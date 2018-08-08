@@ -1,0 +1,5 @@
+_*
+*.install
+.merlin
+dune-workspace
+docs

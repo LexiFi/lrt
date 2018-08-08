@@ -1,0 +1,14 @@
+(library
+ (name lrt_test)
+ (libraries lrt)
+ (inline_tests)
+ (modules path ppx variantizer matcher open_std_only)
+ (preprocess
+  (pps ppx_expect lrt.path lrt.deriving)))
+
+(tests
+ (names fuzzing)
+ (libraries lrt)
+ (modules fuzzing)
+ (preprocess
+  (pps ppx_expect lrt.path lrt.deriving)))

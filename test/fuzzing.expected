@@ -1,0 +1,978 @@
+Type: int
+Value: -8
+Type: bool
+Value: true
+Type: float
+Value: 45.9625724
+Type: bool
+Value: false
+Type: bool
+Value: false
+Type: float
+Value: 9.2587473e-06
+Type: int array option
+Value: None
+Type: float
+Value: 4.53747176e-05
+Type: int
+Value: 2
+Type: unit
+Value: ()
+Type: (llm =
+         {
+           l___: int;
+           l____: float;
+           lMMM: unit;
+           m: string;
+         })
+Value: {l___ = 8; l____ = 91797914.; lMMM = (); m = ""}
+Type: string list option
+Value: Some ["UR"]
+Type: float
+Value: 16.2119329
+Type: float
+Value: 4905.73454
+Type: bool
+Value: true
+Type: float
+Value: 46.6367513
+Type: bool
+Value: true
+Type: float
+Value: infinity
+Type: float
+Value: 88.5456388
+Type: float
+Value: 336029952.
+Type: bool
+Value: true
+Type: float
+Value: 7483481.81
+Type: string
+Value: "U"
+Type: bool list
+Value: [true; true; true; false; true]
+Type: (mlpnoo =
+         | Njj
+         | Ppppp
+         | J of (int * float))
+Value: Ppppp
+Type: float
+Value: 3629871.8
+Type: bool
+Value: true
+Type: float list
+Value: [518489.32]
+Type: bool
+Value: false
+Type: int
+Value: 6
+Type: (string
+       *
+       (int list * bool * int option)
+       *
+       int
+       *
+       (int
+        *
+        (int
+         *
+         (jpkqqonjkq =
+            | L66666 of bool
+            | OLLLLLL of (float * bool)
+            | LO of
+             (string
+              *
+              int
+              *
+              string
+              *
+              (o =
+                 | P7777 of
+                  (float
+                   *
+                   int
+                   *
+                   (p =
+                      | M of bool
+                      | Ollllll of int
+                      | N______
+                      | L888 of
+                       (float
+                        *
+                        (joo =
+                           {
+                             oNNNNNN: int;
+                             m______: float;
+                             i____: bool;
+                           })
+                        *
+                        bool)
+                      | P of string))
+                 | K
+                 | N
+                 | P__ of (unit * string)
+                 | PKKKKK of ((float * unit) * string * int * int)))
+            | JQQQ of ((bool * bool * float * int) * string * string * bool)) list
+         *
+         bool
+         *
+         string)
+        *
+        (q =
+           {
+             m5555: string;
+             k11111: string;
+             ljjj: float;
+             q: unit;
+             l7777: 
+             (nqinlkm =
+                {
+                  pmmmmmm: bool;
+                });
+           })))
+Value: ("TRO", ([-4; 1; 2; -1], true, Some 4), -8,
+        (-6, (-1, [OLLLLLL (0.0059, false)], false, "Q"),
+         {m5555 = "NJ";
+          k11111 = "MO";
+          ljjj = 6505.08;
+          q = ();
+          l7777 = {pmmmmmm = false}}))
+Type: bool
+Value: true
+Type: string list
+Value: ["OI"; "K"; "NN"; "IQTK"]
+Type: (m =
+         | Oqq of
+          (ipnhmj =
+             {
+               r5: bool;
+             })) option array
+Value: [|Some (Oqq {r5 = false})|]
+Type: string
+Value: "JF"
+Type: (hooqnjp =
+         {
+           kLLL: float;
+         })
+Value: {kLLL = 5.5423688}
+Type: float
+Value: 4.9889317e-08
+Type: bool
+Value: false
+Type: bool
+Value: false
+Type: (j =
+         | L_ of (int * string * string option * int)
+         | Ollllll of (int * int)
+         | Rqqqqqq of (bool * float)
+         | Jmm of (int array * float * int * bool))
+Value: Jmm ([|-2|], 97.5, -2, false)
+Type: float
+Value: 694.195455
+Type: bool
+Value: false
+Type: string
+Value: "GWFF"
+Type: float
+Value: 6.54770831e-08
+Type: float
+Value: 2.0733255e-11
+Type: bool
+Value: false
+Type: bool
+Value: false
+Type: float
+Value: 5.57661985e-07
+Type: bool
+Value: false
+Type: bool
+Value: true
+Type: bool
+Value: false
+Type: float
+Value: 8.84206244e-09
+Type: bool option
+Value: None
+Type: string
+Value: ""
+Type: int
+Value: -5
+Type: unit
+Value: ()
+Type: (u =
+         | P______ of
+          (gg =
+             {
+               m_: 
+               (sls =
+                  | L555 of (bool * float)
+                  | K______ of (float * (bool option * string) * string * float));
+               i___: string;
+             }))
+Value: P______ {m_ = K______ (9., (Some true, ""), "", 0.5); i___ = "P"}
+Type: int
+Value: 5
+Type: bool option
+Value: Some true
+Type: int
+Value: 1
+Type: string
+Value: "QRN"
+Type: float
+Value: 4.92697613e-05
+Type: float
+Value: 34890291.1
+Type: int
+Value: -3
+Type: float
+Value: 8717574.53
+Type: bool
+Value: false
+Type: string
+Value: "NJ"
+Type: (unit * int)
+Value: ((), 4)
+Type: bool
+Value: false
+Type: float
+Value: 0.00435882247
+Type: string
+Value: "R"
+Type: string
+Value: "TXMI"
+Type: float
+Value: 0.000904688959
+Type: bool list
+Value: [false; false; false; false]
+Type: string
+Value: "TGRJ"
+Type: string
+Value: ""
+Type: unit
+Value: ()
+Type: int
+Value: -8
+Type: bool
+Value: true
+Type: string
+Value: "HTKV"
+Type: float
+Value: 335.164806
+Type: int
+Value: -1
+Type: unit
+Value: ()
+Type: bool option
+Value: None
+Type: (idffpywivr =
+         | H000000 of (bool * string * bool * float array * int * bool * float * string * unit))
+Value: H000000 (true, "PS", true, [|nan; 0.093|], -1, false, 9.553e-05, 
+        "R", ())
+Type: string
+Value: ""
+Type: int
+Value: 4
+Type: int
+Value: 9
+Type: bool array
+Value: [|true|]
+Type: string
+Value: ""
+Type: string
+Value: "FIQ"
+Type: unit
+Value: ()
+Type: bool
+Value: false
+Type: float
+Value: 7480.91606
+Type: (string * float * string option)
+Value: ("KGVP", 4.5480841e-08, None)
+Type: string list
+Value: []
+Type: string
+Value: "UIMT"
+Type: bool
+Value: false
+Type: unit
+Value: ()
+Type: int
+Value: -8
+Type: float
+Value: 78.5825447
+Type: bool
+Value: true
+Type: float array
+Value: [|1.615412e-09; 9.7348658e-08; 30656.506; 0.015163318|]
+Type: float
+Value: 5506267.51
+Type: int
+Value: 3
+Type: int
+Value: 0
+Type: bool
+Value: true
+Type: float
+Value: 8.26683237e-06
+Type: string
+Value: "JQI"
+Type: float
+Value: 0.0378525188
+Type: string
+Value: "VJ"
+Value: 0.0698412085883319406
+Variant: 0.0698412085883319406
+Value: ">V"
+Variant: ">V"
+Value: [90422281902.2834473; nan; 929.326161742210388;
+         6.57728556543588592e-16; 2731839.34390544891; 70876.952912658453;
+         2.67056914046406746; 384612410329282304.; 1.30540906451642527e-06]
+Variant: [90422281902.2834473; nan; 929.326161742210388;
+          6.57728556543588592e-16; 2731839.34390544891; 70876.952912658453;
+          2.67056914046406746; 384612410329282304.; 1.30540906451642527e-06]
+Value: false
+Variant: false
+Value: ()
+Variant: ()
+Value: {m = false; mmm = 8.28519150614738516e-19}
+Variant: {m = false; mmm = 8.28519150614738516e-19}
+Value: ()
+Variant: ()
+Value: "@;K`^PE"
+Variant: "@;K`^PE"
+Value: 1.84861196205019972e-18
+Variant: 1.84861196205019972e-18
+Value: false
+Variant: false
+Value: ()
+Variant: ()
+Value: false
+Variant: false
+Value: 0.938725103624165
+Variant: 0.938725103624165
+Value: "U]"
+Variant: "U]"
+Value: Some
+        [|3.28854750841855973e-13; 7.58730019442737156e-14;
+          729358498.938381672; 0.102050300687551498|]
+Variant: Some
+          [|3.28854750841855973e-13; 7.58730019442737156e-14;
+            729358498.938381672; 0.102050300687551498|]
+Value: [true; false]
+Variant: [true; false]
+Value: "GbTXDK"
+Variant: "GbTXDK"
+Value: Some
+        [(17, true, "BJaEJGWJ>"); (-3, true, "`IOM\\W>");
+          (-14, true, "WQ\\_TM?FH"); (2, false, "IJMX"); (4, true, "STW=");
+          (9, true, "CZG\\EHXH")]
+Variant: Some
+          [(17, true, "BJaEJGWJ>"); (-3, true, "`IOM\\W>");
+           (-14, true, "WQ\\_TM?FH"); (2, false, "IJMX"); (4, true, "STW=");
+           (9, true, "CZG\\EHXH")]
+Value: false
+Variant: false
+Value: "V"
+Variant: "V"
+Value: Some (-19)
+Variant: Some (-19)
+Value: "b[FRdV\\_"
+Variant: "b[FRdV\\_"
+Value: (O55555 (1.25080731e-07, 0.0450784923, 9), 17504.4683739542961,
+        J______ {nJJJJ = "MM"; lNNNNNN = "U"; onnnnn = 1; pjjj = "PUI"},
+        true)
+Variant: (O55555(1.25080731e-07, 0.0450784923, 9), 17504.4683739542961,
+          J______{nJJJJ = "MM"; lNNNNNN = "U"; onnnnn = 1; pjjj = "PUI"},
+          true)
+Value: "`\\"
+Variant: "`\\"
+Value: "[bb"
+Variant: "[bb"
+Value: false
+Variant: false
+Value: PPPPP {l7 = true; jnnnnn = -3; j_ = 529.4387117; jMM = -9}
+Variant: PPPPP{l7 = true; jnnnnn = -3; j_ = 529.4387117; jMM = -9}
+Value: false
+Variant: false
+Value: -9
+Variant: -9
+Value: "AXIR\\FHc"
+Variant: "AXIR\\FHc"
+Value: -13
+Variant: -13
+Value: ""
+Variant: ""
+Value: -7
+Variant: -7
+Value: [|949.881142005324364; 0.0061495957802981142|]
+Variant: [|949.881142005324364; 0.0061495957802981142|]
+Value: M44444
+Variant: M44444
+Value: 6.34239224717021e-08
+Variant: 6.34239224717021e-08
+Value: 17
+Variant: 17
+Value: ()
+Variant: ()
+Value: -10
+Variant: -10
+Value: 9.78606279939413e-15
+Variant: 9.78606279939413e-15
+Value: -15
+Variant: -15
+Value: 2.12591331452131248e-13
+Variant: 2.12591331452131248e-13
+Value: {mQ = [|None; None|]; ik = -8; o = 0.60317990742623806}
+Variant: {mQ = [|None; None|]; ik = -8; o = 0.60317990742623806}
+Value: false
+Variant: false
+Value: -3
+Variant: -3
+Value: true
+Variant: true
+Value: 19968980364501476.
+Variant: 19968980364501476.
+Value: ["bD@_Y"; "KGJ`a"; ">\\HU]U?[>"; "?@HCXR@"; "A@E"; "aPbEaPE";
+         "=DGESGP"; "VD"; "UTFOLJR"; "@FQ"]
+Variant: ["bD@_Y"; "KGJ`a"; ">\\HU]U?[>"; "?@HCXR@"; "A@E"; "aPbEaPE";
+          "=DGESGP"; "VD"; "UTFOLJR"; "@FQ"]
+Value: ()
+Variant: ()
+Value: None
+Variant: None
+Value: 0
+Variant: 0
+Value: 3.50257353857159594e-15
+Variant: 3.50257353857159594e-15
+Value: 9
+Variant: 9
+Value: 5.22653223015368e+19
+Variant: 5.22653223015368e+19
+Value: 0.0245594811625778689
+Variant: 0.0245594811625778689
+Value: -8
+Variant: -8
+Value: false
+Variant: false
+Value: {g____ = "F>SIaQBcR";
+        m__ = -1;
+        f___ = None;
+        lGGGG = 7.73741398006677654e-20;
+        tHHHHHH = 18}
+Variant: {g____ = "F>SIaQBcR";
+          m__ = -1;
+          f___ = None;
+          lGGGG = 7.73741398006677654e-20;
+          tHHHHHH = 18}
+Value: 13401884585.6189728
+Variant: 13401884585.6189728
+Value: -12
+Variant: -12
+Value: 9.95214220136404e-06
+Variant: 9.95214220136404e-06
+Value: false
+Variant: false
+Value: -17
+Variant: -17
+Value: false
+Variant: false
+Value: -4
+Variant: -4
+Value: 5770272.04446494579
+Variant: 5770272.04446494579
+Value: -3
+Variant: -3
+Value: 5.87137838825583411e+18
+Variant: 5.87137838825583411e+18
+Value: 21
+Variant: 21
+Value: 6.48666927590966238e-19
+Variant: 6.48666927590966238e-19
+Value: None
+Variant: None
+Value: [|3; 3; -6; -7; 1; 12|]
+Variant: [|3; 3; -6; -7; 1; 12|]
+Value: {lGGGG = 20632807724.1778374;
+        c_____ = "^[MC_S_BGW";
+        feeeeee = "TCG_AO?F"}
+Variant: {lGGGG = 20632807724.1778374;
+          c_____ = "^[MC_S_BGW";
+          feeeeee = "TCG_AO?F"}
+Value: {c_ = 5}
+Variant: {c_ = 5}
+Value: [|5; 14; -18|]
+Variant: [|5; 14; -18|]
+Value: 558745941147208.188
+Variant: 558745941147208.188
+Value: 9
+Variant: 9
+Value: ""
+Variant: ""
+Value: [|7.29941341094672638e-08; 5.10901963338255807e-07; nan;
+         8.46936675719916778e-21; 77193292882.293457;
+         2.57712732069194292e-13; 58253471.8327224255;
+         4.56017306074500147e-17; neg_infinity|]
+Variant: [|7.29941341094672638e-08; 5.10901963338255807e-07; nan;
+           8.46936675719916778e-21; 77193292882.293457;
+           2.57712732069194292e-13; 58253471.8327224255;
+           4.56017306074500147e-17; neg_infinity|]
+Value: "NbFV"
+Variant: "NbFV"
+Value: "CLMC^AWZI="
+Variant: "CLMC^AWZI="
+Value: JLLLL
+        {kEEEEE = 76516592.68;
+        pffff = ();
+        i___ = false;
+        n______ = -2;
+        wU = -9}
+Variant: JLLLL
+          {kEEEEE = 76516592.68;
+           pffff = ();
+           i___ = false;
+           n______ = -2;
+           wU = -9}
+Value: 5753.85628268122673
+Variant: 5753.85628268122673
+Value: true
+Variant: true
+Value: "GI_MJ;^"
+Variant: "GI_MJ;^"
+Value: "V;"
+Variant: "V;"
+Value: ["WO>P"; ""; "HJ;CHZ"; ""; "HI`"]
+Variant: ["WO>P"; ""; "HJ;CHZ"; ""; "HI`"]
+Value: 9.96964479796588573e-10
+Variant: 9.96964479796588573e-10
+Value: -13
+Variant: -13
+Value: 203990.653157234192
+Variant: 203990.653157234192
+Value: false
+Variant: false
+Value: 42797384.4110965729
+Variant: 42797384.4110965729
+Value: 6.49115256033837818e-10
+Variant: 6.49115256033837818e-10
+Value: ()
+Variant: ()
+Value: false
+Variant: false
+Value: false
+Variant: false
+Value: 16553587280213832.
+Variant: 16553587280213832.
+Value: [2.59689059108495694e-12; 4.96476528234779804e-15;
+         580503365956246.875; 7011614367.3658371; 5.2147423755377526e-21;
+         9.88962758332490881e-12; 0.00877315602265298436;
+         8.40287298895418649e-11]
+Variant: [2.59689059108495694e-12; 4.96476528234779804e-15;
+          580503365956246.875; 7011614367.3658371; 5.2147423755377526e-21;
+          9.88962758332490881e-12; 0.00877315602265298436;
+          8.40287298895418649e-11]
+Value: true
+Variant: true
+Value: false
+Variant: false
+Value: 9845379.74931299686
+Variant: 9845379.74931299686
+Value: O______
+        {m____ = "HRTQE";
+        t_ = "";
+        ebbbbb = Naaaa {gyyy = 3051.};
+        zHHH = 22668507.69;
+        oOOOOO = [true; true; true]}
+Variant: O______
+          {m____ = "HRTQE";
+           t_ = "";
+           ebbbbb = Naaaa{gyyy = 3051.};
+           zHHH = 22668507.69;
+           oOOOOO = [true; true; true]}
+Value: true
+Variant: true
+Value: 0
+Variant: 0
+Value: 435120981186628352.
+Variant: 435120981186628352.
+Value: "aUHR:LcC^"
+Variant: "aUHR:LcC^"
+Value: "PMXG;@NOF"
+Variant: "PMXG;@NOF"
+Value: [[|10225473344326.0195; 1.95223490707576274e-18; 11381.095927208662;
+          1.3691544905304909e-10; 6409.44494865834713;
+          3.84353104047477276e-10; 9.02227293699979864e-12;
+          4.43556783720850932e-13; infinity|];
+         [|9.04330288060009469e-15; 2.15694625861942766e-14;
+           4.46486566215753609e-21; 8.15086607821285764e-14;
+           36953172367066144.|];
+         [|2.54846801981329918; 218155757.524073124; 3708.93212966620922;
+           562462.160363793373|];
+         [|54972128756344320.; 7.25435827858746e-13; 84.0506900101900101;
+           3.2099708914756775e-14|]]
+Variant: [[|10225473344326.0195; 1.95223490707576274e-18; 11381.095927208662;
+            1.3691544905304909e-10; 6409.44494865834713;
+            3.84353104047477276e-10; 9.02227293699979864e-12;
+            4.43556783720850932e-13; infinity|];
+          [|9.04330288060009469e-15; 2.15694625861942766e-14;
+            4.46486566215753609e-21; 8.15086607821285764e-14;
+            36953172367066144.|];
+          [|2.54846801981329918; 218155757.524073124; 3708.93212966620922;
+            562462.160363793373|];
+          [|54972128756344320.; 7.25435827858746e-13; 84.0506900101900101;
+            3.2099708914756775e-14|]]
+Value: true
+Variant: true
+Value: 5.79025737941265186e-10
+Variant: 5.79025737941265186e-10
+Value: 1
+Variant: 1
+Value: true
+Json: true
+Value: [26633097.7901816368; 2.92901493608951593e-06; 0.00345516062341630478;
+         1770182.00047314167; 1643.79129186272621; nan;
+         6.93192749284207792e-20; 50626713782.5489044; 996.726831421256]
+Json: [
+  26633097.7901816368,
+  2.92901493608951593e-06,
+  0.00345516062341630478,
+  1770182.00047314167,
+  1643.79129186272621,
+  "NaN",
+  6.93192749284207792e-20,
+  50626713782.5489044,
+  996.726831421256
+]
+Value: ()
+Json: {}
+Value: MMMMMMM {m____ = "X"; m___ = (false, 5575032.06, -6); m = -10; m_ = 3}
+Json: {
+  type: "MMMMMMM",
+  m____: "X",
+  m___: [
+          false,
+          5575032.06,
+          -6
+        ],
+  m: -10,
+  m_: 3
+}
+Value: [1.2686396669596434e-17; 48962031.7704975531; 9.108968889340758e-15]
+Json: [
+  1.2686396669596434e-17,
+  48962031.7704975531,
+  9.108968889340758e-15
+]
+Value: Some false
+Json: false
+Value: false
+Json: false
+Value: "KM"
+Json: "KM"
+Value: "Y=Z??"
+Json: "Y=Z??"
+Value: L___
+Json: {
+  type: "L___"
+}
+Value: false
+Json: false
+Value: true
+Json: true
+Value: 5.95918454229831766e-10
+Json: 5.95918454229831766e-10
+Value: "YK?;b<RFO"
+Json: "YK?;b<RFO"
+Value: true
+Json: true
+Value: "@"
+Json: "@"
+Value: MMM ("QO", "RXVVV")
+Json: {
+  type: "MMM",
+  val: [
+         "QO",
+         "RXVVV"
+       ]
+}
+Value: L____
+Json: {
+  type: "L____"
+}
+Value: 66804909.3335866928
+Json: 66804909.3335866928
+Value: true
+Json: true
+Value: 12
+Json: 12
+Value: "RY"
+Json: "RY"
+Value: {pNNNNN = 48873.4298385679722; k____ = 0.365889506414532661}
+Json: {
+  pNNNNN: 48873.4298385679722,
+  k____: 0.365889506414532661
+}
+Value: 456246297806501.375
+Json: 456246297806501.375
+Value: -5
+Json: -5
+Value: 9.49637303128838472e-14
+Json: 9.49637303128838472e-14
+Value: false
+Json: false
+Value: -21
+Json: -21
+Value: "HZV"
+Json: "HZV"
+Value: false
+Json: false
+Value: 1.99349330738186838e-11
+Json: 1.99349330738186838e-11
+Value: false
+Json: false
+Value: 11
+Json: 11
+Value: "XG["
+Json: "XG["
+Value: 8.64289526827633357e+18
+Json: 8.64289526827633357e+18
+Value: true
+Json: true
+Value: Some 0
+Json: 0
+Value: true
+Json: true
+Value: "W\\\\LR"
+Json: "W\\\\LR"
+Value: false
+Json: false
+Value: 32292579300.7016182
+Json: 32292579300.7016182
+Value: -1
+Json: -1
+Value: (-2, 668637.482449412346)
+Json: [
+  -2,
+  668637.482449412346
+]
+Value: 5.56584011763334316e-14
+Json: 5.56584011763334316e-14
+Value: 19
+Json: 19
+Value: 4
+Json: 4
+Value: K
+        {t____ = "";
+        koooo = [|false; true; true; false; false|];
+        j44 = 2.605819385e-09;
+        jqqqq = true;
+        iOOOO = "KVNXI"}
+Json: {
+  type: "K",
+  t____: "",
+  koooo: [
+           false,
+           true,
+           true,
+           false,
+           false
+         ],
+  j44: 2.605819385e-09,
+  jqqqq: true,
+  iOOOO: "KVNXI"
+}
+Value: (true, false, infinity, 17)
+Json: [
+  true,
+  false,
+  "Infinity",
+  17
+]
+Value: "@JATD=>BSKG"
+Json: "@JATD=>BSKG"
+Value: 7298259735107422.
+Json: 7298259735107422.0
+Value: "B_"
+Json: "B_"
+Value: -16
+Json: -16
+Value: false
+Json: false
+Value: true
+Json: true
+Value: -20
+Json: -20
+Value: ()
+Json: {}
+Value: "HdWGX["
+Json: "HdWGX["
+Value: 13
+Json: 13
+Value: "H<^:bD"
+Json: "H<^:bD"
+Value: ()
+Json: {}
+Value: true
+Json: true
+Value: "KN[Q"
+Json: "KN[Q"
+Value: 0.0928188215941190831
+Json: 0.0928188215941190831
+Value: J_____ (false, 10, [||], 4, -5)
+Json: {
+  type: "J_____",
+  val: [
+         false,
+         10,
+         [],
+         4,
+         -5
+       ]
+}
+Value: true
+Json: true
+Value: 75093391165137.3
+Json: 75093391165137.3
+Value: {j = 6.7213739082217218e+19;
+        iooo = true;
+        gUUUUU = true;
+        e777 = false;
+        t2222 = 0.0042758971732109784}
+Json: {
+  j: 6.7213739082217218e+19,
+  iooo: true,
+  gUUUUU: true,
+  e777: false,
+  t2222: 0.0042758971732109784
+}
+Value: ()
+Json: {}
+Value: false
+Json: false
+Value: true
+Json: true
+Value: "b"
+Json: "b"
+Value: 1276912.71714866161
+Json: 1276912.71714866161
+Value: true
+Json: true
+Value: 6.04852897115051644e-15
+Json: 6.04852897115051644e-15
+Value: 2.20189846120774765e-15
+Json: 2.20189846120774765e-15
+Value: false
+Json: false
+Value: "X@bSFNaSL\\N"
+Json: "X@bSFNaSL\\N"
+Value: "<H[IOE^Z"
+Json: "<H[IOE^Z"
+Value: {tGG = false; mTT = ""}
+Json: {
+  tGG: false,
+  mTT: ""
+}
+Value: infinity
+Json: "Infinity"
+Value: Some None
+Json: {
+  type: "Some"
+}
+Value: "[]M:LXY"
+Json: "[]M:LXY"
+Value: None
+Json: null
+Value: 2.96909138560295034e-21
+Json: 2.96909138560295034e-21
+Value: -3
+Json: -3
+Value: 6.71291369944810954e-15
+Json: 6.71291369944810954e-15
+Value: SLLLL
+Json: {
+  type: "SLLLL"
+}
+Value: -6
+Json: -6
+Value: 16
+Json: 16
+Value: OQQQQQ
+        {h2222 = 10;
+        b = O__ [2];
+        tCCCC = [true; false];
+        m = false;
+        n = 7}
+Json: {
+  type: "OQQQQQ",
+  h2222: 10,
+  b: {
+       type: "O__",
+       val: [
+              [
+                2
+              ]
+            ]
+     },
+  tCCCC: [
+           true,
+           false
+         ],
+  m: false,
+  n: 7
+}
+Value: 2.42446005344390869
+Json: 2.42446005344390869
+Value: false
+Json: false
+Value: 8030862659.21592712
+Json: 8030862659.21592712
+Value: [false; true; false; false]
+Json: [
+  false,
+  true,
+  false,
+  false
+]
+Value: -19
+Json: -19
+Value: 21
+Json: 21
+Value: -15
+Json: -15
+Value: [|10; 4|]
+Json: [
+  10,
+  4
+]
+Value: -7
+Json: -7
+Value: false
+Json: false
+Value: 4.62985669262707185e-21
+Json: 4.62985669262707185e-21
+Value: 7.27751199156046e-16
+Json: 7.27751199156046e-16
+Value: 3.18317547440528871e-05
+Json: 3.18317547440528871e-05
+Value: true
+Json: true
+Value: Uaaa {w = 99984.2789; vhhhhhh = None; h______ = -3; mDDDDD = nan}
+Json: {
+  type: "Uaaa",
+  w: 99984.2789,
+  vhhhhhh: null,
+  h______: -3,
+  mDDDDD: "NaN"
+}
+Value: true
+Json: true
+Value: 11
+Json: 11
+Value: 0.0336226718500256538
+Json: 0.0336226718500256538
+Value: -20
+Json: -20
+Value: -19
+Json: -19
+Value: "bEDQ"
+Json: "bEDQ"

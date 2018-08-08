@@ -1,0 +1,8 @@
+(library
+ (name lrt_path)
+ (public_name lrt.path)
+ (synopsis "lrt [%path? .] syntax extension")
+ (libraries ppxlib)
+ (preprocess
+  (pps ppxlib.metaquot))
+ (kind ppx_rewriter))

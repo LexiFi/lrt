@@ -1,0 +1,3 @@
+(executable
+ (name standalone)
+ (libraries lrt_path lrt_deriving ppxlib))

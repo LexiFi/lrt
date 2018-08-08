@@ -1,0 +1,8 @@
+(library
+ (name lrt_deriving)
+ (public_name lrt.deriving)
+ (synopsis "lrt [@@deriving t] syntax extension")
+ (libraries ppxlib)
+ (preprocess
+  (pps ppxlib.metaquot))
+ (kind ppx_rewriter))

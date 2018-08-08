@@ -1,0 +1,15 @@
+(library
+ (public_name lrt)
+ (synopsis "LexiFi runtime types")
+ (inline_tests)
+ (libraries stdlib-shims landmarks)
+ (preprocess
+  (pps ppx_expect lrt.deriving landmarks.ppx)))
+
+(rule
+ (targets variant_lexer.ml)
+ (deps variant_lexer.mll)
+ (action
+  (chdir
+   %{workspace_root}
+   (run %{bin:ocamllex} -ml -q -o %{targets} %{deps}))))
