@@ -4,7 +4,8 @@
 
 module TypEq : sig
   type (_, _) t = Eq: ('a, 'a) t
-  (** A value of type [('a, 'b) t] is a witness that the two types ['a] and ['b] are equal. *)
+  (** A value of type [('a, 'b) t] is a witness that the two types ['a] and
+   * ['b] are equal. *)
 
   val refl: ('a, 'a) t
   val trans: ('a, 'b) t -> ('b, 'c) t -> ('a, 'c) t
@@ -76,8 +77,10 @@ module Textual: sig
   type t = int gtype
 
   type node =
-    | Variant of string * t list * (string * stype_properties * t variant_args) list
-    | Record of string * t list * (string * stype_properties * t) list * record_repr
+    | Variant of
+        string * t list * (string * stype_properties * t variant_args) list
+    | Record of
+        string * t list * (string * stype_properties * t) list * record_repr
 
   type textual = {
     nodes: node array;
@@ -114,7 +117,8 @@ type 'a ttype
 external stype_of_ttype: _ ttype -> stype = "%identity"
 
 val ttypes_equality: 'a ttype -> 'b ttype -> ('a, 'b) TypEq.t option
-val ttypes_equality_modulo_props: 'a ttype -> 'b ttype -> ('a, 'b) TypEq.t option
+val ttypes_equality_modulo_props: 'a ttype -> 'b ttype
+  -> ('a, 'b) TypEq.t option
 
 val split_arrow_ttype: ('a -> 'b) ttype -> 'a ttype * 'b ttype
 val build_arrow_ttype: 'a ttype -> 'b ttype -> ('a -> 'b) ttype
@@ -131,17 +135,25 @@ val abstract_stype: stype -> stype
 (** {2 Internal definitions} *)
 
 module Internal: sig
-  val create_variant_type: string -> stype list -> (stype -> (string * stype_properties * stype variant_args) list) -> stype
-  val create_record_type: string -> stype list -> (stype -> (string * stype_properties * stype) list * record_repr) -> stype
+  val create_variant_type: string -> stype list
+    -> (stype -> (string * stype_properties * stype variant_args) list)
+    -> stype
+  val create_record_type: string -> stype list
+    -> (stype -> (string * stype_properties * stype) list * record_repr)
+    -> stype
 
   val create_node: string -> stype list -> node
-  val set_node_variant: node -> ((string * stype_properties * stype variant_args) list) -> unit
-  val set_node_record: node -> (((string * stype_properties * stype) list) * record_repr) -> unit
+  val set_node_variant: node
+    -> ((string * stype_properties * stype variant_args) list)
+    -> unit
+  val set_node_record: node
+    -> (((string * stype_properties * stype) list) * record_repr)
+    -> unit
 
   val hash0: stype -> int
-  (** This hash function ignores paths and properties. It remembers only the ordered
-      list of constructors names (with arity) and field labels. It memoized the hash value
-      of nodes. *)
+  (** This hash function ignores paths and properties. It remembers only the
+   * ordered list of constructors names (with arity) and field labels. It
+   * memoized the hash value of nodes. *)
 
   val hash0_node: node -> int
 
@@ -149,7 +161,8 @@ module Internal: sig
   val hash: ignore_props:bool -> ignore_path:bool -> stype -> int
 
   val equal: ignore_props:bool -> ignore_path:bool -> stype -> stype -> bool
-  (** The function returned (after passing the two named arguments) is memoized. *)
+  (** The function returned (after passing the two named arguments) is memoized.
+   * *)
 
 
   val has_var: stype -> bool
@@ -158,7 +171,8 @@ module Internal: sig
       the array. *)
 
   val normalize: ignore_props:bool -> ignore_path:bool -> stype -> stype
-  (** The function returned (after passing the two named arguments) is memoized. *)
+  (** The function returned (after passing the two named arguments) is memoized.
+   * *)
 
   val remove_props: stype -> stype
   (** This function is memoized. *)
@@ -189,7 +203,6 @@ module StackTrace: sig
   val print_expr: Format.formatter -> expr -> unit
   val print_call_site: Format.formatter -> call_site -> unit
 end
-
 
 (**/**)
 

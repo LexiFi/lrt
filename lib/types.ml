@@ -154,121 +154,122 @@ let print_stype ~show_enumerations ppf =
     | DT_tuple l -> List.exists is_complex l
     | _ -> false
   in
+  let fprintf = Format.fprintf in
   let rec aux ppf t =
     match t with
     | DT_node n when Hashtbl.mem seen n.rec_uid ||
                      (not show_enumerations && is_enumeration t) -> name ppf n
     | DT_node n ->
       Hashtbl.replace seen n.rec_uid ();
-      Format.fprintf ppf "(@[<v2>%a =%a@])" name n descr n.rec_descr
-    | DT_int -> Format.fprintf ppf "int"
-    | DT_float -> Format.fprintf ppf "float"
-    | DT_string -> Format.fprintf ppf "string"
-    | DT_date -> Format.fprintf ppf "date"
+      fprintf ppf "(@[<v2>%a =%a@])" name n descr n.rec_descr
+    | DT_int -> fprintf ppf "int"
+    | DT_float -> fprintf ppf "float"
+    | DT_string -> fprintf ppf "string"
+    | DT_date -> fprintf ppf "date"
     | DT_tuple tl -> tlist STAR ppf tl
-    | DT_list t -> Format.fprintf ppf "%a list" aux t
-    | DT_array t -> Format.fprintf ppf "%a array" aux t
-    | DT_option t -> Format.fprintf ppf "%a option" aux t
-    | DT_abstract (s, []) -> Format.fprintf ppf "%s" s
-    | DT_abstract (s, tl) -> Format.fprintf ppf "%a %s" (tlist COMMA) tl s
-    | DT_arrow ("", t1, t2) -> Format.fprintf ppf "(%a -> %a)" aux t1 aux t2
-    | DT_arrow (l, t1, t2) -> Format.fprintf ppf "(%s:%a -> %a)" l aux t1 aux t2
+    | DT_list t -> fprintf ppf "%a list" aux t
+    | DT_array t -> fprintf ppf "%a array" aux t
+    | DT_option t -> fprintf ppf "%a option" aux t
+    | DT_abstract (s, []) -> fprintf ppf "%s" s
+    | DT_abstract (s, tl) -> fprintf ppf "%a %s" (tlist COMMA) tl s
+    | DT_arrow ("", t1, t2) -> fprintf ppf "(%a -> %a)" aux t1 aux t2
+    | DT_arrow (l, t1, t2) -> fprintf ppf "(%s:%a -> %a)" l aux t1 aux t2
     | DT_object fl ->
-      Format.fprintf ppf "@ <@[<v1>";
+      fprintf ppf "@ <@[<v1>";
       List.iter
         (fun (s, t) ->
-           Format.fprintf ppf "@ %s" s;
-           Format.fprintf ppf ": ";
+           fprintf ppf "@ %s" s;
+           fprintf ppf ": ";
            if is_complex t then
-             Format.fprintf ppf "@ ";
+             fprintf ppf "@ ";
            aux ppf t;
-           Format.fprintf ppf ";"
+           fprintf ppf ";"
         )
         fl;
-      Format.fprintf ppf "@]@ >"
+      fprintf ppf "@]@ >"
 
-    | DT_prop (p, t) -> Format.fprintf ppf "%a%a" aux t props p;
-    | DT_var i -> Format.fprintf ppf "$%i" i
+    | DT_prop (p, t) -> fprintf ppf "%a%a" aux t props p;
+    | DT_var i -> fprintf ppf "$%i" i
   and props ppf p =
-    Format.fprintf ppf " + [";
+    fprintf ppf " + [";
     let first = ref true in
     List.iter
       (fun (k,v) ->
-         if !first then first := false else Format.fprintf ppf "; ";
-         if v = "" then Format.fprintf ppf "%s" k
-         else Format.fprintf ppf "%s = %S" k v
+         if !first then first := false else fprintf ppf "; ";
+         if v = "" then fprintf ppf "%s" k
+         else fprintf ppf "%s = %S" k v
       )
       p;
-    Format.fprintf ppf "]"
+    fprintf ppf "]"
   and tlist sep ppf = function
-    | [] -> Format.fprintf ppf "[]"
+    | [] -> fprintf ppf "[]"
     | [x] -> aux ppf x
     | hd::tl as l ->
-      Format.fprintf ppf "(";
+      fprintf ppf "(";
       if List.exists is_complex l then
-        Format.fprintf ppf "@[<v>"
+        fprintf ppf "@[<v>"
       else
-        Format.fprintf ppf "@[<h>";
+        fprintf ppf "@[<h>";
       aux ppf hd;
       List.iter
         (fun x ->
            begin
              match sep with
-             | STAR -> Format.fprintf ppf "@ *@ ";
-             | COMMA -> Format.fprintf ppf ",@ "
+             | STAR -> fprintf ppf "@ *@ ";
+             | COMMA -> fprintf ppf ",@ "
            end;
            aux ppf x
         ) tl;
-      Format.fprintf ppf "@])"
+      fprintf ppf "@])"
   and name ppf n =
     match n.rec_args with
-    | [] -> Format.fprintf ppf "%s" n.rec_name
-    | l -> Format.fprintf ppf "%a %s" (tlist COMMA) l n.rec_name
+    | [] -> fprintf ppf "%s" n.rec_name
+    | l -> fprintf ppf "%a %s" (tlist COMMA) l n.rec_name
   and descr ppf = function
     | DT_variant v ->
       let simple =
         List.for_all (fun (_, _, args) -> args = C_tuple []) v.variant_constrs
       in
       if simple then
-        Format.fprintf ppf "@[<h>";
+        fprintf ppf "@[<h>";
       let first = ref simple in
       List.iter
         (fun (c, p, args) ->
            if not !first then
-             Format.fprintf ppf "@ | "
+             fprintf ppf "@ | "
            else
              begin
-               Format.fprintf ppf "@ ";
+               fprintf ppf "@ ";
                first := false;
              end;
-           Format.fprintf ppf "%s" c;
+           fprintf ppf "%s" c;
            if p <> [] then props ppf p;
            let args = uninline args in
            if args <> [] then
              begin
-               Format.fprintf ppf " of";
+               fprintf ppf " of";
                if List.exists is_complex args then
-                 Format.fprintf ppf "@ ";
-               Format.fprintf ppf " %a" (tlist STAR) args;
+                 fprintf ppf "@ ";
+               fprintf ppf " %a" (tlist STAR) args;
              end
         )
         v.variant_constrs;
       if simple then
-        Format.fprintf ppf "@]";
+        fprintf ppf "@]";
     | DT_record r ->
-      Format.fprintf ppf "@ {@[<v1>";
+      fprintf ppf "@ {@[<v1>";
       List.iter
         (fun (c, p, arg) ->
-           Format.fprintf ppf "@ %s" c;
+           fprintf ppf "@ %s" c;
            if p <> [] then props ppf p;
-           Format.fprintf ppf ": ";
+           fprintf ppf ": ";
            if is_complex arg then
-             Format.fprintf ppf "@ ";
+             fprintf ppf "@ ";
            aux ppf arg;
-           Format.fprintf ppf ";"
+           fprintf ppf ";"
         )
         r.record_fields;
-      Format.fprintf ppf "@]@ }"
+      fprintf ppf "@]@ }"
   in
   aux ppf
 
@@ -286,9 +287,8 @@ module Internal = struct
 
   let create_node name args =
     incr uid;
-    {rec_descr=dummy_descr; rec_uid = !uid; rec_name=name; rec_args=args; rec_has_var=None; rec_hash=0;
-     rec_memoized=[||];
-    }
+    {rec_descr=dummy_descr; rec_uid = !uid; rec_name=name; rec_args=args;
+     rec_has_var=None; rec_hash=0; rec_memoized=[||]; }
 
   let set_node_variant n constrs =
     n.rec_descr <- DT_variant {variant_constrs=constrs}
@@ -302,11 +302,19 @@ module Internal = struct
     n'.rec_descr <- begin
       match n.rec_descr with
       | DT_variant v ->
-        DT_variant {variant_constrs = List.map (fun (s, p, args) ->
-            (s, prop p, match args with C_tuple tl -> C_tuple (List.map aux tl) | C_inline t -> C_inline (aux t))
-          ) v.variant_constrs}
+        let variant_constrs = List.map (
+            fun (s, p, args) ->
+              let args =  match args with
+                | C_tuple tl -> C_tuple (List.map aux tl)
+                | C_inline t -> C_inline (aux t)
+              in
+              (s, prop p, args)
+          ) v.variant_constrs in
+        DT_variant { variant_constrs }
       | DT_record r ->
-        DT_record {r with record_fields = List.map (fun (s, p, t) -> (s, prop p, aux t)) r.record_fields}
+        let record_fields = List.map (fun (s, p, t) ->
+            (s, prop p, aux t)) r.record_fields
+        in DT_record {r with record_fields }
     end;
     n'
 
@@ -325,7 +333,9 @@ module Internal = struct
   let name ~ignore_path n =
     let s = n.rec_name in
     if ignore_path then
-      try let i = String.rindex s '.' in String.sub s (i + 1) (String.length s - i - 1)
+      try
+        let i = String.rindex s '.' in
+        String.sub s (i + 1) (String.length s - i - 1)
       with Not_found -> s
     else s
 
@@ -333,12 +343,15 @@ module Internal = struct
 
   let rec hash0_node _ n =
     if n.rec_hash <> 0 then n.rec_hash
-    else let h = Hashtbl.hash (name ~ignore_path:true n, List.map hash0 n.rec_args,
-                               String.concat ","
-                                 (match n.rec_descr with
-                                  | DT_variant v -> List.map (fun (s, _, _) -> s) v.variant_constrs
-                                  | DT_record r -> List.map (fun (s, _, _) -> s) r.record_fields)
-                              )
+    else
+      let h = (name ~ignore_path:true n, List.map hash0 n.rec_args,
+               String.concat ","
+                 (match n.rec_descr with
+                  | DT_variant v ->
+                    List.map (fun (s, _, _) -> s) v.variant_constrs
+                  | DT_record r ->
+                    List.map (fun (s, _, _) -> s) r.record_fields)
+              ) |> Hashtbl.hash
       in
       n.rec_hash <- h;
       h
@@ -380,10 +393,14 @@ module Internal = struct
                 | C_inline t1, C_inline t2 -> geq t1 t2
                 | _ -> false
               in
-              let constr (c1, p1, tl1) (c2, p2, tl2) = c1 = c2 && (ignore_props || p1 = p2) && (var_args_eq tl1 tl2) in
+              let constr (c1, p1, tl1) (c2, p2, tl2) =
+                c1 = c2 && (ignore_props || p1 = p2) && (var_args_eq tl1 tl2)
+              in
               equal_list constr v1.variant_constrs v2.variant_constrs
             | DT_record r1, DT_record r2 ->
-              let field (f1, p1, t1) (f2, p2, t2) = f1 = f2 && (ignore_props || p1 = p2) && geq t1 t2 in
+              let field (f1, p1, t1) (f2, p2, t2) =
+                f1 = f2 && (ignore_props || p1 = p2) && geq t1 t2
+              in
               equal_list field r1.record_fields r2.record_fields
             | _ -> false
           end || (Hashtbl.replace memo k false; false)
@@ -392,15 +409,19 @@ module Internal = struct
     and geq t1 t2 =
       t1 == t2 ||
       match t1, t2 with
-      | DT_prop (_, t1), t2 | t1, DT_prop (_, t2) when ignore_props -> geq t1 t2
+      | DT_prop (_, t1), t2 | t1, DT_prop (_, t2) when ignore_props ->
+        geq t1 t2
       | DT_node n1, DT_node n2 -> eq n1 n2
       | DT_tuple tl1, DT_tuple tl2 -> equal_list geq tl1 tl2
       | DT_list t1, DT_list t2
       | DT_array t1, DT_array t2
       | DT_option t1, DT_option t2 -> geq t1 t2
-      | DT_abstract (t1, tl1), DT_abstract (t2, tl2) -> t1 = t2 && equal_list geq tl1 tl2
-      | DT_arrow (l1, t1, s1), DT_arrow (l2, t2, s2) -> l1 = l2 && geq t1 t2 && geq s1 s2
-      | DT_object fl1, DT_object fl2 -> equal_list (fun (s1, t1) (s2, t2) -> s1 = s2 && geq t1 t2) fl1 fl2
+      | DT_abstract (t1, tl1), DT_abstract (t2, tl2) ->
+        t1 = t2 && equal_list geq tl1 tl2
+      | DT_arrow (l1, t1, s1), DT_arrow (l2, t2, s2) ->
+        l1 = l2 && geq t1 t2 && geq s1 s2
+      | DT_object fl1, DT_object fl2 ->
+        equal_list (fun (s1, t1) (s2, t2) -> s1 = s2 && geq t1 t2) fl1 fl2
       | DT_prop (p1, t1), DT_prop (p2, t2) -> p1 = p2 && geq t1 t2
       | DT_var i1, DT_var i2 -> i1 = i2
       | _ -> false
@@ -408,7 +429,8 @@ module Internal = struct
     fun t1 t2 ->
       let r = geq t1 t2 in
       if not r && !stack != [] then begin
-        List.iter (function k -> if Hashtbl.find memo k then Hashtbl.remove memo k) !stack;
+        List.iter (function k ->
+            if Hashtbl.find memo k then Hashtbl.remove memo k) !stack;
         stack := [];
       end;
       r
@@ -444,8 +466,11 @@ module Internal = struct
           n.rec_has_var <- Some false;
           varstack := n :: !varstack;
           begin match n.rec_descr with
-            | DT_variant v -> List.exists (fun (_, _, tl) -> List.exists aux (uninline tl)) v.variant_constrs
-            | DT_record r -> List.exists (fun (_, _, t) -> aux t) r.record_fields
+            | DT_variant v ->
+              List.exists (fun (_, _, tl) ->
+                  List.exists aux (uninline tl)) v.variant_constrs
+            | DT_record r ->
+              List.exists (fun (_, _, t) -> aux t) r.record_fields
           end && (n.rec_has_var <- Some true; true)
         end
     and aux = function
@@ -458,7 +483,9 @@ module Internal = struct
       | DT_node n -> node n
     in
     let r = aux t in
-    if r then List.iter (function {rec_has_var=Some false; _} as n -> n.rec_has_var <- None | _ -> ()) !varstack;
+    if r then List.iter (function
+        | { rec_has_var = Some false; _} as n -> n.rec_has_var <- None
+        | _ -> ()) !varstack;
     r
 
   let node_has_var = function
@@ -474,7 +501,8 @@ module Internal = struct
   let substitute subst t =
     if debug then begin
       Format.printf "  SUBST t=%a@." print_stype t;
-      Array.iteri (fun i _t -> Format.printf " SUBST %i -> %a@." i print_stype subst.(i)) subst;
+      Array.iteri (fun i _t ->
+          Format.printf " SUBST %i -> %a@." i print_stype subst.(i)) subst;
     end;
     let tbl = Hashtbl.create 4 in
     let rec aux = function
@@ -498,7 +526,8 @@ module Internal = struct
       try Hashtbl.find tbl n.rec_uid
       with Not_found ->
         let n1 = f n in
-        if n != n1 then (let n2 = node aux n1 in Hashtbl.replace tbl n.rec_uid n2; n2)
+        if n != n1 then
+          (let n2 = node aux n1 in Hashtbl.replace tbl n.rec_uid n2; n2)
         else map_node ~ignore_props aux (Hashtbl.replace tbl n.rec_uid) n
     in
     gmap ~ignore_props node
@@ -519,8 +548,10 @@ module Textual = struct
   type t = int gtype
 
   type node =
-    | Variant of string * t list * (string * stype_properties * t variant_args) list
-    | Record of string * t list * (string * stype_properties * t) list * record_repr
+    | Variant of
+        string * t list * (string * stype_properties * t variant_args) list
+    | Record of
+        string * t list * (string * stype_properties * t) list * record_repr
 
   type textual = {
     nodes: node array;
@@ -557,14 +588,17 @@ module Textual = struct
             let constrs =
               List.map (fun (s, p, args) ->
                   (share s, share_props p,
-                   match args with C_tuple tl -> C_tuple (List.map aux tl) | C_inline t -> C_inline (aux t)
+                   match args with
+                   | C_tuple tl -> C_tuple (List.map aux tl)
+                   | C_inline t -> C_inline (aux t)
                   )
                 ) v.variant_constrs
             in
             Variant (name, args, constrs)
           | DT_record r ->
             let fields =
-              List.map (fun (s, p, t) -> (share s, share_props p, aux t)) r.record_fields
+              List.map (fun (s, p, t) ->
+                  (share s, share_props p, aux t)) r.record_fields
             in
             Record (name, args, fields, r.record_repr)
         in
@@ -604,7 +638,9 @@ module Textual = struct
                      nodes.(i) <- Some (unnode node);
                      List.map (fun (s, p, args) ->
                          (share s, share_props p,
-                          match args with C_tuple tl -> C_tuple (List.map aux tl) | C_inline t -> C_inline (aux t)
+                          match args with
+                          | C_tuple tl -> C_tuple (List.map aux tl)
+                          | C_inline t -> C_inline (aux t)
                          )
                        ) constrs
                   ))
@@ -612,7 +648,8 @@ module Textual = struct
         unnode (Internal.create_record_type name (List.map aux args)
                   (fun node ->
                      nodes.(i) <- Some (unnode node);
-                     (List.map (fun (s, p, t) -> (share s, share_props p, aux t)) fields, repr)
+                     (List.map (fun (s, p, t) ->
+                          (share s, share_props p, aux t)) fields, repr)
                   ))
     in
     let node aux i =
@@ -643,7 +680,7 @@ module Textual = struct
   let import t = import t [||]
 end
 
-(******************************************************************************************)
+(************************ statisfy interface **********************************)
 
 type 'a ttype = stype
 
@@ -663,7 +700,8 @@ let add_props props t = DT_prop(props, t)
 let rec abstract_ttype = function
   | DT_node {rec_name=name; rec_args=l; _} -> DT_abstract(name, l)
   | DT_prop(props, t) -> DT_prop(props, abstract_ttype t)
-  | _ -> failwith "Mlfi_types.abstract_type only applies to variant or record types."
+  | _ ->
+    failwith "abstract_ttype only applies to variant or record types."
 
 let abstract_stype = abstract_ttype
 
@@ -672,14 +710,19 @@ let split_arrow_ttype t =
   | DT_arrow(_, t1, t2) -> t1, t2
   | _ -> assert false
 
-let strict_types_equality = Internal.equal ~ignore_props:false ~ignore_path:false
-let types_equality_modulo_props = Internal.equal ~ignore_props:true ~ignore_path:true
-let types_equality = Internal.equal ~ignore_props:false ~ignore_path:true
+let strict_types_equality =
+  Internal.equal ~ignore_props:false ~ignore_path:false
+let types_equality_modulo_props =
+  Internal.equal ~ignore_props:true ~ignore_path:true
+let types_equality = 
+  Internal.equal ~ignore_props:false ~ignore_path:true
 
 let strict_types_equality t1 t2 =
   match t1, t2 with
-  | DT_node n1, DT_node n2 -> n1 == n2 || (n1.rec_name = n2.rec_name && strict_types_equality t1 t2)
-  | DT_node _, _ | _, DT_node _ -> false
+  | DT_node n1, DT_node n2 ->
+    n1 == n2 || (n1.rec_name = n2.rec_name && strict_types_equality t1 t2)
+  | DT_node _, _
+  | _, DT_node _ -> false
   | _ -> strict_types_equality t1 t2
 
 let ttypes_equality t1 t2 =
@@ -716,28 +759,44 @@ module StackTrace = struct
 
   let rec print_expr ppf = function
     | Longident lid -> Format.fprintf ppf "%s" lid
-    | Apply (Longident "^", ["", e1; "", e2]) -> Format.fprintf ppf "(%a ^ %a)" print_expr e1 print_list e2
-    | Apply (f, args) -> Format.fprintf ppf "(%a%a)" print_expr f print_args args
-    | Construct ("::", Some (Tuple [_;_])) as e -> Format.fprintf ppf "(%a)" print_list e
-    | Construct (c, None) -> Format.fprintf ppf "%s" c
-    | Construct (c, Some e) -> Format.fprintf ppf "(%s %a)" c print_expr e
-    | Tuple el -> Format.fprintf ppf "(%a)" print_tuple el
-    | Int i -> Format.fprintf ppf "%i" i
-    | String s -> Format.fprintf ppf "%S" s
-    | Float s -> Format.fprintf ppf "%s" s
-    | Unknown -> Format.fprintf ppf "<expr>"
+    | Apply (Longident "^", ["", e1; "", e2]) ->
+      Format.fprintf ppf "(%a ^ %a)" print_expr e1 print_list e2
+    | Apply (f, args) ->
+      Format.fprintf ppf "(%a%a)" print_expr f print_args args
+    | Construct ("::", Some (Tuple [_;_])) as e ->
+      Format.fprintf ppf "(%a)" print_list e
+    | Construct (c, None) ->
+      Format.fprintf ppf "%s" c
+    | Construct (c, Some e) ->
+      Format.fprintf ppf "(%s %a)" c print_expr e
+    | Tuple el ->
+      Format.fprintf ppf "(%a)" print_tuple el
+    | Int i ->
+      Format.fprintf ppf "%i" i
+    | String s ->
+      Format.fprintf ppf "%S" s
+    | Float s ->
+      Format.fprintf ppf "%s" s
+    | Unknown ->
+      Format.fprintf ppf "<expr>"
   and print_list ppf = function
-    | Construct ("::", Some (Tuple [e1;e2])) -> Format.fprintf ppf "%a :: %a" print_expr e1 print_list e2
+    | Construct ("::", Some (Tuple [e1;e2])) ->
+      Format.fprintf ppf "%a :: %a" print_expr e1 print_list e2
     | e -> print_expr ppf e
   and print_args ppf = function
     | [] -> ()
-    | ("", e) :: rest -> Format.fprintf ppf " %a" print_expr e; print_args ppf rest
-    | (l, e) :: rest when l.[0] = '?' -> Format.fprintf ppf " %s:%a" l print_expr e; print_args ppf rest
-    | (l, e) :: rest -> Format.fprintf ppf " ~%s:%a" l print_expr e; print_args ppf rest
+    | ("", e) :: rest ->
+      Format.fprintf ppf " %a" print_expr e; print_args ppf rest
+    | (l, e) :: rest when l.[0] = '?' ->
+      Format.fprintf ppf " %s:%a" l print_expr e; print_args ppf rest
+    | (l, e) :: rest ->
+      Format.fprintf ppf " ~%s:%a" l print_expr e; print_args ppf rest
   and print_tuple ppf = function
     | [] -> ()
-    | [hd] -> Format.fprintf ppf "%a" print_expr hd
-    | hd::tl -> Format.fprintf ppf "%a, " print_expr hd; print_tuple ppf tl
+    | [hd] ->
+      Format.fprintf ppf "%a" print_expr hd
+    | hd::tl ->
+      Format.fprintf ppf "%a, " print_expr hd; print_tuple ppf tl
 
   let print_call_site ppf cs =
     Format.fprintf ppf "%s:%i:%a" cs.filename cs.line print_expr cs.expr
