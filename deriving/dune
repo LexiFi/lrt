@@ -1,0 +1,7 @@
+(library
+ (public_name ppx_deriving_dynt)
+ (name ppx_deriving_dynt)
+ (libraries ppx_deriving.api ppx_deriving)
+ (preprocess (pps ppx_metaquot))
+ (ppx_runtime_libraries dynt)
+ (kind ppx_deriver))
