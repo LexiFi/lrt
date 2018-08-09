@@ -1,0 +1,8 @@
+#!/bin/bash
+
+cd _build/default
+.ppx/ppx_deriving.std+ppx_deriving_dynt+ppx_expect/ppx.exe \
+  --cookie 'library-name="test"' -o test/$1.pp.ml \
+  --impl test/$1.ml -corrected-suffix .ppx-corrected -diff-cmd -
+
+cat test/$1.pp.ml
