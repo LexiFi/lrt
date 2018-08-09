@@ -1,20 +1,24 @@
-open Dynt.Types
+open Dynt
 
 let print x =
-  Format.(fprintf std_formatter "%a\n%!" print_stype (stype_of_ttype x))
+  Types.stype_of_ttype x
+  |> Format.(fprintf std_formatter "%a\n%!" Types.print_stype)
 
-(* Q: What should we do about that? *)
-type int = string
-
-type atom1 = int [@@deriving dynt]
-type pair2 = int * int [@@deriving dynt]
-type pair3 = int * string [@@deriving dynt]
-type pair4 = float * int * string [@@deriving dynt]
+type t = int [@@deriving t]
+type pair1 = string * int [@@deriving t]
+type pair2 = int * string [@@deriving t]
+type pair3 = float * int * string [@@deriving t]
 
 let%expect_test _ =
-  List.iter print [atom1_dynt ; pair2_dynt ; pair3_dynt ; pair4_dynt] ;
+  List.iter print [t ; pair1_t ; pair2_t ; pair3_t] ;
   [%expect{|
     int
-    (int * int)
+    (string * int)
     (int * string)
     (float * int * string) |}]
+
+type bool = string [@@deriving t]
+let%expect_test _ =
+  print bool_t ;
+  [%expect{|
+    string |}]
