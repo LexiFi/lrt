@@ -1,26 +1,20 @@
 open Dynt.Types
 
-type pair1 = int * int [@@deriving show]
+let print x =
+  Format.(fprintf std_formatter "%a\n%!" print_stype (stype_of_ttype x))
 
-let pair1_dynt : pair1 ttype = DT_tuple [ DT_int ; DT_int ] |> Obj.magic
+(* Q: What should we do about that? *)
+type int = string
 
-let stdout = Format.std_formatter
-let flush fmt = Format.pp_print_flush fmt ()
-
-let%expect_test _ =
-  print_stype stdout (stype_of_ttype pair1_dynt) ;
-  flush stdout ;
-  [%expect{| (int * int) |}]
-
-let%expect_test _ =
-  show_pair1 (42, 7) |> print_endline ;
-  [%expect{| (42, 7) |}]
-
-(* Now use our not yet premature deriving plugin *)
-
-type pair2 = int * int [@@deriving dynt ]
+type atom1 = int [@@deriving dynt]
+type pair2 = int * int [@@deriving dynt]
+type pair3 = int * string [@@deriving dynt]
+type pair4 = float * int * string [@@deriving dynt]
 
 let%expect_test _ =
-  print_stype stdout (stype_of_ttype pair2_dynt) ;
-  flush stdout ;
-  [%expect{| (int * int) |}]
+  List.iter print [atom1_dynt ; pair2_dynt ; pair3_dynt ; pair4_dynt] ;
+  [%expect{|
+    int
+    (int * int)
+    (int * string)
+    (float * int * string) |}]

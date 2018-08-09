@@ -10,20 +10,53 @@ let raise_errorf = Ppx_deriving.raise_errorf
 
 let parse_options options =
   options |> List.iter (fun (name, expr) ->
-    match name with
-    | _ -> raise_errorf ~loc:expr.pexp_loc
-             "%s does not support option %s" deriver name )
+      match name with
+      | _ -> raise_errorf ~loc:expr.pexp_loc
+               "%s does not support option %s" deriver name )
+
+let rec stype_of_core_type t =
+  let loc  = t.ptyp_loc in
+  let fail () = raise_errorf ~loc "type not yet supported: %s"
+           (Ppx_deriving.string_of_core_type t)
+  in
+  match t.ptyp_desc with
+  | Ptyp_tuple l  ->
+    let l = List.rev_map stype_of_core_type l in
+    Ppx_deriving.fold_exprs (fun acc e ->
+        [%expr [%e e] :: [%e acc]]) ([%expr [] ] :: l)
+    |> fun x -> [%expr DT_tuple ([%e x])]
+  | Ptyp_constr (id, []) -> begin
+      let open Longident in
+      match id.txt with
+      | Lident "int"    -> [%expr DT_int]
+      | Lident "date"   -> [%expr DT_date]
+      | Lident "float"  -> [%expr DT_float]
+      | Lident "string" -> [%expr DT_string]
+      | _ -> fail ()
+    end
+  | _ -> fail ()
+
+let stype_of_type_decl x =
+  let loc = x.ptype_loc in
+  let t = Ppx_deriving.core_type_of_type_decl x in
+  match x.ptype_kind with
+  | Ptype_abstract -> begin match x.ptype_manifest with
+      | None -> raise_errorf ~loc "no manifest found for type %s"
+                  (Ppx_deriving.string_of_core_type t)
+      | Some t -> stype_of_core_type t
+    end
+  | Ptype_record _
+  | Ptype_open
+  | Ptype_variant _ -> raise_errorf ~loc "type kind not yet supported: %s"
+                  (Ppx_deriving.string_of_core_type t)
 
 let str_of_type ~options ~path ({ ptype_loc = loc ; _} as type_decl) =
   ignore(path);
   parse_options options;
   let quoter = Ppx_deriving.create_quoter () in
-  let creator =
-    match type_decl.ptype_kind with
-    | _ -> [%expr DT_tuple [DT_int;DT_int] |> Obj.magic ]
-  in
   let decl = Ppx_deriving.mangle_type_decl (`Suffix deriver) type_decl in
-  [Vb.mk (pvar decl) (Ppx_deriving.sanitize ~quoter creator)]
+  let ttype = [%expr [%e stype_of_type_decl type_decl] |> Obj.magic ] in
+  [Vb.mk (pvar decl) (Ppx_deriving.sanitize ~quoter ttype)]
 
 let sig_of_type ~options ~path ({ ptype_loc = loc ; _} as type_decl) =
   ignore(path);
