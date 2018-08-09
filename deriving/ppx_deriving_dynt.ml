@@ -5,8 +5,13 @@ open Parsetree
 open Ast_helper
 open Ast_convenience
 
-let deriver = "dynt"
+let deriver = "t"
 let raise_errorf = Ppx_deriving.raise_errorf
+
+let mangle_lid = Ppx_deriving.mangle_lid (`Suffix deriver)
+
+let wrap_runtime decls =
+  Ppx_deriving.sanitize ~module_:(Lident "Ppx_deriving_dynt_runtime") decls
 
 let parse_options options =
   options |> List.iter (fun (name, expr) ->
@@ -23,17 +28,13 @@ let rec stype_of_core_type t =
   | Ptyp_tuple l  ->
     let l = List.rev_map stype_of_core_type l in
     Ppx_deriving.fold_exprs (fun acc e ->
-        [%expr [%e e] :: [%e acc]]) ([%expr [] ] :: l)
+        [%expr (stype_of_ttype [%e e]) :: [%e acc]]) ([%expr [] ] :: l)
     |> fun x -> [%expr DT_tuple ([%e x])]
-  | Ptyp_constr (id, []) -> begin
-      let open Longident in
-      match id.txt with
-      | Lident "int"    -> [%expr DT_int]
-      | Lident "date"   -> [%expr DT_date]
-      | Lident "float"  -> [%expr DT_float]
-      | Lident "string" -> [%expr DT_string]
-      | _ -> fail ()
-    end
+  | Ptyp_constr (id, []) ->
+      let n = mangle_lid id.txt |>  Longident.flatten |> String.concat "."
+              |> evar
+      in
+      [%expr [%e n]]
   | _ -> fail ()
 
 let stype_of_type_decl x =
@@ -53,10 +54,9 @@ let stype_of_type_decl x =
 let str_of_type ~options ~path ({ ptype_loc = loc ; _} as type_decl) =
   ignore(path);
   parse_options options;
-  let quoter = Ppx_deriving.create_quoter () in
   let decl = Ppx_deriving.mangle_type_decl (`Suffix deriver) type_decl in
-  let ttype = [%expr [%e stype_of_type_decl type_decl] |> Obj.magic ] in
-  [Vb.mk (pvar decl) (Ppx_deriving.sanitize ~quoter ttype)]
+  let ttype = [%expr [%e stype_of_type_decl type_decl] |> Obj.magic] in
+  [Vb.mk (pvar decl) (wrap_runtime ttype)]
 
 let sig_of_type ~options ~path ({ ptype_loc = loc ; _} as type_decl) =
   ignore(path);
