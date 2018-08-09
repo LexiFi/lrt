@@ -128,7 +128,7 @@ type list_sep =
 
 
 let is_enumeration = function
-  | DT_node{rec_name = "Mlfi_isdatypes.variant"; _} -> true
+  (* | DT_node{rec_name = "Mlfi_isdatypes.variant"; _} -> true *)
   | DT_node{rec_descr = DT_variant {variant_constrs}; _} ->
     List.for_all (fun (_, _, args) -> args = C_tuple []) variant_constrs
   | _ -> false
@@ -738,66 +738,3 @@ let build_arrow_ttype t1 t2 =
 
 let ttype_fst = function DT_tuple [t; _] -> t | _ -> assert false
 let ttype_snd = function DT_tuple [_; t] -> t | _ -> assert false
-
-module StackTrace = struct
-  type expr =
-    | Longident of string
-    | Apply of expr * (string * expr) list
-    | Construct of string * expr option
-    | Tuple of expr list
-    | Int of int
-    | String of string
-    | Float of string
-    | Unknown
-
-  type call_site = {
-    directory: string;
-    filename: string;
-    line: int;
-    expr: expr;
-  }
-
-  let rec print_expr ppf = function
-    | Longident lid -> Format.fprintf ppf "%s" lid
-    | Apply (Longident "^", ["", e1; "", e2]) ->
-      Format.fprintf ppf "(%a ^ %a)" print_expr e1 print_list e2
-    | Apply (f, args) ->
-      Format.fprintf ppf "(%a%a)" print_expr f print_args args
-    | Construct ("::", Some (Tuple [_;_])) as e ->
-      Format.fprintf ppf "(%a)" print_list e
-    | Construct (c, None) ->
-      Format.fprintf ppf "%s" c
-    | Construct (c, Some e) ->
-      Format.fprintf ppf "(%s %a)" c print_expr e
-    | Tuple el ->
-      Format.fprintf ppf "(%a)" print_tuple el
-    | Int i ->
-      Format.fprintf ppf "%i" i
-    | String s ->
-      Format.fprintf ppf "%S" s
-    | Float s ->
-      Format.fprintf ppf "%s" s
-    | Unknown ->
-      Format.fprintf ppf "<expr>"
-  and print_list ppf = function
-    | Construct ("::", Some (Tuple [e1;e2])) ->
-      Format.fprintf ppf "%a :: %a" print_expr e1 print_list e2
-    | e -> print_expr ppf e
-  and print_args ppf = function
-    | [] -> ()
-    | ("", e) :: rest ->
-      Format.fprintf ppf " %a" print_expr e; print_args ppf rest
-    | (l, e) :: rest when l.[0] = '?' ->
-      Format.fprintf ppf " %s:%a" l print_expr e; print_args ppf rest
-    | (l, e) :: rest ->
-      Format.fprintf ppf " ~%s:%a" l print_expr e; print_args ppf rest
-  and print_tuple ppf = function
-    | [] -> ()
-    | [hd] ->
-      Format.fprintf ppf "%a" print_expr hd
-    | hd::tl ->
-      Format.fprintf ppf "%a, " print_expr hd; print_tuple ppf tl
-
-  let print_call_site ppf cs =
-    Format.fprintf ppf "%s:%i:%a" cs.filename cs.line print_expr cs.expr
-end

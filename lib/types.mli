@@ -52,6 +52,7 @@ and node = private {
   mutable rec_hash: int; (** Internal use only. *)
   mutable rec_memoized: memoized_type_prop array;
 }
+
 (** Instantiated datatype declaration. *)
 
 and node_descr =
@@ -99,7 +100,7 @@ val print_stype_ref: (Format.formatter -> stype -> unit) ref
 (** Pretty-printer hook. This can be changed dynamically. *)
 
 val print_stype: Format.formatter -> stype -> unit
-(** Pretty-printer for stype. Calls {!Mlfi_types.print_stype_ref}. *)
+(** Pretty-printer for stype. Calls {!print_stype_ref}. *)
 
 val print_stype_hide_enumerations: Format.formatter -> stype -> unit
 
@@ -138,14 +139,17 @@ module Internal: sig
   val create_variant_type: string -> stype list
     -> (stype -> (string * stype_properties * stype variant_args) list)
     -> stype
+
   val create_record_type: string -> stype list
     -> (stype -> (string * stype_properties * stype) list * record_repr)
     -> stype
 
   val create_node: string -> stype list -> node
+
   val set_node_variant: node
     -> ((string * stype_properties * stype variant_args) list)
     -> unit
+
   val set_node_record: node
     -> (((string * stype_properties * stype) list) * record_repr)
     -> unit
@@ -178,30 +182,6 @@ module Internal: sig
   (** This function is memoized. *)
 
   val set_memoized: node -> memoized_type_prop array -> unit
-end
-
-(** {2 Stack traces} *)
-
-module StackTrace: sig
-  type expr =
-    | Longident of string
-    | Apply of expr * (string * expr) list
-    | Construct of string * expr option
-    | Tuple of expr list
-    | Int of int
-    | String of string
-    | Float of string
-    | Unknown
-
-  type call_site = {
-    directory: string;
-    filename: string;
-    line: int;
-    expr: expr;
-  }
-
-  val print_expr: Format.formatter -> expr -> unit
-  val print_call_site: Format.formatter -> call_site -> unit
 end
 
 (**/**)
