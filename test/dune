@@ -1,3 +1,5 @@
-(tests
- (names one)
- (libraries dynt))
+(library
+ (name test)
+ (libraries dynt)
+ (inline_tests)
+ (preprocess (pps ppx_expect)))
