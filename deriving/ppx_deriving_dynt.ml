@@ -17,13 +17,18 @@ let mangle_lid = Ppx_deriving.mangle_lid (`Suffix deriver)
 let wrap_runtime decls =
   Ppx_deriving.sanitize ~module_:(Lident "Ppx_deriving_dynt_runtime") decls
 
-type options = { abstract : bool ; path : label list }
+type options = { abstract : label option ; path : label list }
 let parse_options ~path options : options =
-  let default = { abstract = false ; path } in
+  let default = { abstract = None ; path } in
   List.fold_left (fun acc (name, expr) ->
+    let loc = expr.pexp_loc in
       match name with
-      | "abstract" -> { acc with abstract = true }
-      | _ -> raise_str ~loc:expr.pexp_loc
+      | "abstract" ->
+        let name = match expr.pexp_desc with
+          | Pexp_constant (Pconst_string (name, None )) -> name
+          | _ -> raise_str ~loc "please provide a string as abstract name"
+        in  { acc with abstract = Some name }
+      | _ -> raise_str ~loc
                ( sprintf "option %s not supported" name )
     ) default options
 
@@ -44,17 +49,12 @@ let rec stype_of_core_type t =
       [%expr [%e n]]
   | _ -> fail ()
 
-let fresh_abstract_stype ~loc () =
-  (* This is not so nice *)
-  let nonce = Random.bits () |> string_of_int
-            |> Const.string |> Exp.constant in
-  [%expr DT_abstract ([%e nonce], []) ]
-
 let stype_of_type_decl ~opt x =
   let loc = x.ptype_loc in
-  if opt.abstract then
-    fresh_abstract_stype ~loc ()
-  else
+  match opt.abstract with
+  | Some name -> let n = Const.string name |> Exp.constant in
+    [%expr DT_abstract ([%e n], []) ]
+  | None ->
     match x.ptype_kind with
     | Ptype_abstract -> begin match x.ptype_manifest with
         | None -> raise_errorf ~loc "no manifest found"
@@ -71,11 +71,6 @@ let str_of_type ~options ~path ({ ptype_loc = loc ; _} as type_decl) =
   [Vb.mk (pvar decl) (wrap_runtime ttype)]
 
 let sig_of_type ~options ~path ({ ptype_loc = loc ; _} as type_decl) =
-  (* let name = match Ast_mapper.get_cookie "library-name" with *)
-  (* | None -> raise_str "Cookie library-name is missing" *)
-  (* | Some name -> Pprintast.string_of_expression name *)
-  (* in *)
-  (* if true then raise_str name; *)
   let _opt = parse_options ~path options in
   let typ  = Ppx_deriving.core_type_of_type_decl type_decl in
   let name = Ppx_deriving.mangle_type_decl (`Suffix deriver) type_decl in
@@ -88,7 +83,6 @@ let sig_of_type ~options ~path ({ ptype_loc = loc ; _} as type_decl) =
 
 let () =
   let type_decl_str ~options ~path type_decls =
-    Random.self_init ();
     List.map (str_of_type ~options ~path) type_decls
     |> List.concat
     |> Str.value Nonrecursive

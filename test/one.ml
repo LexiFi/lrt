@@ -25,8 +25,12 @@ let%expect_test _ =
 
 type two_public = Two.public [@@deriving t]
 type two_hidden = Two.hidden [@@deriving t]
+type two_hidden2 = two_hidden [@@deriving t]
 let%expect_test _ =
   print two_public_t ;
   print two_hidden_t ;
+  print two_hidden2_t ;
   [%expect{|
-    (int * int) |}]
+    (int * int)
+    Two.hidden
+    Two.hidden |}]
