@@ -1,0 +1,2 @@
+type public = int * int [@@deriving t]
+type hidden = string * int [@@deriving t { abstract }]

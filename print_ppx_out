@@ -1,8 +1,15 @@
 #!/bin/bash
 
 cd _build/default
-.ppx/ppx_deriving.std+ppx_deriving_dynt+ppx_expect/ppx.exe \
-  --cookie 'library-name="test"' -o test/$1.pp.ml \
-  --impl test/$1.ml -corrected-suffix .ppx-corrected -diff-cmd -
 
-cat test/$1.pp.ml
+echo "::: test/$1.mli :::"
+
+.ppx/ppx_deriving.std+ppx_deriving_dynt+ppx_expect/ppx.exe \
+  --cookie 'library-name="test"' \
+  --intf test/$1.mli -corrected-suffix .ppx-corrected -diff-cmd -
+
+echo "::: test/$1.ml ::::"
+
+.ppx/ppx_deriving.std+ppx_deriving_dynt+ppx_expect/ppx.exe \
+  --cookie 'library-name="test"' \
+  --impl test/$1.ml -corrected-suffix .ppx-corrected -diff-cmd -
