@@ -38,15 +38,21 @@ let%expect_test _ =
 
 type enum = North | East | South | West [@@deriving t]
 let%expect_test _ = print enum_t ;
-  [%expect{| (enum = West | South | East | North) |}]
+  [%expect{| (enum = North | East | South | West) |}]
 
 type sum1 =
   | Option1 of string * int
   | Option2 of int * int * string
   | Option3
+  | Option4 of Two.public * Two.hidden
 [@@deriving t]
 let%expect_test _ = print sum1_t ;
-  [%expect{|  |}]
+  [%expect{|
+    (sum1 =
+       | Option1 of (string * int)
+       | Option2 of (int * int * string)
+       | Option3
+       | Option4 of ((int * int) * Two.hidden)) |}]
 
 type bool = string [@@deriving t]
 let%expect_test _ =
