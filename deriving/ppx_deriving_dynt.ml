@@ -26,6 +26,11 @@ let sprintf = Format.sprintf
 let expand_path = Ppx_deriving.expand_path (* this should mix in library name
                                               at some point *)
 
+(* Combine multiple expressions into a list expression *)
+let expr_list ~loc lst =
+  Ppx_deriving.fold_exprs (fun acc el ->
+      [%expr [%e el] :: [%e acc]]) ([%expr []] :: lst)
+
 (* read options from e.g. [%deriving t { abstract = "Hashtbl.t" }] *)
 type options = { abstract : label option ; path : label list }
 let parse_options ~path options : options =
@@ -74,16 +79,19 @@ let rec str_of_core_type ~opt ({ ptyp_loc = loc ; _ } as ct) =
   | None -> t
 
 (* Construct variant ttypes *)
-let str_of_variant_constructors ~loc ~vname l =
+let str_of_variant_constructors ~loc ~opt ~vname l =
   let fail loc = raise_str ~loc "this variant is too advanced" in
-  let ll = List.map (fun {pcd_loc = loc; pcd_name; pcd_args; _ } ->
+  let ll = List.rev_map (fun {pcd_loc = loc; pcd_name; pcd_args; _ } ->
       match pcd_args with
-      | Pcstr_tuple [] ->
+      | Pcstr_tuple ctl ->
+        let l = List.rev_map (fun ct ->
+            str_of_core_type ~opt ct
+            |> fun e -> [%expr stype_of_ttype [%e e]]
+          ) ctl in
         let name = Const.string pcd_name.txt |> Exp.constant in
-        [%expr make_variant_constructor ~name:[%e name] []]
+        [%expr make_variant_constructor ~name:[%e name] [%e expr_list ~loc l]]
       | _ -> fail loc
-    ) l |> fun l -> Ppx_deriving.fold_exprs (fun acc el ->
-      [%expr [%e el] :: [%e acc]]) ([%expr []] :: l)
+    ) l |> expr_list ~loc
   in
   let vname = Const.string vname |> Exp.constant in
   [%expr make_variant ~name:[%e vname] [] (fun _ -> [%e ll]) |> Obj.magic ]
@@ -101,7 +109,7 @@ let str_of_type_decl ~options ~path
         | None -> raise_errorf ~loc "no manifest found"
         | Some ct -> str_of_core_type ~opt ct
       end
-    | Ptype_variant l -> str_of_variant_constructors ~loc ~vname l
+    | Ptype_variant l -> str_of_variant_constructors ~loc ~opt ~vname l
     | Ptype_record _
     | Ptype_open ->
       raise_str ~loc (sprintf "type kind not yet supported")
