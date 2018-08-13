@@ -14,3 +14,9 @@ val make_variant_constructor: name:string -> stype list -> variant_constructor
 
 val make_variant: name:string -> stype list ->
   (stype -> variant_constructor list) -> stype
+
+type record_field
+val make_record_field: name:string -> stype -> record_field
+
+val make_record: name:string -> stype list ->
+  (stype -> record_field list) -> stype

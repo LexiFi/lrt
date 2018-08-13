@@ -28,3 +28,12 @@ let make_variant_constructor ~name stypes =
 
 let make_variant ~name _stypes stype_to_constructors =
   Internal.create_variant_type name [] stype_to_constructors
+
+type record_field = (string * stype_properties * stype)
+
+let make_record_field ~name stype =
+  (name, [], stype)
+
+let make_record ~name _stypes stype_to_fields =
+  let f x = stype_to_fields x , Record_regular in
+  Internal.create_record_type name [] f

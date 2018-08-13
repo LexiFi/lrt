@@ -79,7 +79,7 @@ let rec str_of_core_type ~opt ({ ptyp_loc = loc ; _ } as ct) =
   | None -> t
 
 (* Construct variant ttypes *)
-let str_of_variant_constructors ~loc ~opt ~vname l =
+let str_of_variant_constructors ~loc ~opt ~name l =
   let fail loc = raise_str ~loc "this variant is too advanced" in
   let ll = List.rev_map (fun {pcd_loc = loc; pcd_name; pcd_args; _ } ->
       match pcd_args with
@@ -93,8 +93,19 @@ let str_of_variant_constructors ~loc ~opt ~vname l =
       | _ -> fail loc
     ) l |> expr_list ~loc
   in
-  let vname = Const.string vname |> Exp.constant in
-  [%expr make_variant ~name:[%e vname] [] (fun _ -> [%e ll]) |> Obj.magic ]
+  let name = Const.string name |> Exp.constant in
+  [%expr make_variant ~name:[%e name] [] (fun _ -> [%e ll]) |> Obj.magic ]
+
+(* Construct record ttypes *)
+let str_of_record_labels ~loc ~opt ~name l =
+  let ll = List.rev_map (fun {pld_loc = loc; pld_name; pld_type; _ } ->
+      let t = str_of_core_type ~opt pld_type in
+      let name = Const.string pld_name.txt |> Exp.constant in
+      [%expr make_record_field ~name:[%e name] (stype_of_ttype [%e t])]
+    ) l |> expr_list ~loc
+  in
+  let name = Const.string name |> Exp.constant in
+  [%expr make_record ~name:[%e name] [] (fun _ -> [%e ll]) |> Obj.magic ]
 
 (* Type declarations in structure.  Builds e.g.
  * let <type>_t : (<a> * <b>) ttype = pair <b>_t <a>_t
@@ -102,18 +113,18 @@ let str_of_variant_constructors ~loc ~opt ~vname l =
 let str_of_type_decl ~options ~path
     ({ ptype_loc = loc ; ptype_name ; _} as td) =
   let opt = parse_options ~path options in
-  let vname = ptype_name.txt in
-  let name = mangle_type_decl td in
+  let name = ptype_name.txt in
   let t = match td.ptype_kind with
     | Ptype_abstract -> begin match td.ptype_manifest with
         | None -> raise_errorf ~loc "no manifest found"
         | Some ct -> str_of_core_type ~opt ct
       end
-    | Ptype_variant l -> str_of_variant_constructors ~loc ~opt ~vname l
-    | Ptype_record _
+    | Ptype_variant l -> str_of_variant_constructors ~loc ~opt ~name l
+    | Ptype_record l -> str_of_record_labels ~loc ~opt ~name l
     | Ptype_open ->
       raise_str ~loc (sprintf "type kind not yet supported")
   in
+  let name = mangle_type_decl td in
   [Vb.mk (pvar name) (wrap_runtime [%expr [%e t]])]
 
 (* Type declarations in signature. Generates

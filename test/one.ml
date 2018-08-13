@@ -54,6 +54,23 @@ let%expect_test _ = print sum1_t ;
        | Option3
        | Option4 of ((int * int) * Two.hidden)) |}]
 
+type record1 =
+  { field1 : int
+  ; field2 : string
+  ; field3 : Two.hidden
+  ; field4 : Two.public
+  }
+[@@deriving t]
+let%expect_test _ = print record1_t ;
+  [%expect{|
+    (record1 =
+       {
+         field1: int;
+         field2: string;
+         field3: Two.hidden;
+         field4: (int * int);
+       }) |}]
+
 type bool = string [@@deriving t]
 let%expect_test _ =
   print bool_t ;
