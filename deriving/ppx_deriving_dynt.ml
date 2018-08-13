@@ -79,7 +79,7 @@ let rec str_of_core_type ~opt ({ ptyp_loc = loc ; _ } as ct) =
   | None -> t
 
 (* Construct record ttypes *)
-let str_of_record_labels ~loc ~opt ~name l =
+let str_of_record_labels ?inline ~loc ~opt ~name l =
   let ll = List.rev_map (fun {pld_loc = loc; pld_name; pld_type; _ } ->
       let t = str_of_core_type ~opt pld_type in
       let name = Const.string pld_name.txt |> Exp.constant in
@@ -87,21 +87,35 @@ let str_of_record_labels ~loc ~opt ~name l =
     ) l |> expr_list ~loc
   in
   let name = Const.string name |> Exp.constant in
-  [%expr make_record ~name:[%e name] [] (fun _ -> [%e ll]) |> Obj.magic ]
+  match inline with
+  | None ->
+    [%expr make_record ~name:[%e name] [] (fun _ -> [%e ll]) |> Obj.magic ]
+  | Some i ->
+    let i = Const.int i |> Exp.constant in
+    [%expr make_record ~name:[%e name] ~inline:[%e i] []
+        (fun _ -> [%e ll]) ]
 
 (* Construct variant ttypes *)
 let str_of_variant_constructors ~loc ~opt ~name l =
+  let nconst_tag = ref 0 in
   let ll = List.rev_map (fun {pcd_loc = loc; pcd_name; pcd_args; _ } ->
+      let nameexp = Const.string pcd_name.txt |> Exp.constant in
       match pcd_args with
       | Pcstr_tuple ctl ->
+        if ctl <> [] then incr nconst_tag;
         let l = List.rev_map (fun ct ->
             str_of_core_type ~opt ct
             |> fun e -> [%expr stype_of_ttype [%e e]]
           ) ctl in
-        let name = Const.string pcd_name.txt |> Exp.constant in
-        [%expr make_variant_constructor_tuple ~name:[%e name]
+        [%expr make_variant_constructor_tuple ~name:[%e nameexp]
             [%e expr_list ~loc l]]
-      | Pcstr_record lbl -> str_of_record_labels ~opt ~loc ~name:"" lbl
+      | Pcstr_record lbl ->
+        let r =
+          str_of_record_labels ~inline:!nconst_tag
+            ~opt ~loc ~name:(sprintf "%s.%s" name pcd_name.txt) lbl
+        in
+        incr nconst_tag;
+        [%expr make_variant_constructor_inline ~name:[%e nameexp] [%e r]]
     ) l |> expr_list ~loc
   in
   let name = Const.string name |> Exp.constant in

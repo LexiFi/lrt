@@ -12,7 +12,7 @@ val make_abstract: name:string -> 'a ttype -> 'b ttype
 type record_field
 val make_record_field: name:string -> stype -> record_field
 
-val make_record: name:string -> stype list ->
+val make_record: name:string -> ?inline:int -> stype list ->
   (stype -> record_field list) -> stype
 
 type variant_constructor

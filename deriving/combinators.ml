@@ -26,8 +26,12 @@ type record_field = (string * stype_properties * stype)
 let make_record_field ~name stype =
   (name, [], stype)
 
-let make_record ~name _stypes stype_to_fields =
-  let f x = stype_to_fields x , Record_regular in
+let make_record ~name ?inline _stypes stype_to_fields =
+  let r = match inline with
+    | None -> Record_regular
+    | Some i -> Record_inline i
+  in
+  let f x = stype_to_fields x , r in
   Internal.create_record_type name [] f
 
 type variant_constructor = (string * stype_properties * stype variant_args)

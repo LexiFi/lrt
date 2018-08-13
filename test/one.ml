@@ -77,6 +77,14 @@ type inline_record =
 [@@deriving t]
 let%expect_test _ = print inline_record_t ;
   [%expect{|
+    (inline_record =
+       | Basic of (int * int)
+       | Inline of
+        (inline_record.Inline =
+           {
+             h: Two.hidden;
+             p: (int * int);
+           }))
     |}]
 
 type bool = string [@@deriving t]
