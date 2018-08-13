@@ -5,18 +5,24 @@ open Parsetree
 open Ast_helper
 open Ast_convenience
 
+(* Who are we? *)
 let deriver = "t"
-
 let me = "[@@deriving t]"
+
+(* How are names derived? We use suffix over prefix *)
+let mangle_lid = Ppx_deriving.mangle_lid (`Suffix deriver)
+let mangle_type_decl = Ppx_deriving.mangle_type_decl (`Suffix deriver)
+
+(* Make accesible the runtime module at runtime *)
+let wrap_runtime decls =
+  Ppx_deriving.sanitize ~module_:(Lident "Ppx_deriving_dynt_runtime") decls
+
+(* Helpers for error raising *)
 let raise_str ?loc ?sub ?if_highlight (s : string) =
   Ppx_deriving.raise_errorf ?sub ?if_highlight ?loc "%s: %s" me s
 let sprintf = Format.sprintf
 
-let mangle_lid = Ppx_deriving.mangle_lid (`Suffix deriver)
-
-let wrap_runtime decls =
-  Ppx_deriving.sanitize ~module_:(Lident "Ppx_deriving_dynt_runtime") decls
-
+(* read options from e.g. [%deriving t { abstract = "Hashtbl.t" }] *)
 type options = { abstract : label option ; path : label list }
 let parse_options ~path options : options =
   let default = { abstract = None ; path } in
@@ -32,63 +38,78 @@ let parse_options ~path options : options =
                ( sprintf "option %s not supported" name )
     ) default options
 
-let rec stype_of_core_type t =
-  let loc  = t.ptyp_loc in
-  let fail () = raise_str ~loc "type not yet supported"
+(* Construct ttype generator from core type *)
+let rec str_of_core_type ~opt ({ ptyp_loc = loc ; _ } as ct) =
+  let fail () = raise_str ~loc "type not yet supported" in
+  let rc = str_of_core_type ~opt in
+  let t = match ct.ptyp_desc with
+    | Ptyp_tuple []
+    | Ptyp_tuple [_] -> raise_str ~loc "tuple too small"
+    | Ptyp_tuple [a; b] ->
+      let a, b = rc a, rc b in
+      [%expr pair ([%e a]) [%e b]]
+    | Ptyp_tuple [a; b; c] ->
+      let a, b, c = rc a, rc b, rc c in
+      [%expr triple ([%e a]) [%e b] [%e c]]
+    | Ptyp_tuple [a; b; c; d] ->
+      let a, b, c, d = rc a, rc b, rc c, rc d in
+      [%expr quartet ([%e a]) [%e b] [%e c] [%e d]]
+    | Ptyp_tuple [a; b; c; d; e] ->
+      let a, b, c, d, e = rc a, rc b, rc c, rc d, rc e in
+      [%expr quintet ([%e a]) [%e b] [%e c] [%e d] [%e e]]
+    | Ptyp_tuple _ -> raise_str ~loc "tuple too big"
+    | Ptyp_constr (id, []) ->
+      let id' = { id with txt = mangle_lid id.txt} in
+      [%expr [%e Exp.ident id']]
+    | _ -> fail ()
   in
-  match t.ptyp_desc with
-  | Ptyp_tuple l  ->
-    let l = List.rev_map stype_of_core_type l in
-    Ppx_deriving.fold_exprs (fun acc e ->
-        [%expr (stype_of_ttype [%e e]) :: [%e acc]]) ([%expr [] ] :: l)
-    |> fun x -> [%expr DT_tuple ([%e x])]
-  | Ptyp_constr (id, []) ->
-      let n = mangle_lid id.txt |>  Longident.flatten |> String.concat "."
-              |> evar
-      in
-      [%expr [%e n]]
-  | _ -> fail ()
-
-let stype_of_type_decl ~opt x =
-  let loc = x.ptype_loc in
   match opt.abstract with
-  | Some name -> let n = Const.string name |> Exp.constant in
-    [%expr DT_abstract ([%e n], []) ]
-  | None ->
-    match x.ptype_kind with
-    | Ptype_abstract -> begin match x.ptype_manifest with
+  | Some name ->
+    let n = Const.string name |> Exp.constant in
+    [%expr make_abstract ~name:[%e n] [%e t]]
+  | None -> t
+
+(* Type declarations in structure.  Builds e.g.
+ * let <type>_t : (<a> * <b>) ttype = pair <b>_t <a>_t
+ *)
+let str_of_type_decl ~options ~path ({ ptype_loc = loc ; _} as td) =
+  let opt = parse_options ~path options in
+  let name = mangle_type_decl td in
+  let t = match td.ptype_kind with
+    | Ptype_abstract -> begin match td.ptype_manifest with
         | None -> raise_errorf ~loc "no manifest found"
-        | Some t -> stype_of_core_type t
+        | Some ct -> str_of_core_type ~opt ct
       end
     | Ptype_record _
     | Ptype_open
-    | Ptype_variant _ -> raise_str ~loc (sprintf "type kind not yet supported")
+    | Ptype_variant _ ->
+      raise_str ~loc (sprintf "type kind not yet supported")
+  in
+  [Vb.mk (pvar name) (wrap_runtime [%expr [%e t]])]
 
-let str_of_type ~options ~path ({ ptype_loc = loc ; _} as type_decl) =
-  let opt = parse_options ~path options in
-  let decl = Ppx_deriving.mangle_type_decl (`Suffix deriver) type_decl in
-  let ttype = [%expr [%e stype_of_type_decl ~opt type_decl] |> Obj.magic] in
-  [Vb.mk (pvar decl) (wrap_runtime ttype)]
-
-let sig_of_type ~options ~path ({ ptype_loc = loc ; _} as type_decl) =
+(* Type declarations in signature. Generates
+ * val <type>_t : <type> ttype
+ *)
+let sig_of_type_decl ~options ~path ({ ptype_loc = loc ; _} as td) =
   let _opt = parse_options ~path options in
-  let typ  = Ppx_deriving.core_type_of_type_decl type_decl in
-  let name = Ppx_deriving.mangle_type_decl (`Suffix deriver) type_decl in
+  let ct  = Ppx_deriving.core_type_of_type_decl td in
+  let name = mangle_type_decl td in
   let typ =
-    match type_decl.ptype_kind with
-    | Ptype_abstract -> [%type: [%t typ] Dynt.Types.ttype ]
+    match td.ptype_kind with
+    | Ptype_abstract -> [%type: [%t ct] Dynt.Types.ttype ]
     | _ -> raise_str ~loc "cannot handle this type in signatures yet"
   in
   [Sig.value (Val.mk (mknoloc name) typ)]
 
+(* Register the handler for type declarations in signatures and structures *)
 let () =
   let type_decl_str ~options ~path type_decls =
-    List.map (str_of_type ~options ~path) type_decls
+    List.map (str_of_type_decl ~options ~path) type_decls
     |> List.concat
     |> Str.value Nonrecursive
     |> fun x -> [x]
   and type_decl_sig ~options ~path type_decls =
-    List.map (sig_of_type ~options ~path) type_decls
+    List.map (sig_of_type_decl ~options ~path) type_decls
     |> List.concat
   in
   Ppx_deriving.(register (create deriver ~type_decl_str ~type_decl_sig ()))
