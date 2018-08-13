@@ -2,7 +2,7 @@
  (name ppx_deriving_dynt_runtime)
  (public_name ppx_deriving_dynt.runtime)
  (synopsis "Runtime components of [@@deriving t]")
- (modules ppx_deriving_dynt_runtime)
+ (modules ppx_deriving_dynt_runtime combinators)
  (libraries ppx_deriving.runtime dynt))
 
 (library

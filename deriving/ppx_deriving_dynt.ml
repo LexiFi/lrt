@@ -22,6 +22,10 @@ let raise_str ?loc ?sub ?if_highlight (s : string) =
   Ppx_deriving.raise_errorf ?sub ?if_highlight ?loc "%s: %s" me s
 let sprintf = Format.sprintf
 
+(* More helpers *)
+let expand_path = Ppx_deriving.expand_path (* this should mix in library name
+                                              at some point *)
+
 (* read options from e.g. [%deriving t { abstract = "Hashtbl.t" }] *)
 type options = { abstract : label option ; path : label list }
 let parse_options ~path options : options =
@@ -69,32 +73,35 @@ let rec str_of_core_type ~opt ({ ptyp_loc = loc ; _ } as ct) =
     [%expr make_abstract ~name:[%e n] [%e t]]
   | None -> t
 
-let str_of_variant_constructors ~loc l =
+(* Construct variant ttypes *)
+let str_of_variant_constructors ~loc ~vname l =
   let fail loc = raise_str ~loc "this variant is too advanced" in
   let ll = List.map (fun {pcd_loc = loc; pcd_name; pcd_args; _ } ->
       match pcd_args with
       | Pcstr_tuple [] ->
         let name = Const.string pcd_name.txt |> Exp.constant in
-        [%expr ([%e name], [], C_tuple [])]
+        [%expr make_variant_constructor ~name:[%e name] []]
       | _ -> fail loc
     ) l |> fun l -> Ppx_deriving.fold_exprs (fun acc el ->
       [%expr [%e el] :: [%e acc]]) ([%expr []] :: l)
   in
-  [%expr Dynt.Types.Internal.create_variant_type "enum" []
-      (fun _ -> [%e ll]) |> Obj.magic ]
+  let vname = Const.string vname |> Exp.constant in
+  [%expr make_variant ~name:[%e vname] [] (fun _ -> [%e ll]) |> Obj.magic ]
 
 (* Type declarations in structure.  Builds e.g.
  * let <type>_t : (<a> * <b>) ttype = pair <b>_t <a>_t
  *)
-let str_of_type_decl ~options ~path ({ ptype_loc = loc ; _} as td) =
+let str_of_type_decl ~options ~path
+    ({ ptype_loc = loc ; ptype_name ; _} as td) =
   let opt = parse_options ~path options in
+  let vname = ptype_name.txt in
   let name = mangle_type_decl td in
   let t = match td.ptype_kind with
     | Ptype_abstract -> begin match td.ptype_manifest with
         | None -> raise_errorf ~loc "no manifest found"
         | Some ct -> str_of_core_type ~opt ct
       end
-    | Ptype_variant l -> str_of_variant_constructors ~loc l
+    | Ptype_variant l -> str_of_variant_constructors ~loc ~vname l
     | Ptype_record _
     | Ptype_open ->
       raise_str ~loc (sprintf "type kind not yet supported")
