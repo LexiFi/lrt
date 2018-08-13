@@ -1,0 +1,3 @@
+#!/bin/bash
+
+ocamlc -dparsetree test/$1.ml
