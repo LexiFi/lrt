@@ -69,6 +69,20 @@ let rec str_of_core_type ~opt ({ ptyp_loc = loc ; _ } as ct) =
     [%expr make_abstract ~name:[%e n] [%e t]]
   | None -> t
 
+let str_of_variant_constructors ~loc l =
+  let fail loc = raise_str ~loc "this variant is too advanced" in
+  let ll = List.map (fun {pcd_loc = loc; pcd_name; pcd_args; _ } ->
+      match pcd_args with
+      | Pcstr_tuple [] ->
+        let name = Const.string pcd_name.txt |> Exp.constant in
+        [%expr ([%e name], [], C_tuple [])]
+      | _ -> fail loc
+    ) l |> fun l -> Ppx_deriving.fold_exprs (fun acc el ->
+      [%expr [%e el] :: [%e acc]]) ([%expr []] :: l)
+  in
+  [%expr Dynt.Types.Internal.create_variant_type "enum" []
+      (fun _ -> [%e ll]) |> Obj.magic ]
+
 (* Type declarations in structure.  Builds e.g.
  * let <type>_t : (<a> * <b>) ttype = pair <b>_t <a>_t
  *)
@@ -80,9 +94,9 @@ let str_of_type_decl ~options ~path ({ ptype_loc = loc ; _} as td) =
         | None -> raise_errorf ~loc "no manifest found"
         | Some ct -> str_of_core_type ~opt ct
       end
+    | Ptype_variant l -> str_of_variant_constructors ~loc l
     | Ptype_record _
-    | Ptype_open
-    | Ptype_variant _ ->
+    | Ptype_open ->
       raise_str ~loc (sprintf "type kind not yet supported")
   in
   [Vb.mk (pvar name) (wrap_runtime [%expr [%e t]])]

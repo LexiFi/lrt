@@ -24,12 +24,6 @@ let%expect_test _ =
     (float * int * string * int)
     (float * int * string * int * int) |}]
 
-type bool = string [@@deriving t]
-let%expect_test _ =
-  print bool_t ;
-  [%expect{|
-    string |}]
-
 type two_public = Two.public [@@deriving t]
 type two_hidden = Two.hidden [@@deriving t]
 type two_hidden2 = two_hidden [@@deriving t]
@@ -41,3 +35,14 @@ let%expect_test _ =
     (int * int)
     Two.hidden
     Two.hidden |}]
+
+type enum = North | East | South | West [@@deriving t]
+
+let%expect_test _ = print enum_t ;
+  [%expect{| (enum = West | South | East | North) |}]
+
+type bool = string [@@deriving t]
+let%expect_test _ =
+  print bool_t ;
+  [%expect{|
+    string |}]
