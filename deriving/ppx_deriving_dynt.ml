@@ -78,24 +78,6 @@ let rec str_of_core_type ~opt ({ ptyp_loc = loc ; _ } as ct) =
     [%expr make_abstract ~name:[%e n] [%e t]]
   | None -> t
 
-(* Construct variant ttypes *)
-let str_of_variant_constructors ~loc ~opt ~name l =
-  let fail loc = raise_str ~loc "this variant is too advanced" in
-  let ll = List.rev_map (fun {pcd_loc = loc; pcd_name; pcd_args; _ } ->
-      match pcd_args with
-      | Pcstr_tuple ctl ->
-        let l = List.rev_map (fun ct ->
-            str_of_core_type ~opt ct
-            |> fun e -> [%expr stype_of_ttype [%e e]]
-          ) ctl in
-        let name = Const.string pcd_name.txt |> Exp.constant in
-        [%expr make_variant_constructor ~name:[%e name] [%e expr_list ~loc l]]
-      | _ -> fail loc
-    ) l |> expr_list ~loc
-  in
-  let name = Const.string name |> Exp.constant in
-  [%expr make_variant ~name:[%e name] [] (fun _ -> [%e ll]) |> Obj.magic ]
-
 (* Construct record ttypes *)
 let str_of_record_labels ~loc ~opt ~name l =
   let ll = List.rev_map (fun {pld_loc = loc; pld_name; pld_type; _ } ->
@@ -106,6 +88,24 @@ let str_of_record_labels ~loc ~opt ~name l =
   in
   let name = Const.string name |> Exp.constant in
   [%expr make_record ~name:[%e name] [] (fun _ -> [%e ll]) |> Obj.magic ]
+
+(* Construct variant ttypes *)
+let str_of_variant_constructors ~loc ~opt ~name l =
+  let ll = List.rev_map (fun {pcd_loc = loc; pcd_name; pcd_args; _ } ->
+      match pcd_args with
+      | Pcstr_tuple ctl ->
+        let l = List.rev_map (fun ct ->
+            str_of_core_type ~opt ct
+            |> fun e -> [%expr stype_of_ttype [%e e]]
+          ) ctl in
+        let name = Const.string pcd_name.txt |> Exp.constant in
+        [%expr make_variant_constructor_tuple ~name:[%e name]
+            [%e expr_list ~loc l]]
+      | Pcstr_record lbl -> str_of_record_labels ~opt ~loc ~name:"" lbl
+    ) l |> expr_list ~loc
+  in
+  let name = Const.string name |> Exp.constant in
+  [%expr make_variant ~name:[%e name] [] (fun _ -> [%e ll]) |> Obj.magic ]
 
 (* Type declarations in structure.  Builds e.g.
  * let <type>_t : (<a> * <b>) ttype = pair <b>_t <a>_t

@@ -71,6 +71,14 @@ let%expect_test _ = print record1_t ;
          field4: (int * int);
        }) |}]
 
+type inline_record =
+  | Basic of Two.public
+  | Inline of { h : Two.hidden ; p : Two.public }
+[@@deriving t]
+let%expect_test _ = print inline_record_t ;
+  [%expect{|
+    |}]
+
 type bool = string [@@deriving t]
 let%expect_test _ =
   print bool_t ;

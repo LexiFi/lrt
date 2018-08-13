@@ -21,14 +21,6 @@ let quintet a b c d e =
 let make_abstract ~name _t =
   DT_abstract (name, []) |> Obj.magic
 
-type variant_constructor = (string * stype_properties * stype variant_args)
-
-let make_variant_constructor ~name stypes =
-  (name, [], C_tuple stypes)
-
-let make_variant ~name _stypes stype_to_constructors =
-  Internal.create_variant_type name [] stype_to_constructors
-
 type record_field = (string * stype_properties * stype)
 
 let make_record_field ~name stype =
@@ -37,3 +29,14 @@ let make_record_field ~name stype =
 let make_record ~name _stypes stype_to_fields =
   let f x = stype_to_fields x , Record_regular in
   Internal.create_record_type name [] f
+
+type variant_constructor = (string * stype_properties * stype variant_args)
+
+let make_variant_constructor_tuple ~name stypes =
+  (name, [], C_tuple stypes)
+
+let make_variant_constructor_inline ~name stype =
+  (name, [], C_inline stype)
+
+let make_variant ~name _stypes stype_to_constructors =
+  Internal.create_variant_type name [] stype_to_constructors
