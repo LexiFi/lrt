@@ -155,16 +155,15 @@ type 'a btree =
   ; l: 'a btree option
   ; r: 'a btree option
   } [@@deriving t]
-(* TODO: produces SEGV, since we cast stype to function *)
-(* let%expect_test _ = *)
-  (* print (btree_t int_t); *)
-  (* [%expect {| *)
-    (* (btree = *)
-       (* { *)
-         (* v: int; *)
-         (* l: btree option; *)
-         (* r: btree option; *)
-       (* }) |}] *)
+let%expect_test _ =
+  print (btree_t int_t);
+  [%expect {|
+    (btree =
+       {
+         v: int;
+         l: btree option;
+         r: btree option;
+       }) |}]
 
 type bool = string [@@deriving t]
 let%expect_test _ =
