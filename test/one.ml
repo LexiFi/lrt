@@ -118,25 +118,52 @@ let%expect_test _ =
 
 module M : sig
   type 'num rectangle = { a: 'num ; b: 'num} [@@deriving t]
+  type ('a, 'b) alist = ('a * 'b) list [@@deriving t]
+  type aalist = (int,string) alist [@@deriving t]
 end = struct
   type 'num rectangle = { a: 'num ; b: 'num} [@@deriving t]
+  type ('a,'b) alist = ('a * 'b) list [@@deriving t]
+  type aalist = (int,string) alist [@@deriving t]
 end
 let%expect_test _ =
   print (M.rectangle_t int_t);
+  print (M.alist_t int_t string_t);
+  print M.aalist_t;
   [%expect {|
     (rectangle =
        {
          a: int;
          b: int;
-       }) |}]
+       })
+    (int * string) list
+    (int * string) list |}]
 
-(* type btree = *)
-  (* { v: int *)
-  (* ; l: btree option *)
-  (* ; r: btree option *)
-  (* } [@@deriving t] *)
-(* let%expect_test _ = *)
-  (* print brtee_t *)
+type ('a,'b,'c,'d,'e) weird_type = A of 'a | B of 'b | C of 'c | D of 'd
+                                 | E of 'e [@@deriving t]
+let%expect_test _ =
+  print (weird_type_t int_t float_t string_t (M.alist_t int_t float_t) int_t);
+  [%expect {|
+    (weird_type =
+       | A of int
+       | B of float
+       | C of string
+       | D of (int * float) list
+       | E of int) |}]
+
+type btree =
+  { v: int
+  ; l: btree option
+  ; r: btree option
+  } [@@deriving t]
+let%expect_test _ =
+  print btree_t;
+  [%expect {|
+    (btree =
+       {
+         v: int;
+         l: btree option;
+         r: btree option;
+       }) |}]
 
 type bool = string [@@deriving t]
 let%expect_test _ =

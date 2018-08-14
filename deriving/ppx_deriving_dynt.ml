@@ -67,9 +67,11 @@ let rec str_of_core_type ~opt ({ ptyp_loc = loc ; _ } as ct) =
       let a, b, c, d, e = rc a, rc b, rc c, rc d, rc e in
       [%expr quintet ([%e a]) [%e b] [%e c] [%e d] [%e e]]
     | Ptyp_tuple _ -> raise_str ~loc "tuple too big"
-    | Ptyp_constr (id, []) ->
+    | Ptyp_constr (id, args) ->
       let id' = { id with txt = mangle_lid id.txt} in
-      [%expr [%e Exp.ident id']]
+      List.fold_left
+        (fun acc e -> [%expr [%e acc] [%e rc e]])
+        [%expr [%e Exp.ident id']] args
     | Ptyp_var vname -> [%expr [%e evar vname]]
     | _ -> fail ()
   in
