@@ -70,6 +70,7 @@ let rec str_of_core_type ~opt ({ ptyp_loc = loc ; _ } as ct) =
     | Ptyp_constr (id, []) ->
       let id' = { id with txt = mangle_lid id.txt} in
       [%expr [%e Exp.ident id']]
+    | Ptyp_var vname -> [%expr [%e evar vname]]
     | _ -> fail ()
   in
   match opt.abstract with
@@ -82,8 +83,8 @@ let rec str_of_core_type ~opt ({ ptyp_loc = loc ; _ } as ct) =
 let str_of_record_labels ?inline ~loc ~opt ~name ~rarg l =
   let ll = List.rev_map (fun {pld_loc = loc; pld_name; pld_type; _ } ->
       let t = str_of_core_type ~opt pld_type in
-      let name = Const.string pld_name.txt |> Exp.constant in
-      [%expr make_record_field ~name:[%e name] (stype_of_ttype [%e t])]
+      [%expr make_record_field ~name:[%e str pld_name.txt ]
+          (stype_of_ttype [%e t])]
     ) l |> expr_list ~loc
   in
   let name = Const.string name |> Exp.constant in
@@ -94,15 +95,14 @@ let str_of_record_labels ?inline ~loc ~opt ~name ~rarg l =
            let [%p pvar rarg] = Obj.magic ([%e evar rarg]) in
            [%e ll]) |> Obj.magic ]
   | Some i ->
-    let i = Const.int i |> Exp.constant in
-    [%expr make_record ~name:[%e name] ~inline:[%e i] []
+    [%expr make_record ~name:[%e name] ~inline:[%e int i] []
         (fun _ -> [%e ll]) |> Obj.magic ]
 
 (* Construct variant ttypes *)
 let str_of_variant_constructors ~loc ~opt ~name ~rarg l =
   let nconst_tag = ref 0 in
   let ll = List.rev_map (fun {pcd_loc = loc; pcd_name; pcd_args; _ } ->
-      let nameexp = Const.string pcd_name.txt |> Exp.constant in
+      let nameexp = str pcd_name.txt in
       match pcd_args with
       | Pcstr_tuple ctl ->
         if ctl <> [] then incr nconst_tag;
@@ -121,19 +121,24 @@ let str_of_variant_constructors ~loc ~opt ~name ~rarg l =
         [%expr make_variant_constructor_inline ~name:[%e nameexp] [%e r]]
     ) l |> expr_list ~loc
   in
-  let name = Const.string name |> Exp.constant in
-  [%expr make_variant ~name:[%e name] []
+  [%expr make_variant ~name:[%e str name] []
       (fun [%p pvar rarg] ->
-         let [%p pvar rarg] = Obj.magic ([%e evar rarg]) in
+         let [%p pvar rarg] = Obj.magic [%e evar rarg] in
          [%e ll]) |> Obj.magic ]
+
+let free_vars_of_type_decl td =
+  List.rev_map (fun (ct, _variance) ->
+      match ct.ptyp_desc with
+      | Ptyp_var name -> name
+      | _ -> raise_str "type parameter not yet supported"
+    ) td.ptype_params
 
 (* Type declarations in structure.  Builds e.g.
  * let <type>_t : (<a> * <b>) ttype = pair <b>_t <a>_t
  *)
-let str_of_type_decl ~options ~path
-    ({ ptype_loc = loc ; ptype_name ; _} as td) =
+let str_of_type_decl ~options ~path ({ ptype_loc = loc ; _} as td) =
   let opt = parse_options ~path options in
-  let name = ptype_name.txt in
+  let name = td.ptype_name.txt in
   let rarg = mangle_type_decl td in
   let t = match td.ptype_kind with
     | Ptype_abstract -> begin match td.ptype_manifest with
@@ -144,9 +149,13 @@ let str_of_type_decl ~options ~path
       str_of_variant_constructors ~loc ~opt ~rarg ~name l
     | Ptype_record l -> str_of_record_labels ~loc ~opt ~name ~rarg l
     | Ptype_open ->
-      raise_str ~loc (sprintf "type kind not yet supported")
+      raise_str ~loc "type kind not yet supported"
   in
-  [Vb.mk (pvar rarg) (wrap_runtime [%expr [%e t]])]
+  let e = List.fold_left
+      (fun acc name -> lam (pvar name) acc) t (free_vars_of_type_decl td)
+  in
+  [Vb.mk (pvar rarg) (wrap_runtime e)]
+
 
 (* Type declarations in signature. Generates
  * val <type>_t : <type> ttype
@@ -157,10 +166,17 @@ let sig_of_type_decl ~options ~path ({ ptype_loc = loc ; _} as td) =
   let name = mangle_type_decl td in
   let typ =
     match td.ptype_kind with
-    | Ptype_abstract -> [%type: [%t ct] Dynt.Types.ttype ]
+    | Ptype_abstract
+    | Ptype_record _
+    | Ptype_variant _ -> [%type: [%t ct] Dynt.Types.ttype ]
     | _ -> raise_str ~loc "cannot handle this type in signatures yet"
   in
-  [Sig.value (Val.mk (mknoloc name) typ)]
+  let e = List.fold_left
+      (fun acc name ->
+         [%type: [%t Typ.var name] Dynt.Types.ttype -> [%t acc] ]) typ
+      (free_vars_of_type_decl td)
+  in
+  [Sig.value (Val.mk (mknoloc name) e)]
 
 (* Register the handler for type declarations in signatures and structures *)
 let () =

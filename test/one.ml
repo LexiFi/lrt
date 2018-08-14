@@ -1,6 +1,8 @@
+open Dynt
+
 let print x =
-  Dynt.Types.stype_of_ttype x
-  |> Format.(fprintf std_formatter "%a\n%!" Dynt.Types.print_stype)
+  Types.stype_of_ttype x
+  |> Format.(fprintf std_formatter "%a\n%!" Types.print_stype)
 
 type t = int [@@deriving t]
 type pair1 = string * int [@@deriving t]
@@ -89,7 +91,7 @@ let%expect_test _ = print inline_record_t ;
 
 type recrec = { a: int ; b: recrec} [@@deriving t]
 type natural = Z | S of natural [@@deriving t]
-type natural2 = Z | S of natural | Sum of {a: natural2;  b: natural2}
+type natural2 = Z | S of natural2 | Sum of {a: natural2;  b: natural2}
 [@@deriving t]
 let%expect_test _ =
   print recrec_t ;
@@ -106,10 +108,7 @@ let%expect_test _ =
        | S of natural)
     (natural2 =
        | Z
-       | S of
-        (natural =
-           | Z
-           | S of natural)
+       | S of natural2
        | Sum of
         (natural2.Sum =
            {
@@ -117,11 +116,27 @@ let%expect_test _ =
              b: natural2;
            })) |}]
 
+module M : sig
+  type 'num rectangle = { a: 'num ; b: 'num} [@@deriving t]
+end = struct
+  type 'num rectangle = { a: 'num ; b: 'num} [@@deriving t]
+end
+let%expect_test _ =
+  print (M.rectangle_t int_t);
+  [%expect {|
+    (rectangle =
+       {
+         a: int;
+         b: int;
+       }) |}]
+
 (* type btree = *)
   (* { v: int *)
   (* ; l: btree option *)
   (* ; r: btree option *)
-  (* } *)
+  (* } [@@deriving t] *)
+(* let%expect_test _ = *)
+  (* print brtee_t *)
 
 type bool = string [@@deriving t]
 let%expect_test _ =
