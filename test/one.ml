@@ -87,6 +87,42 @@ let%expect_test _ = print inline_record_t ;
            }))
     |}]
 
+type recrec = { a: int ; b: recrec} [@@deriving t]
+type natural = Z | S of natural [@@deriving t]
+type natural2 = Z | S of natural | Sum of {a: natural2;  b: natural2}
+[@@deriving t]
+let%expect_test _ =
+  print recrec_t ;
+  print natural_t ;
+  print natural2_t ;
+  [%expect{|
+    (recrec =
+       {
+         a: int;
+         b: recrec;
+       })
+    (natural =
+       | Z
+       | S of natural)
+    (natural2 =
+       | Z
+       | S of
+        (natural =
+           | Z
+           | S of natural)
+       | Sum of
+        (natural2.Sum =
+           {
+             a: natural2;
+             b: natural2;
+           })) |}]
+
+(* type btree = *)
+  (* { v: int *)
+  (* ; l: btree option *)
+  (* ; r: btree option *)
+  (* } *)
+
 type bool = string [@@deriving t]
 let%expect_test _ =
   print bool_t ;

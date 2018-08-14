@@ -79,7 +79,7 @@ let rec str_of_core_type ~opt ({ ptyp_loc = loc ; _ } as ct) =
   | None -> t
 
 (* Construct record ttypes *)
-let str_of_record_labels ?inline ~loc ~opt ~name l =
+let str_of_record_labels ?inline ~loc ~opt ~name ~rarg l =
   let ll = List.rev_map (fun {pld_loc = loc; pld_name; pld_type; _ } ->
       let t = str_of_core_type ~opt pld_type in
       let name = Const.string pld_name.txt |> Exp.constant in
@@ -89,14 +89,17 @@ let str_of_record_labels ?inline ~loc ~opt ~name l =
   let name = Const.string name |> Exp.constant in
   match inline with
   | None ->
-    [%expr make_record ~name:[%e name] [] (fun _ -> [%e ll]) |> Obj.magic ]
+    [%expr make_record ~name:[%e name] []
+        (fun [%p pvar rarg] ->
+           let [%p pvar rarg] = Obj.magic ([%e evar rarg]) in
+           [%e ll]) |> Obj.magic ]
   | Some i ->
     let i = Const.int i |> Exp.constant in
     [%expr make_record ~name:[%e name] ~inline:[%e i] []
-        (fun _ -> [%e ll]) ]
+        (fun _ -> [%e ll]) |> Obj.magic ]
 
 (* Construct variant ttypes *)
-let str_of_variant_constructors ~loc ~opt ~name l =
+let str_of_variant_constructors ~loc ~opt ~name ~rarg l =
   let nconst_tag = ref 0 in
   let ll = List.rev_map (fun {pcd_loc = loc; pcd_name; pcd_args; _ } ->
       let nameexp = Const.string pcd_name.txt |> Exp.constant in
@@ -111,7 +114,7 @@ let str_of_variant_constructors ~loc ~opt ~name l =
             [%e expr_list ~loc l]]
       | Pcstr_record lbl ->
         let r =
-          str_of_record_labels ~inline:!nconst_tag
+          str_of_record_labels ~inline:!nconst_tag ~rarg
             ~opt ~loc ~name:(sprintf "%s.%s" name pcd_name.txt) lbl
         in
         incr nconst_tag;
@@ -119,7 +122,10 @@ let str_of_variant_constructors ~loc ~opt ~name l =
     ) l |> expr_list ~loc
   in
   let name = Const.string name |> Exp.constant in
-  [%expr make_variant ~name:[%e name] [] (fun _ -> [%e ll]) |> Obj.magic ]
+  [%expr make_variant ~name:[%e name] []
+      (fun [%p pvar rarg] ->
+         let [%p pvar rarg] = Obj.magic ([%e evar rarg]) in
+         [%e ll]) |> Obj.magic ]
 
 (* Type declarations in structure.  Builds e.g.
  * let <type>_t : (<a> * <b>) ttype = pair <b>_t <a>_t
@@ -128,18 +134,19 @@ let str_of_type_decl ~options ~path
     ({ ptype_loc = loc ; ptype_name ; _} as td) =
   let opt = parse_options ~path options in
   let name = ptype_name.txt in
+  let rarg = mangle_type_decl td in
   let t = match td.ptype_kind with
     | Ptype_abstract -> begin match td.ptype_manifest with
         | None -> raise_errorf ~loc "no manifest found"
         | Some ct -> str_of_core_type ~opt ct
       end
-    | Ptype_variant l -> str_of_variant_constructors ~loc ~opt ~name l
-    | Ptype_record l -> str_of_record_labels ~loc ~opt ~name l
+    | Ptype_variant l ->
+      str_of_variant_constructors ~loc ~opt ~rarg ~name l
+    | Ptype_record l -> str_of_record_labels ~loc ~opt ~name ~rarg l
     | Ptype_open ->
       raise_str ~loc (sprintf "type kind not yet supported")
   in
-  let name = mangle_type_decl td in
-  [Vb.mk (pvar name) (wrap_runtime [%expr [%e t]])]
+  [Vb.mk (pvar rarg) (wrap_runtime [%expr [%e t]])]
 
 (* Type declarations in signature. Generates
  * val <type>_t : <type> ttype
