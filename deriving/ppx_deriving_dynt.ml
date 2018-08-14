@@ -82,7 +82,7 @@ let rec str_of_core_type ~opt ({ ptyp_loc = loc ; _ } as ct) =
   | None -> t
 
 (* Construct record ttypes *)
-let str_of_record_labels ?inline ~loc ~opt ~name ~rarg l =
+let str_of_record_labels ?inline ~loc ~opt ~name l =
   let ll = List.rev_map (fun {pld_loc = loc; pld_name; pld_type; _ } ->
       let t = str_of_core_type ~opt pld_type in
       [%expr make_record_field ~name:[%e str pld_name.txt ]
@@ -93,15 +93,13 @@ let str_of_record_labels ?inline ~loc ~opt ~name ~rarg l =
   match inline with
   | None ->
     [%expr make_record ~name:[%e name] []
-        (fun [%p pvar rarg] ->
-           let [%p pvar rarg] = Obj.magic ([%e evar rarg]) in
-           [%e ll]) |> Obj.magic ]
+        (fun _ -> [%e ll]) |> Obj.magic ]
   | Some i ->
     [%expr make_record ~name:[%e name] ~inline:[%e int i] []
         (fun _ -> [%e ll]) |> Obj.magic ]
 
 (* Construct variant ttypes *)
-let str_of_variant_constructors ~loc ~opt ~name ~rarg l =
+let str_of_variant_constructors ~loc ~opt ~name l =
   let nconst_tag = ref 0 in
   let ll = List.rev_map (fun {pcd_loc = loc; pcd_name; pcd_args; _ } ->
       let nameexp = str pcd_name.txt in
@@ -116,7 +114,7 @@ let str_of_variant_constructors ~loc ~opt ~name ~rarg l =
             [%e expr_list ~loc l]]
       | Pcstr_record lbl ->
         let r =
-          str_of_record_labels ~inline:!nconst_tag ~rarg
+          str_of_record_labels ~inline:!nconst_tag
             ~opt ~loc ~name:(sprintf "%s.%s" name pcd_name.txt) lbl
         in
         incr nconst_tag;
@@ -124,9 +122,7 @@ let str_of_variant_constructors ~loc ~opt ~name ~rarg l =
     ) l |> expr_list ~loc
   in
   [%expr make_variant ~name:[%e str name] []
-      (fun [%p pvar rarg] ->
-         let [%p pvar rarg] = Obj.magic [%e evar rarg] in
-         [%e ll]) |> Obj.magic ]
+      (fun _ -> [%e ll]) |> Obj.magic ]
 
 let free_vars_of_type_decl td =
   List.rev_map (fun (ct, _variance) ->
@@ -148,15 +144,16 @@ let str_of_type_decl ~options ~path ({ ptype_loc = loc ; _} as td) =
         | Some ct -> str_of_core_type ~opt ct
       end
     | Ptype_variant l ->
-      str_of_variant_constructors ~loc ~opt ~rarg ~name l
-    | Ptype_record l -> str_of_record_labels ~loc ~opt ~name ~rarg l
+      str_of_variant_constructors ~loc ~opt ~name l
+    | Ptype_record l -> str_of_record_labels ~loc ~opt ~name l
     | Ptype_open ->
       raise_str ~loc "type kind not yet supported"
   in
   let e = List.fold_left
-      (fun acc name -> lam (pvar name) acc) t (free_vars_of_type_decl td)
+      (fun acc name -> lam (pvar name) acc)
+      (wrap_runtime t) (free_vars_of_type_decl td)
   in
-  [Vb.mk (pvar rarg) (wrap_runtime e)]
+  [Vb.mk (pvar rarg) e]
 
 
 (* Type declarations in signature. Generates
