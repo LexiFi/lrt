@@ -9,7 +9,7 @@
  (public_name ppx_deriving_dynt)
  (name ppx_deriving_dynt)
  (synopsis "Runtime components of [@@deriving t]")
- (libraries ppx_deriving.api ppx_deriving)
+ (libraries ppx_deriving.api)
  (preprocess (pps ppx_metaquot))
  (modules ppx_deriving_dynt)
  (ppx_runtime_libraries dynt ppx_deriving_dynt_runtime)
