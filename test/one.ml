@@ -173,3 +173,45 @@ let%expect_test _ =
   (* { basic : 'a *)
   (* ; weird : 'a weirdtree *)
   (* } [@@deriving t] *)
+
+module N = struct
+  open Types
+  open Internal
+
+  type 'a t = { pred : ('a * int) t option } [@@deriving t]
+
+  let stype_marc =
+    let outer_node = create_node "t" [ DT_var 0 ] in
+    let inner_node = create_node "t" [DT_tuple [DT_var 0; DT_int]] in
+    let descr = ["pred", [], DT_option (DT_node inner_node)], Record_regular in
+    set_node_record outer_node descr;
+    set_node_record inner_node descr;
+    DT_node outer_node
+
+  let t_marc (a : 'a ttype) : 'a t ttype =
+    substitute [| stype_of_ttype a |] stype_marc |> Obj.magic
+
+  let stype_p =
+    let node = create_node "t" [ DT_var 0 ] in
+    (* TODO: check again the following variant. It worked before?!
+     * let node = create_node "t" [ ] in *)
+    let descr = ["pred", [], DT_option (DT_node node)], Record_regular in
+    set_node_record node descr;
+    DT_node node
+
+  let t_p (a : 'a ttype) : 'a t ttype =
+    substitute [| stype_of_ttype a |] stype_p |> Obj.magic
+
+  let zero = { pred = None }
+  let succ (type a) (p : (a * int) t) : a t = { pred = Some p }
+  let () =
+    let _three : string t = succ (succ (succ zero)) in
+    let _t : string t ttype = t string_t in
+    (* Debug.print ~t three *) ()
+end
+
+let%expect_test _ =
+  print (N.t string_t);
+  print (N.t_marc string_t);
+  print (N.t_p string_t);
+

@@ -50,10 +50,18 @@ let parse_options ~path options : options =
                ( sprintf "option %s not supported" name )
     ) default options
 
+let find_index_opt (l : 'a list) (el : 'a) : int option =
+  let i = ref 0 in
+  let rec f = function
+    | [] -> None
+    | hd :: _ when hd = el -> Some !i
+    | _ :: tl -> incr i ; f tl
+  in f l
+
 (* Construct ttype generator from core type *)
-let rec str_of_core_type ~opt ~recurse ({ ptyp_loc = loc ; _ } as ct) =
+let rec str_of_core_type ~opt ~recurse ~free ({ ptyp_loc = loc ; _ } as ct) =
   let fail () = raise_str ~loc "type not yet supported" in
-  let rc = str_of_core_type ~opt ~recurse in
+  let rc = str_of_core_type ~opt ~recurse ~free in
   let t = match ct.ptyp_desc with
     | Ptyp_tuple l ->
       let args = List.rev_map rc l |> List.fold_left (fun acc e ->
@@ -68,7 +76,11 @@ let rec str_of_core_type ~opt ~recurse ({ ptyp_loc = loc ; _ } as ct) =
         List.fold_left
           (fun acc e -> [%expr [%e acc] [%e rc e]])
           [%expr [%e Exp.ident id']] args
-    | Ptyp_var vname -> [%expr [%e evar vname]]
+    | Ptyp_var vname -> begin
+        match find_index_opt free vname with
+        | None -> assert false
+        | Some i -> [%expr ttype_of_stype (DT_var [%e int i])]
+      end
     | _ -> fail ()
   in
   match opt.abstract with
@@ -77,9 +89,9 @@ let rec str_of_core_type ~opt ~recurse ({ ptyp_loc = loc ; _ } as ct) =
   | None -> t
 
 (* Construct record ttypes *)
-let str_of_record_labels ?inline ~loc ~opt ~name ~recurse l =
+let str_of_record_labels ?inline ~loc ~opt ~name ~free ~recurse l =
   let ll = List.rev_map (fun {pld_loc = loc; pld_name; pld_type; _ } ->
-      let t = str_of_core_type ~opt ~recurse pld_type in
+      let t = str_of_core_type ~opt ~recurse ~free pld_type in
       [%expr ([%e str pld_name.txt], [], stype_of_ttype [%e t])]
     ) l |> expr_list ~loc
   in
@@ -94,20 +106,20 @@ let str_of_record_labels ?inline ~loc ~opt ~name ~recurse l =
            |> ttype_of_stype ]
 
 (* Construct variant ttypes *)
-let str_of_variant_constructors ~loc ~opt ~name ~recurse l =
+let str_of_variant_constructors ~loc ~opt ~name ~free ~recurse l =
   let nconst_tag = ref 0 in
   let ll = List.rev_map (fun {pcd_loc = loc; pcd_name; pcd_args; _ } ->
       match pcd_args with
       | Pcstr_tuple ctl ->
         if ctl <> [] then incr nconst_tag;
         let l = List.rev_map (fun ct ->
-            str_of_core_type ~opt ~recurse ct
+            str_of_core_type ~opt ~recurse ~free ct
             |> fun e -> [%expr stype_of_ttype [%e e]]
           ) ctl in
         [%expr ([%e str pcd_name.txt], [], C_tuple [%e expr_list ~loc l])]
       | Pcstr_record lbl ->
         let r =
-          str_of_record_labels ~inline:!nconst_tag ~recurse
+          str_of_record_labels ~inline:!nconst_tag ~recurse ~free
             ~opt ~loc ~name:(sprintf "%s.%s" name pcd_name.txt) lbl
         in
         incr nconst_tag;
@@ -131,30 +143,46 @@ let str_of_type_decl ~options ~path ({ ptype_loc = loc ; _} as td) =
   let opt = parse_options ~path options in
   let name = td.ptype_name.txt in
   let recurse = name in
+  let free = free_vars_of_type_decl td in
   let t = match td.ptype_kind with
     | Ptype_abstract -> begin match td.ptype_manifest with
         | None -> raise_errorf ~loc "no manifest found"
-        | Some ct -> str_of_core_type ~opt ~recurse ct
+        | Some ct -> str_of_core_type ~opt ~recurse ~free ct
       end
     | Ptype_variant l ->
-      str_of_variant_constructors ~loc ~opt ~name ~recurse l
-    | Ptype_record l -> str_of_record_labels ~loc ~opt ~name ~recurse l
+      str_of_variant_constructors ~loc ~opt ~name ~recurse ~free l
+    | Ptype_record l -> str_of_record_labels ~loc ~opt ~name ~recurse ~free l
     | Ptype_open ->
       raise_str ~loc "type kind not yet supported"
   in
-  let free = free_vars_of_type_decl td in
-  (* Add constraint *)
-  let t = tconstr "ttype" [tconstr name (List.rev_map Typ.var free)]
-        |> Exp.constraint_ t
-  in
-  (* Add contrained arguments *)
-  let e = List.fold_left (fun acc name ->
-      lam (Pat.constraint_ (pvar name) (tconstr "ttype" [Typ.var name])) acc)
-      t free
+  (* Substitute vars, set contstraints *)
+  (* TODO: The contraints are not strong enough, generate code of the form
+   * fun (type num) (num : num ttype) ->
+   *    (substitute [|stype_of_ttype num|] stype : num rectangle ttype )
+   * Now:
+   * fun (num : 'num ttype) ->
+   *    (substitute [|stype_of_ttype num|] stype : 'num rectangle ttype )
+   * *)
+  let t =
+    match free with
+    | [] -> t
+    | _ ->
+      let f =
+        let arr = List.map (fun v ->
+            [%expr stype_of_ttype [%e evar v]]) free
+        in
+        let subst = tconstr "ttype" [tconstr name (List.rev_map Typ.var free)]
+              |> Exp.constraint_ [%expr
+            substitute [%e Exp.array arr] stype |> ttype_of_stype ]
+        in
+        List.fold_left (fun acc v ->
+            lam (Pat.constraint_ (pvar v) (tconstr "ttype" [Typ.var v])) acc)
+          subst free
+      in
+      [%expr let stype : stype = stype_of_ttype [%e t] in [%e f]]
   in
   let mangled = mangle_type_decl td in
-  [Vb.mk (pvar mangled) (wrap_runtime e)]
-
+  [Vb.mk (pvar mangled) (wrap_runtime t)]
 
 (* Type declarations in signature. Generates
  * val <type>_t : <type> ttype
