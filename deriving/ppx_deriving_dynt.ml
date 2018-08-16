@@ -59,10 +59,10 @@ let rec str_of_core_type ~opt ~recurse ({ ptyp_loc = loc ; _ } as ct) =
       let args = List.rev_map rc l |> List.fold_left (fun acc e ->
           [%expr stype_of_ttype [%e e] :: [%e acc]]) [%expr []]
       in
-      [%expr Obj.magic (DT_tuple [%e args])]
+      [%expr ttype_of_stype (DT_tuple [%e args])]
     | Ptyp_constr (id, args) ->
       if id.txt = Lident recurse then
-        [%expr Obj.magic [%e evar rec_stype_label]]
+        [%expr ttype_of_stype [%e evar rec_stype_label]]
       else
         let id' = { id with txt = mangle_lid id.txt} in
         List.fold_left
@@ -73,7 +73,7 @@ let rec str_of_core_type ~opt ~recurse ({ ptyp_loc = loc ; _ } as ct) =
   in
   match opt.abstract with
   | Some name ->
-    [%expr Obj.magic( DT_abstract ([%e str name],[]))]
+    [%expr ttype_of_stype( DT_abstract ([%e str name],[]))]
   | None -> t
 
 (* Construct record ttypes *)
@@ -87,11 +87,11 @@ let str_of_record_labels ?inline ~loc ~opt ~name ~recurse l =
   | None ->
     [%expr Internal.create_record_type [%e str name] []
         (fun [%p pvar rec_stype_label] -> [%e ll], Record_regular)
-           |> Obj.magic ]
+           |> ttype_of_stype ]
   | Some i ->
     [%expr Internal.create_record_type [%e str name] []
         (fun _ -> [%e ll], Record_inline [%e int i])
-           |> Obj.magic ]
+           |> ttype_of_stype ]
 
 (* Construct variant ttypes *)
 let str_of_variant_constructors ~loc ~opt ~name ~recurse l =
@@ -115,7 +115,7 @@ let str_of_variant_constructors ~loc ~opt ~name ~recurse l =
     ) l |> expr_list ~loc
   in
   [%expr Internal.create_variant_type [%e str name] []
-      (fun [%p pvar rec_stype_label] -> [%e ll]) |> Obj.magic ]
+      (fun [%p pvar rec_stype_label] -> [%e ll]) |> ttype_of_stype ]
 
 let free_vars_of_type_decl td =
   List.rev_map (fun (ct, _variance) ->
