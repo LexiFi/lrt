@@ -55,21 +55,11 @@ let rec str_of_core_type ~opt ~recurse ({ ptyp_loc = loc ; _ } as ct) =
   let fail () = raise_str ~loc "type not yet supported" in
   let rc = str_of_core_type ~opt ~recurse in
   let t = match ct.ptyp_desc with
-    | Ptyp_tuple []
-    | Ptyp_tuple [_] -> raise_str ~loc "tuple too small"
-    | Ptyp_tuple [a; b] ->
-      let a, b = rc a, rc b in
-      [%expr pair ([%e a]) [%e b]]
-    | Ptyp_tuple [a; b; c] ->
-      let a, b, c = rc a, rc b, rc c in
-      [%expr triple ([%e a]) [%e b] [%e c]]
-    | Ptyp_tuple [a; b; c; d] ->
-      let a, b, c, d = rc a, rc b, rc c, rc d in
-      [%expr quartet ([%e a]) [%e b] [%e c] [%e d]]
-    | Ptyp_tuple [a; b; c; d; e] ->
-      let a, b, c, d, e = rc a, rc b, rc c, rc d, rc e in
-      [%expr quintet ([%e a]) [%e b] [%e c] [%e d] [%e e]]
-    | Ptyp_tuple _ -> raise_str ~loc "tuple too big"
+    | Ptyp_tuple l ->
+      let args = List.rev_map rc l |> List.fold_left (fun acc e ->
+          [%expr stype_of_ttype [%e e] :: [%e acc]]) [%expr []]
+      in
+      [%expr Obj.magic (DT_tuple [%e args])]
     | Ptyp_constr (id, args) ->
       if id.txt = Lident recurse then
         [%expr Obj.magic [%e evar rec_stype_label]]
