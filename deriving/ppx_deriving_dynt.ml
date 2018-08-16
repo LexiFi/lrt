@@ -142,12 +142,18 @@ let str_of_type_decl ~options ~path ({ ptype_loc = loc ; _} as td) =
     | Ptype_open ->
       raise_str ~loc "type kind not yet supported"
   in
-  let e = List.fold_left
-      (fun acc name -> lam (pvar name) acc)
-      (wrap_runtime t) (free_vars_of_type_decl td)
+  let free = free_vars_of_type_decl td in
+  (* Add constraint *)
+  let t = tconstr "ttype" [tconstr name (List.rev_map Typ.var free)]
+        |> Exp.constraint_ t
+  in
+  (* Add contrained arguments *)
+  let e = List.fold_left (fun acc name ->
+      lam (Pat.constraint_ (pvar name) (tconstr "ttype" [Typ.var name])) acc)
+      t free
   in
   let mangled = mangle_type_decl td in
-  [Vb.mk (pvar mangled) e]
+  [Vb.mk (pvar mangled) (wrap_runtime e)]
 
 
 (* Type declarations in signature. Generates
