@@ -165,8 +165,11 @@ let%expect_test _ =
          r: btree option;
        }) |}]
 
-type bool = string [@@deriving t]
-let%expect_test _ =
-  print bool_t ;
-  [%expect{|
-    string |}]
+(* type 'a weirdtree = *)
+  (* { node : 'a node *)
+  (* ; children : 'a weirdtree list *)
+  (* } *)
+(* and 'a node = *)
+  (* { basic : 'a *)
+  (* ; weird : 'a weirdtree *)
+  (* } [@@deriving t] *)

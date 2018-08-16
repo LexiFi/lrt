@@ -73,32 +73,30 @@ let rec str_of_core_type ~opt ~recurse ({ ptyp_loc = loc ; _ } as ct) =
   in
   match opt.abstract with
   | Some name ->
-    let n = Const.string name |> Exp.constant in
-    [%expr make_abstract ~name:[%e n] [%e t]]
+    [%expr Obj.magic( DT_abstract ([%e str name],[]))]
   | None -> t
 
 (* Construct record ttypes *)
 let str_of_record_labels ?inline ~loc ~opt ~name ~recurse l =
   let ll = List.rev_map (fun {pld_loc = loc; pld_name; pld_type; _ } ->
       let t = str_of_core_type ~opt ~recurse pld_type in
-      [%expr make_record_field ~name:[%e str pld_name.txt ]
-          (stype_of_ttype [%e t])]
+      [%expr ([%e str pld_name.txt], [], stype_of_ttype [%e t])]
     ) l |> expr_list ~loc
   in
-  let name = Const.string name |> Exp.constant in
   match inline with
   | None ->
-    [%expr make_record ~name:[%e name] []
-        (fun [%p pvar rec_stype_label] -> [%e ll]) |> Obj.magic ]
+    [%expr Internal.create_record_type [%e str name] []
+        (fun [%p pvar rec_stype_label] -> [%e ll], Record_regular)
+           |> Obj.magic ]
   | Some i ->
-    [%expr make_record ~name:[%e name] ~inline:[%e int i] []
-        (fun _ -> [%e ll]) |> Obj.magic ]
+    [%expr Internal.create_record_type [%e str name] []
+        (fun _ -> [%e ll], Record_inline [%e int i])
+           |> Obj.magic ]
 
 (* Construct variant ttypes *)
 let str_of_variant_constructors ~loc ~opt ~name ~recurse l =
   let nconst_tag = ref 0 in
   let ll = List.rev_map (fun {pcd_loc = loc; pcd_name; pcd_args; _ } ->
-      let nameexp = str pcd_name.txt in
       match pcd_args with
       | Pcstr_tuple ctl ->
         if ctl <> [] then incr nconst_tag;
@@ -106,18 +104,17 @@ let str_of_variant_constructors ~loc ~opt ~name ~recurse l =
             str_of_core_type ~opt ~recurse ct
             |> fun e -> [%expr stype_of_ttype [%e e]]
           ) ctl in
-        [%expr make_variant_constructor_tuple ~name:[%e nameexp]
-            [%e expr_list ~loc l]]
+        [%expr ([%e str pcd_name.txt], [], C_tuple [%e expr_list ~loc l])]
       | Pcstr_record lbl ->
         let r =
           str_of_record_labels ~inline:!nconst_tag ~recurse
             ~opt ~loc ~name:(sprintf "%s.%s" name pcd_name.txt) lbl
         in
         incr nconst_tag;
-        [%expr make_variant_constructor_inline ~name:[%e nameexp] [%e r]]
+        [%expr ([%e str pcd_name.txt], [], C_inline [%e r])]
     ) l |> expr_list ~loc
   in
-  [%expr make_variant ~name:[%e str name] []
+  [%expr Internal.create_variant_type [%e str name] []
       (fun [%p pvar rec_stype_label] -> [%e ll]) |> Obj.magic ]
 
 let free_vars_of_type_decl td =
