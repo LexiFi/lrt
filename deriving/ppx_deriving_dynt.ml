@@ -141,10 +141,11 @@ let free_vars_of_type_decl td =
  *)
 let str_of_type_decl ~options ~path ({ ptype_loc = loc ; _} as td) =
   let opt = parse_options ~path options in
+  let ct  = Ppx_deriving.core_type_of_type_decl td in
   let name = td.ptype_name.txt in
   let recurse = name in
   let free = free_vars_of_type_decl td in
-  let t = match td.ptype_kind with
+  let unclosed = match td.ptype_kind with
     | Ptype_abstract -> begin match td.ptype_manifest with
         | None -> raise_errorf ~loc "no manifest found"
         | Some ct -> str_of_core_type ~opt ~recurse ~free ct
@@ -155,34 +156,27 @@ let str_of_type_decl ~options ~path ({ ptype_loc = loc ; _} as td) =
     | Ptype_open ->
       raise_str ~loc "type kind not yet supported"
   in
-  (* Substitute vars, set contstraints *)
-  (* TODO: The contraints are not strong enough, generate code of the form
-   * fun (type num) (num : num ttype) ->
-   *    (substitute [|stype_of_ttype num|] stype : num rectangle ttype )
-   * Now:
-   * fun (num : 'num ttype) ->
-   *    (substitute [|stype_of_ttype num|] stype : 'num rectangle ttype )
-   * *)
-  let t =
-    match free with
-    | [] -> t
-    | _ ->
-      let f =
-        let arr = List.map (fun v ->
-            [%expr stype_of_ttype [%e evar v]]) free
-        in
-        let subst = tconstr "ttype" [tconstr name (List.rev_map Typ.var free)]
-              |> Exp.constraint_ [%expr
-            substitute [%e Exp.array arr] stype |> ttype_of_stype ]
-        in
-        List.fold_left (fun acc v ->
-            lam (Pat.constraint_ (pvar v) (tconstr "ttype" [Typ.var v])) acc)
-          subst free
+  let id = mangle_type_decl td in
+  if free = [] then
+    [Vb.mk (pvar id) (wrap_runtime unclosed)]
+  else begin
+    let subst =
+      let arr = List.map (fun v ->
+          [%expr stype_of_ttype [%e evar v]]) free
       in
-      [%expr let stype : stype = stype_of_ttype [%e t] in [%e f]]
-  in
-  let mangled = mangle_type_decl td in
-  [Vb.mk (pvar mangled) (wrap_runtime t)]
+      List.fold_left (fun acc v -> lam (pvar v) acc)
+        [%expr ttype_of_stype (
+            substitute [%e Exp.array arr] (stype_of_ttype [%e evar id]))]
+        free
+    in
+    let id = mangle_type_decl td in
+    let typ = List.fold_left (fun acc v ->
+        [%type: [%t Typ.var v] Dynt.Types.ttype -> [%t acc]])
+        [%type: [%t ct] Dynt.Types.ttype] free
+    in
+    [Vb.mk (pvar id) (wrap_runtime unclosed);
+     Vb.mk (Pat.constraint_ (pvar id) typ) (wrap_runtime subst)]
+  end
 
 (* Type declarations in signature. Generates
  * val <type>_t : <type> ttype
@@ -195,12 +189,12 @@ let sig_of_type_decl ~options ~path ({ ptype_loc = loc ; _} as td) =
     match td.ptype_kind with
     | Ptype_abstract
     | Ptype_record _
-    | Ptype_variant _ -> [%type: [%t ct] Dynt.Types.ttype ]
+    | Ptype_variant _ -> [%type: [%t ct] Dynt.Types.ttype]
     | _ -> raise_str ~loc "cannot handle this type in signatures yet"
   in
   let e = List.fold_left
       (fun acc name ->
-         [%type: [%t Typ.var name] Dynt.Types.ttype -> [%t acc] ]) typ
+         [%type: [%t Typ.var name] Dynt.Types.ttype -> [%t acc]]) typ
       (free_vars_of_type_decl td)
   in
   [Sig.value (Val.mk (mknoloc name) e)]
@@ -210,8 +204,7 @@ let () =
   let type_decl_str ~options ~path type_decls =
     List.map (str_of_type_decl ~options ~path) type_decls
     |> List.concat
-    |> Str.value Nonrecursive
-    |> fun x -> [x]
+    |> List.map (fun x -> Str.value Nonrecursive [x])
   and type_decl_sig ~options ~path type_decls =
     List.map (sig_of_type_decl ~options ~path) type_decls
     |> List.concat
