@@ -125,6 +125,7 @@ end = struct
   type ('a,'b) alist = ('a * 'b) list [@@deriving t]
   type aalist = (int,string) alist [@@deriving t]
 end
+
 let%expect_test _ =
   print (M.rectangle_t int_t);
   print (M.alist_t int_t string_t);
@@ -193,8 +194,6 @@ module N = struct
 
   let stype_p =
     let node = create_node "t" [ DT_var 0 ] in
-    (* TODO: check again the following variant. It worked before?!
-     * let node = create_node "t" [ ] in *)
     let descr = ["pred", [], DT_option (DT_node node)], Record_regular in
     set_node_record node descr;
     DT_node node
@@ -214,4 +213,21 @@ let%expect_test _ =
   print (N.t string_t);
   print (N.t_marc string_t);
   print (N.t_p string_t);
+  [%expect {|
+    (t =
+       {
+         pred: string t option;
+       })
+    (string t =
+       {
+         pred:
+         ((string * int) t =
+            {
+              pred: (string * int) t option;
+            }) option;
+       })
+    (string t =
+       {
+         pred: string t option;
+       }) |}]
 
