@@ -112,6 +112,7 @@ let str_of_record_labels ?inline ~loc ~opt ~me ~free ~recurse l =
       [%e evar me.mangled]]
   | Some i ->
     (* TODO: Move this into separate function. me argument does not make sense *)
+    (* TODO: avoid create_record_type; recursion impossible here *)
     [%expr Internal.create_record_type [%e str me.is]
         [%e stypes_of_free ~loc free]
         (fun _ -> [%e list fields], Record_inline [%e int i])
