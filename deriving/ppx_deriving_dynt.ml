@@ -136,12 +136,22 @@ let free_vars_of_type_decl td =
       | _ -> raise_str "type parameter not yet supported"
     ) td.ptype_params
 
+(* generate type expressions of the form 'a list ttype *)
+let basetyp_of_type_decl ~loc td =
+  let ct  = Ppx_deriving.core_type_of_type_decl td in
+  [%type: [%t ct] Dynt.Types.ttype]
+
+(* generate type expresseion of the form 'a ttype -> 'a list ttype *)
+let typ_of_free_vars ~loc ~basetyp free =
+  List.fold_left (fun acc name ->
+      [%type: [%t Typ.var name] Dynt.Types.ttype -> [%t acc]])
+    basetyp free
+
 (* Type declarations in structure.  Builds e.g.
  * let <type>_t : (<a> * <b>) ttype = pair <b>_t <a>_t
  *)
 let str_of_type_decl ~options ~path ({ ptype_loc = loc ; _} as td) =
   let opt = parse_options ~path options in
-  let ct  = Ppx_deriving.core_type_of_type_decl td in
   let name = td.ptype_name.txt in
   let recurse = name in
   let free = free_vars_of_type_decl td in
@@ -157,9 +167,11 @@ let str_of_type_decl ~options ~path ({ ptype_loc = loc ; _} as td) =
       raise_str ~loc "type kind not yet supported"
   in
   let id = mangle_type_decl td in
+  let basetyp = basetyp_of_type_decl ~loc td in
   if free = [] then
-    [Vb.mk (pvar id) (wrap_runtime unclosed)]
+    [Vb.mk (Pat.constraint_ (pvar id) basetyp) (wrap_runtime unclosed)]
   else begin
+    let typ = typ_of_free_vars ~loc ~basetyp free in
     let subst =
       let arr = List.map (fun v ->
           [%expr stype_of_ttype [%e evar v]]) free
@@ -168,11 +180,6 @@ let str_of_type_decl ~options ~path ({ ptype_loc = loc ; _} as td) =
         [%expr ttype_of_stype (
             substitute [%e Exp.array arr] (stype_of_ttype [%e evar id]))]
         free
-    in
-    let id = mangle_type_decl td in
-    let typ = List.fold_left (fun acc v ->
-        [%type: [%t Typ.var v] Dynt.Types.ttype -> [%t acc]])
-        [%type: [%t ct] Dynt.Types.ttype] free
     in
     [Vb.mk (pvar id) (wrap_runtime unclosed);
      Vb.mk (Pat.constraint_ (pvar id) typ) (wrap_runtime subst)]
@@ -183,21 +190,15 @@ let str_of_type_decl ~options ~path ({ ptype_loc = loc ; _} as td) =
  *)
 let sig_of_type_decl ~options ~path ({ ptype_loc = loc ; _} as td) =
   let _opt = parse_options ~path options in
-  let ct  = Ppx_deriving.core_type_of_type_decl td in
-  let name = mangle_type_decl td in
-  let typ =
+  let basetyp =
     match td.ptype_kind with
     | Ptype_abstract
     | Ptype_record _
-    | Ptype_variant _ -> [%type: [%t ct] Dynt.Types.ttype]
+    | Ptype_variant _ -> basetyp_of_type_decl ~loc td
     | _ -> raise_str ~loc "cannot handle this type in signatures yet"
   in
-  let e = List.fold_left
-      (fun acc name ->
-         [%type: [%t Typ.var name] Dynt.Types.ttype -> [%t acc]]) typ
-      (free_vars_of_type_decl td)
-  in
-  [Sig.value (Val.mk (mknoloc name) e)]
+  let typ = typ_of_free_vars ~loc ~basetyp (free_vars_of_type_decl td) in
+  [Val.mk {txt=(mangle_type_decl td); loc} typ]
 
 (* Register the handler for type declarations in signatures and structures *)
 let () =
@@ -208,5 +209,6 @@ let () =
   and type_decl_sig ~options ~path type_decls =
     List.map (sig_of_type_decl ~options ~path) type_decls
     |> List.concat
+    |> List.map Sig.value
   in
   Ppx_deriving.(register (create deriver ~type_decl_str ~type_decl_sig ()))
