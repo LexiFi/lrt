@@ -88,20 +88,26 @@ let rec str_of_core_type ~opt ~recurse ~free ({ ptyp_loc = loc ; _ } as ct) =
     [%expr ttype_of_stype( DT_abstract ([%e str name],[]))]
   | None -> t
 
+let stypes_of_free ~loc free =
+  List.mapi (fun i _v -> [%expr DT_var [%e int i]]) free |> list
+
 (* Construct record ttypes *)
 let str_of_record_labels ?inline ~loc ~opt ~name ~free ~recurse l =
   let ll = List.rev_map (fun {pld_loc = loc; pld_name; pld_type; _ } ->
       let t = str_of_core_type ~opt ~recurse ~free pld_type in
-      [%expr ([%e str pld_name.txt], [], stype_of_ttype [%e t])]
+      [%expr
+        ([%e str pld_name.txt], [], stype_of_ttype [%e t])]
     ) l |> expr_list ~loc
   in
   match inline with
   | None ->
-    [%expr Internal.create_record_type [%e str name] []
+    [%expr Internal.create_record_type [%e str name]
+        [%e stypes_of_free ~loc free]
         (fun [%p pvar rec_stype_label] -> [%e ll], Record_regular)
            |> ttype_of_stype ]
   | Some i ->
-    [%expr Internal.create_record_type [%e str name] []
+    [%expr Internal.create_record_type [%e str name]
+        [%e stypes_of_free ~loc free]
         (fun _ -> [%e ll], Record_inline [%e int i])
            |> ttype_of_stype ]
 
@@ -116,7 +122,8 @@ let str_of_variant_constructors ~loc ~opt ~name ~free ~recurse l =
             str_of_core_type ~opt ~recurse ~free ct
             |> fun e -> [%expr stype_of_ttype [%e e]]
           ) ctl in
-        [%expr ([%e str pcd_name.txt], [], C_tuple [%e expr_list ~loc l])]
+        [%expr ([%e str pcd_name.txt], [],
+                C_tuple [%e expr_list ~loc l])]
       | Pcstr_record lbl ->
         let r =
           str_of_record_labels ~inline:!nconst_tag ~recurse ~free
@@ -126,7 +133,8 @@ let str_of_variant_constructors ~loc ~opt ~name ~free ~recurse l =
         [%expr ([%e str pcd_name.txt], [], C_inline [%e r])]
     ) l |> expr_list ~loc
   in
-  [%expr Internal.create_variant_type [%e str name] []
+  [%expr Internal.create_variant_type [%e str name]
+      [%e stypes_of_free ~loc free]
       (fun [%p pvar rec_stype_label] -> [%e ll]) |> ttype_of_stype ]
 
 let free_vars_of_type_decl td =

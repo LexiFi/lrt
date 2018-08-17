@@ -131,7 +131,7 @@ let%expect_test _ =
   print (M.alist_t int_t string_t);
   print M.aalist_t;
   [%expect {|
-    (rectangle =
+    (int rectangle =
        {
          a: int;
          b: int;
@@ -144,7 +144,7 @@ type ('a,'b,'c,'d,'e) weird_type = A of 'a | B of 'b | C of 'c | D of 'd
 let%expect_test _ =
   print (weird_type_t int_t float_t string_t (M.alist_t int_t float_t) int_t);
   [%expect {|
-    (weird_type =
+    ((int, (int * float) list, string, float, int) weird_type =
        | A of int
        | B of float
        | C of string
@@ -162,19 +162,36 @@ type 'a bbtree =
   | Leave of 'a
 [@@deriving t]
 
+type ('a,'b) either_list =
+  | Either of { v : 'a list }
+  | Or of { v : 'b list }
+[@@deriving t]
+
 let%expect_test _ =
   print (btree_t int_t);
   print (bbtree_t int_t);
+  print (either_list_t string_t int_t);
   [%expect {|
-    (btree =
+    (int btree =
        {
          v: int;
          l: int btree option;
          r: int btree option;
        })
-    (bbtree =
+    (int bbtree =
        | Inner of (int * int bbtree * int bbtree)
-       | Leave of int)  |}]
+       | Leave of int)
+    ((int, string) either_list =
+       | Either of
+        ((int, string) either_list.Either =
+           {
+             v: string list;
+           })
+       | Or of
+        ((int, string) either_list.Or =
+           {
+             v: int list;
+           }))  |}]
 
 (* type 'a weirdtree = *)
   (* { node : 'a node *)
@@ -224,7 +241,7 @@ let%expect_test _ =
   print (N.t_marc string_t);
   print (N.t_p string_t);
   [%expect {|
-    (t =
+    (string t =
        {
          pred: string t option;
        })
