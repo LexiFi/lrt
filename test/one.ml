@@ -202,6 +202,9 @@ let%expect_test _ =
   (* ; weird : 'a weirdtree *)
   (* } [@@deriving t] *)
 
+(* type foo = bar *)
+(* and bar = int [@@deriving t] *)
+
 module N = struct
   open Types
   open Internal
@@ -228,6 +231,21 @@ module N = struct
   let t_p (a : 'a ttype) : 'a t ttype =
     substitute [| stype_of_ttype a |] stype_p |> Obj.magic
 
+
+  let t_p2 = DT_node (create_node "t" [ DT_var 0 ])
+
+  let set_record descr = function
+    | DT_node n -> set_node_record n descr
+    | _ -> assert false
+
+  let t_p2 =
+    let descr = ["pred", [], DT_option t_p2], Record_regular in
+    set_record descr t_p2 ;
+    t_p2
+
+  let t_p2 (type a) (a: a ttype) : a t ttype =
+    substitute [| stype_of_ttype a |] t_p2 |> Obj.magic
+
   let zero = { pred = None }
   let succ (type a) (p : (a * int) t) : a t = { pred = Some p }
   let () =
@@ -240,6 +258,7 @@ let%expect_test _ =
   print (N.t string_t);
   print (N.t_marc string_t);
   print (N.t_p string_t);
+  print (N.t_p2 string_t);
   [%expect {|
     (string t =
        {
@@ -256,5 +275,8 @@ let%expect_test _ =
     (string t =
        {
          pred: string t option;
+       })
+    (string t =
+       {
+         pred: string t option;
        }) |}]
-

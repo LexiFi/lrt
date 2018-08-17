@@ -2,4 +2,10 @@
  (name test)
  (libraries dynt)
  (inline_tests)
+ (modules one two)
  (preprocess (pps ppx_expect ppx_deriving.std ppx_deriving_dynt)))
+
+(executable
+ (name testexe)
+ (modules testexe)
+ (libraries test))

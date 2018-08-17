@@ -69,10 +69,10 @@ let rec str_of_core_type ~opt ~recurse ~free ({ ptyp_loc = loc ; _ } as ct) =
       in
       [%expr ttype_of_stype (DT_tuple [%e args])]
     | Ptyp_constr (id, args) ->
+      let id' = { id with txt = mangle_lid id.txt} in
       if id.txt = Lident recurse then
-        [%expr ttype_of_stype [%e evar rec_stype_label]]
+        [%expr [%e Exp.ident id']]
       else
-        let id' = { id with txt = mangle_lid id.txt} in
         List.fold_left
           (fun acc e -> [%expr [%e acc] [%e rc e]])
           [%expr [%e Exp.ident id']] args
@@ -91,30 +91,37 @@ let rec str_of_core_type ~opt ~recurse ~free ({ ptyp_loc = loc ; _ } as ct) =
 let stypes_of_free ~loc free =
   List.mapi (fun i _v -> [%expr DT_var [%e int i]]) free |> list
 
+type me = { is : string ; mangled : string}
+
 (* Construct record ttypes *)
-let str_of_record_labels ?inline ~loc ~opt ~name ~free ~recurse l =
-  let ll = List.rev_map (fun {pld_loc = loc; pld_name; pld_type; _ } ->
+let str_of_record_labels ?inline ~loc ~opt ~me ~free ~recurse l =
+  let fields = List.map (fun {pld_loc = loc; pld_name; pld_type; _ } ->
       let t = str_of_core_type ~opt ~recurse ~free pld_type in
       [%expr
         ([%e str pld_name.txt], [], stype_of_ttype [%e t])]
-    ) l |> expr_list ~loc
+    ) l
   in
   match inline with
   | None ->
-    [%expr Internal.create_record_type [%e str name]
-        [%e stypes_of_free ~loc free]
-        (fun [%p pvar rec_stype_label] -> [%e ll], Record_regular)
-           |> ttype_of_stype ]
+    [%expr
+      let [%p pvar me.mangled] : 'a ttype =
+        DT_node (create_node [%e str me.is] [%e stypes_of_free ~loc free])
+        |> ttype_of_stype
+      in
+      set_record ([%e list fields], Record_regular) [%e evar me.mangled] ;
+      [%e evar me.mangled]]
   | Some i ->
-    [%expr Internal.create_record_type [%e str name]
+    (* TODO: Move this into separate function. me argument does not make sense *)
+    [%expr Internal.create_record_type [%e str me.is]
         [%e stypes_of_free ~loc free]
-        (fun _ -> [%e ll], Record_inline [%e int i])
+        (fun _ -> [%e list fields], Record_inline [%e int i])
            |> ttype_of_stype ]
 
 (* Construct variant ttypes *)
-let str_of_variant_constructors ~loc ~opt ~name ~free ~recurse l =
+let str_of_variant_constructors ~loc ~opt ~me ~free ~recurse l =
   let nconst_tag = ref 0 in
-  let ll = List.rev_map (fun {pcd_loc = loc; pcd_name; pcd_args; _ } ->
+  let constructors =
+    List.map (fun {pcd_loc = loc; pcd_name; pcd_args; _ } ->
       match pcd_args with
       | Pcstr_tuple ctl ->
         if ctl <> [] then incr nconst_tag;
@@ -127,15 +134,19 @@ let str_of_variant_constructors ~loc ~opt ~name ~free ~recurse l =
       | Pcstr_record lbl ->
         let r =
           str_of_record_labels ~inline:!nconst_tag ~recurse ~free
-            ~opt ~loc ~name:(sprintf "%s.%s" name pcd_name.txt) lbl
+            ~opt ~loc ~me:{me with is = sprintf "%s.%s" me.is pcd_name.txt} lbl
         in
         incr nconst_tag;
         [%expr ([%e str pcd_name.txt], [], C_inline [%e r])]
-    ) l |> expr_list ~loc
+    ) l
   in
-  [%expr Internal.create_variant_type [%e str name]
-      [%e stypes_of_free ~loc free]
-      (fun [%p pvar rec_stype_label] -> [%e ll]) |> ttype_of_stype ]
+  [%expr
+    let [%p pvar me.mangled] : 'a ttype =
+      DT_node (create_node [%e str me.is] [%e stypes_of_free ~loc free])
+      |> ttype_of_stype
+    in
+    set_variant [%e list constructors] [%e evar me.mangled] ;
+    [%e evar me.mangled]]
 
 let free_vars_of_type_decl td =
   List.rev_map (fun (ct, _variance) ->
@@ -160,8 +171,8 @@ let typ_of_free_vars ~loc ~basetyp free =
  *)
 let str_of_type_decl ~options ~path ({ ptype_loc = loc ; _} as td) =
   let opt = parse_options ~path options in
-  let name = td.ptype_name.txt in
-  let recurse = name in
+  let me = { is = td.ptype_name.txt ; mangled = mangle_type_decl td} in
+  let recurse = me.is in
   let free = free_vars_of_type_decl td in
   let unclosed = match td.ptype_kind with
     | Ptype_abstract -> begin match td.ptype_manifest with
@@ -169,15 +180,14 @@ let str_of_type_decl ~options ~path ({ ptype_loc = loc ; _} as td) =
         | Some ct -> str_of_core_type ~opt ~recurse ~free ct
       end
     | Ptype_variant l ->
-      str_of_variant_constructors ~loc ~opt ~name ~recurse ~free l
-    | Ptype_record l -> str_of_record_labels ~loc ~opt ~name ~recurse ~free l
+      str_of_variant_constructors ~loc ~opt ~me ~recurse ~free l
+    | Ptype_record l -> str_of_record_labels ~loc ~opt ~me ~recurse ~free l
     | Ptype_open ->
       raise_str ~loc "type kind not yet supported"
   in
-  let id = mangle_type_decl td in
   let basetyp = basetyp_of_type_decl ~loc td in
   if free = [] then
-    [Vb.mk (Pat.constraint_ (pvar id) basetyp) (wrap_runtime unclosed)]
+    [Vb.mk (Pat.constraint_ (pvar me.mangled) basetyp) (wrap_runtime unclosed)]
   else begin
     let typ = typ_of_free_vars ~loc ~basetyp free in
     let subst =
@@ -186,11 +196,12 @@ let str_of_type_decl ~options ~path ({ ptype_loc = loc ; _} as td) =
       in
       List.fold_left (fun acc v -> lam (pvar v) acc)
         [%expr ttype_of_stype (
-            substitute [%e Exp.array arr] (stype_of_ttype [%e evar id]))]
+            substitute [%e Exp.array arr]
+              (stype_of_ttype [%e evar me.mangled]))]
         free
     in
-    [Vb.mk (pvar id) (wrap_runtime unclosed);
-     Vb.mk (Pat.constraint_ (pvar id) typ) (wrap_runtime subst)]
+    [Vb.mk (pvar me.mangled) (wrap_runtime unclosed);
+     Vb.mk (Pat.constraint_ (pvar me.mangled) typ) (wrap_runtime subst)]
   end
 
 (* Type declarations in signature. Generates
