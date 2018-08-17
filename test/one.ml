@@ -156,15 +156,25 @@ type 'a btree =
   ; l: 'a btree option
   ; r: 'a btree option
   } [@@deriving t]
+
+type 'a bbtree =
+  | Inner of 'a * 'a bbtree * 'a bbtree
+  | Leave of 'a
+[@@deriving t]
+
 let%expect_test _ =
   print (btree_t int_t);
+  print (bbtree_t int_t);
   [%expect {|
     (btree =
        {
          v: int;
-         l: btree option;
-         r: btree option;
-       }) |}]
+         l: int btree option;
+         r: int btree option;
+       })
+    (bbtree =
+       | Inner of (int * int bbtree * int bbtree)
+       | Leave of int)  |}]
 
 (* type 'a weirdtree = *)
   (* { node : 'a node *)
