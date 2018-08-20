@@ -286,29 +286,28 @@ module Mutual = struct
   and 'a value = 'a list
   and 'a opt_llist = 'a opt_list list
 
-  (* 1. open types *)
+  (* 1. unclosed ttypes *)
   let (opt_list_t : 'a opt_list ttype),
       (value_t: 'a value ttype),
       (opt_llist_t: 'a opt_llist ttype) =
 
-    (* a. prepare recursion *)
-    let opt_list_t : 'a opt_list ttype =
-      DT_node(create_node "opt_list" [DT_var 0]) |> ttype_of_stype in
-    let value_t : 'a value ttype =
-      list_t (ttype_of_stype (DT_var 0)) in
-    let opt_llist_t : 'a opt_llist ttype =
-      list_t (opt_list_t) in
+    let opt_list_node = create_node "opt_list" [DT_var 0] in
 
-    (* b. set variants / records *)
-    set_variant
+    let rec opt_list_t : 'a opt_list ttype Lazy.t =
+      lazy (DT_node opt_list_node |> ttype_of_stype)
+    and value_t : 'a value ttype Lazy.t =
+      lazy (list_t (ttype_of_stype (DT_var 0)))
+    and opt_llist_t : 'a opt_llist ttype Lazy.t =
+      lazy (list_t (Lazy.force opt_list_t))
+    in
+
+    set_node_variant opt_list_node
       [("None", [], C_tuple []);
-       ("Some", [], C_tuple [stype_of_ttype (value_t)])]
-      opt_list_t;
+       ("Some", [], C_tuple [stype_of_ttype (Lazy.force value_t)])] ;
 
-    (* c. return unclosed ttypes *)
-    opt_list_t, value_t, opt_llist_t
+    Lazy.force opt_list_t, Lazy.force value_t, Lazy.force opt_llist_t
 
-  (* 2. build constructors *)
+  (* 2. substitutions *)
 
   let opt_list_t (a : 'a ttype) : 'a opt_list ttype =
     substitute [| stype_of_ttype a |] (stype_of_ttype opt_list_t)
@@ -322,7 +321,6 @@ module Mutual = struct
     substitute [| stype_of_ttype a |] (stype_of_ttype opt_llist_t)
     |> ttype_of_stype
 
-
   let%expect_test _ =
     print (opt_list_t int_t);
     print (value_t int_t);
@@ -331,18 +329,22 @@ module Mutual = struct
       (int opt_list =
          | None
          | Some of int list)
-      int list |}]
+      int list
+      (int opt_list =
+         | None
+         | Some of int list) list |}]
 
   type 'a forward_ref = 'a target
   and 'a target = 'a list
 
-  let (forward_ref_t : 'a forward_ref ttype), (target_t : 'a target ttype) =
-    let forward_ref_t : 'a forward_ref ttype =
-      ttype_of_stype (stype_of_ttype target_t)
-    and target_t : 'a target ttype =
-      list_t (ttype_of_stype (DT_var 0))
+  let (forward_ref_t : 'a forward_ref ttype),
+      (target_t : 'a target ttype) =
+    let rec forward_ref_t : 'a forward_ref ttype Lazy.t =
+      lazy (ttype_of_stype (stype_of_ttype (Lazy.force target_t)))
+    and target_t : 'a target ttype Lazy.t =
+      lazy (list_t (ttype_of_stype (DT_var 0)))
     in
-    forward_ref_t, target_t
+    Lazy.force forward_ref_t, Lazy.force target_t
 
   let forward_ref_t (a: 'a ttype) : 'a forward_ref ttype =
     substitute [| stype_of_ttype a |] (stype_of_ttype forward_ref_t)
@@ -352,33 +354,39 @@ module Mutual = struct
     substitute [| stype_of_ttype a |] (stype_of_ttype target_t)
     |> ttype_of_stype
 
+  let%expect_test _ =
+    print (forward_ref_t int_t);
+    print (target_t int_t);
+    [%expect {|
+      int list
+      int list |}]
+
 
   type 'a ambiguous_list = Nil | Cons of 'a el
   and 'a el = Singleton of 'a | More of ('a * 'a ambiguous_list)
 
-  (* 1. open types *)
+  let (ambiguous_list_t : 'a ambiguous_list ttype),
+      (el_t : 'a el ttype) =
 
-  let (ambiguous_list_t : 'a ttype) , (el_t : 'b ttype) =
-    (* a. prepare recursion *)
-    let ambiguous_list_t : 'a ttype =
-      DT_node(create_node "ambiguous_list" [DT_var 0]) |> ttype_of_stype in
-    let el_t : 'a ttype =
-      DT_node(create_node "el" [DT_var 0]) |> ttype_of_stype in
+    let ambiguous_list_node = create_node "ambiguous_list" [DT_var 0] in
+    let el_node = create_node "el" [DT_var 0] in
 
-    (* b. set variants / records *)
-    set_variant
+    let ambiguous_list_t : 'a ambiguous_list ttype Lazy.t =
+      lazy (DT_node ambiguous_list_node |> ttype_of_stype)
+    and el_t : 'a el ttype Lazy.t =
+      lazy (DT_node el_node |> ttype_of_stype)
+    in
+
+    set_node_variant ambiguous_list_node
       [("Nil", [], C_tuple []);
-       ("Cons", [], C_tuple [stype_of_ttype el_t])]
-      ambiguous_list_t;
-    set_variant
+       ("Cons", [], C_tuple [stype_of_ttype (Lazy.force el_t)])];
+    set_node_variant el_node
       [("Singleton", [], C_tuple []);
-       ("More", [], C_tuple [DT_var 0; stype_of_ttype ambiguous_list_t])]
-      el_t;
+       ("More", [],
+        C_tuple [DT_var 0; stype_of_ttype (Lazy.force ambiguous_list_t)])];
 
-    (* c. return unclosed ttypes *)
-    ambiguous_list_t, el_t
+    Lazy.force ambiguous_list_t, Lazy.force el_t
 
-  (* 2 substitutions *)
   let ambiguous_list_t (a : 'a ttype) : 'a ambiguous_list ttype =
     substitute [| stype_of_ttype a |] (stype_of_ttype ambiguous_list_t)
     |> ttype_of_stype
