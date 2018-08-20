@@ -94,29 +94,32 @@ let stypes_of_free ~loc free =
 type me = { is : string ; mangled : string}
 
 (* Construct record ttypes *)
-let str_of_record_labels ?inline ~loc ~opt ~me ~free ~recurse l =
-  let fields = List.map (fun {pld_loc = loc; pld_name; pld_type; _ } ->
+let record_fields_of_record_labels ~opt ~recurse ~free l =
+  List.map (fun {pld_loc = loc; pld_name; pld_type; _ } ->
       let t = str_of_core_type ~opt ~recurse ~free pld_type in
       [%expr
         ([%e str pld_name.txt], [], stype_of_ttype [%e t])]
     ) l
-  in
-  match inline with
-  | None ->
-    [%expr
-      let [%p pvar me.mangled] : 'a ttype =
-        DT_node (create_node [%e str me.is] [%e stypes_of_free ~loc free])
-        |> ttype_of_stype
-      in
-      set_record ([%e list fields], Record_regular) [%e evar me.mangled] ;
-      [%e evar me.mangled]]
-  | Some i ->
-    (* TODO: Move this into separate function. me argument does not make sense *)
-    (* TODO: avoid create_record_type; recursion impossible here *)
-    [%expr Internal.create_record_type [%e str me.is]
-        [%e stypes_of_free ~loc free]
-        (fun _ -> [%e list fields], Record_inline [%e int i])
-           |> ttype_of_stype ]
+
+let record_ttype_of_record_labels ~loc ~opt ~me ~free ~recurse l =
+  let fields = record_fields_of_record_labels ~opt ~free ~recurse l in
+  [%expr
+    let [%p pvar me.mangled] : 'a ttype =
+      DT_node (create_node [%e str me.is] [%e stypes_of_free ~loc free])
+      |> ttype_of_stype
+    in
+    set_record ([%e list fields], Record_regular) [%e evar me.mangled] ;
+    [%e evar me.mangled]]
+
+let inline_record_stype_of_record_labels ~loc ~opt ~free ~recurse ~name i l =
+  let fields = record_fields_of_record_labels ~opt ~free ~recurse l in
+  [%expr
+    let [%p pvar "inline_node"] : node =
+      create_node [%e str name] [%e stypes_of_free ~loc free]
+    in
+    set_node_record [%e evar "inline_node"]
+      ([%e list fields], Record_inline [%e int i]);
+    DT_node [%e evar "inline_node"]]
 
 (* Construct variant ttypes *)
 let str_of_variant_constructors ~loc ~opt ~me ~free ~recurse l =
@@ -133,9 +136,9 @@ let str_of_variant_constructors ~loc ~opt ~me ~free ~recurse l =
         [%expr ([%e str pcd_name.txt], [],
                 C_tuple [%e expr_list ~loc l])]
       | Pcstr_record lbl ->
-        let r =
-          str_of_record_labels ~inline:!nconst_tag ~recurse ~free
-            ~opt ~loc ~me:{me with is = sprintf "%s.%s" me.is pcd_name.txt} lbl
+        let name = sprintf "%s.%s" me.is pcd_name.txt in
+        let r = inline_record_stype_of_record_labels ~recurse ~free ~opt ~loc
+            ~name !nconst_tag lbl
         in
         incr nconst_tag;
         [%expr ([%e str pcd_name.txt], [], C_inline [%e r])]
@@ -182,7 +185,8 @@ let str_of_type_decl ~options ~path ({ ptype_loc = loc ; _} as td) =
       end
     | Ptype_variant l ->
       str_of_variant_constructors ~loc ~opt ~me ~recurse ~free l
-    | Ptype_record l -> str_of_record_labels ~loc ~opt ~me ~recurse ~free l
+    | Ptype_record l -> record_ttype_of_record_labels ~loc ~opt ~me ~recurse
+                          ~free l
     | Ptype_open ->
       raise_str ~loc "type kind not yet supported"
   in
