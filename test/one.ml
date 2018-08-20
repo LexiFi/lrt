@@ -284,14 +284,20 @@ module Mutual = struct
   open Ppx_deriving_dynt_runtime
   type 'a opt_list = None | Some of 'a value
   and 'a value = 'a list
+  and 'a opt_llist = 'a opt_list list
 
-  (* 1. handle variants and records *)
-  let (opt_list_t : 'a ttype), (value_t: 'b ttype) =
+  (* 1. open types *)
+  let (opt_list_t : 'a opt_list ttype),
+      (value_t: 'a value ttype),
+      (opt_llist_t: 'a opt_llist ttype) =
+
     (* a. prepare recursion *)
-    let opt_list_t : 'a ttype =
+    let opt_list_t : 'a opt_list ttype =
       DT_node(create_node "opt_list" [DT_var 0]) |> ttype_of_stype in
-    let value_t : 'a ttype =
+    let value_t : 'a value ttype =
       list_t (ttype_of_stype (DT_var 0)) in
+    let opt_llist_t : 'a opt_llist ttype =
+      list_t (opt_list_t) in
 
     (* b. set variants / records *)
     set_variant
@@ -300,7 +306,7 @@ module Mutual = struct
       opt_list_t;
 
     (* c. return unclosed ttypes *)
-    opt_list_t, value_t
+    opt_list_t, value_t, opt_llist_t
 
   (* 2. build constructors *)
 
@@ -312,20 +318,45 @@ module Mutual = struct
     substitute [| stype_of_ttype a |] (stype_of_ttype value_t)
     |> ttype_of_stype
 
+  let opt_llist_t (a: 'a ttype) : 'a opt_llist ttype =
+    substitute [| stype_of_ttype a |] (stype_of_ttype opt_llist_t)
+    |> ttype_of_stype
+
 
   let%expect_test _ =
     print (opt_list_t int_t);
     print (value_t int_t);
+    print (opt_llist_t int_t);
     [%expect {|
       (int opt_list =
          | None
          | Some of int list)
       int list |}]
 
+  type 'a forward_ref = 'a target
+  and 'a target = 'a list
+
+  let (forward_ref_t : 'a forward_ref ttype), (target_t : 'a target ttype) =
+    let forward_ref_t : 'a forward_ref ttype =
+      ttype_of_stype (stype_of_ttype target_t)
+    and target_t : 'a target ttype =
+      list_t (ttype_of_stype (DT_var 0))
+    in
+    forward_ref_t, target_t
+
+  let forward_ref_t (a: 'a ttype) : 'a forward_ref ttype =
+    substitute [| stype_of_ttype a |] (stype_of_ttype forward_ref_t)
+    |> ttype_of_stype
+
+  let target_t (a: 'a ttype) : 'a target ttype =
+    substitute [| stype_of_ttype a |] (stype_of_ttype target_t)
+    |> ttype_of_stype
+
+
   type 'a ambiguous_list = Nil | Cons of 'a el
   and 'a el = Singleton of 'a | More of ('a * 'a ambiguous_list)
 
-  (* 1. handle variants and records *)
+  (* 1. open types *)
 
   let (ambiguous_list_t : 'a ttype) , (el_t : 'b ttype) =
     (* a. prepare recursion *)
