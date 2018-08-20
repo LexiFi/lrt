@@ -231,7 +231,6 @@ module N = struct
   let t_p (a : 'a ttype) : 'a t ttype =
     substitute [| stype_of_ttype a |] stype_p |> Obj.magic
 
-
   let t_p2 = DT_node (create_node "t" [ DT_var 0 ])
 
   let set_record descr = function
@@ -280,3 +279,101 @@ let%expect_test _ =
        {
          pred: string t option;
        }) |}]
+
+module Mutual = struct
+  open Ppx_deriving_dynt_runtime
+  type 'a opt_list = None | Some of 'a value
+  and 'a value = 'a list
+
+  (* 1. handle variants and records *)
+  let (opt_list_t : 'a ttype), (value_t: 'b ttype) =
+    (* a. prepare recursion *)
+    let opt_list_t : 'a ttype =
+      DT_node(create_node "opt_list" [DT_var 0]) |> ttype_of_stype in
+    let value_t : 'a ttype =
+      list_t (ttype_of_stype (DT_var 0)) in
+
+    (* b. set variants / records *)
+    set_variant
+      [("None", [], C_tuple []);
+       ("Some", [], C_tuple [stype_of_ttype (value_t)])]
+      opt_list_t;
+
+    (* c. return unclosed ttypes *)
+    opt_list_t, value_t
+
+  (* 2. build constructors *)
+
+  let opt_list_t (a : 'a ttype) : 'a opt_list ttype =
+    substitute [| stype_of_ttype a |] (stype_of_ttype opt_list_t)
+    |> ttype_of_stype
+
+  let value_t (a: 'a ttype) : 'a value ttype =
+    substitute [| stype_of_ttype a |] (stype_of_ttype value_t)
+    |> ttype_of_stype
+
+
+  let%expect_test _ =
+    print (opt_list_t int_t);
+    print (value_t int_t);
+    [%expect {|
+      (int opt_list =
+         | None
+         | Some of int list)
+      int list |}]
+
+  type 'a ambiguous_list = Nil | Cons of 'a el
+  and 'a el = Singleton of 'a | More of ('a * 'a ambiguous_list)
+
+  (* 1. handle variants and records *)
+
+  let (ambiguous_list_t : 'a ttype) , (el_t : 'b ttype) =
+    (* a. prepare recursion *)
+    let ambiguous_list_t : 'a ttype =
+      DT_node(create_node "ambiguous_list" [DT_var 0]) |> ttype_of_stype in
+    let el_t : 'a ttype =
+      DT_node(create_node "el" [DT_var 0]) |> ttype_of_stype in
+
+    (* b. set variants / records *)
+    set_variant
+      [("Nil", [], C_tuple []);
+       ("Cons", [], C_tuple [stype_of_ttype el_t])]
+      ambiguous_list_t;
+    set_variant
+      [("Singleton", [], C_tuple []);
+       ("More", [], C_tuple [DT_var 0; stype_of_ttype ambiguous_list_t])]
+      el_t;
+
+    (* c. return unclosed ttypes *)
+    ambiguous_list_t, el_t
+
+  (* 2 substitutions *)
+  let ambiguous_list_t (a : 'a ttype) : 'a ambiguous_list ttype =
+    substitute [| stype_of_ttype a |] (stype_of_ttype ambiguous_list_t)
+    |> ttype_of_stype
+
+  let el_t (a : 'a ttype) : 'a el ttype =
+    substitute [| stype_of_ttype a |] (stype_of_ttype el_t)
+    |> ttype_of_stype
+
+  let%expect_test _ =
+    print (ambiguous_list_t int_t);
+    print (el_t int_t);
+    [%expect {|
+      (int ambiguous_list =
+         | Nil
+         | Cons of
+          (int el =
+             | Singleton
+             | More of (int * int ambiguous_list)))
+      (int el =
+         | Singleton
+         | More of
+          (int
+           *
+           (int ambiguous_list =
+              | Nil
+              | Cons of int el))) |}]
+
+end
+
