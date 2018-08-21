@@ -1,5 +1,6 @@
 open Types
 
+val unit_t: unit ttype
 val int_t: int ttype
 val string_t: string ttype
 val float_t: float ttype

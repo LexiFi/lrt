@@ -73,11 +73,12 @@ let lazy_value_binding ~loc name basetyp expr =
 let force_lazy ~loc var = [%expr Lazy.force [%e var]]
 
 (* Construct ttype expression from core type *)
-let rec ttype_of_core_type ~opt ~rec_ ~free ({ ptyp_loc = loc ; _ } as ct) =
-  let rc = ttype_of_core_type ~opt ~rec_ ~free in
+let rec core_type ~opt ~rec_ ~free ({ ptyp_loc = loc ; _ } as ct) =
+  let rc = core_type ~opt ~rec_ ~free in
+  let rcs ct = [%expr stype_of_ttype [%e rc ct]] in
   let t = match ct.ptyp_desc with
     | Ptyp_tuple l ->
-      let args = List.map (fun x -> [%expr stype_of_ttype [%e rc x]]) l in
+      let args = List.map rcs l in
       [%expr ttype_of_stype (DT_tuple [%e list args])]
     | Ptyp_constr (id, args) -> begin
         let id' = { id with txt = mangle_lid id.txt} in
@@ -94,11 +95,10 @@ let rec ttype_of_core_type ~opt ~rec_ ~free ({ ptyp_loc = loc ; _ } as ct) =
       end
     | Ptyp_var vname -> begin
         match find_index_opt free vname with
-        | None -> assert false
+        | None -> raise_str ~loc "invalid use of type variable"
         | Some i -> [%expr ttype_of_stype (DT_var [%e int i])]
       end
     | Ptyp_arrow (label, l, r) ->
-      let f x = [%expr stype_of_ttype [%e rc x]] in
       let lab =
         match label with
         | Nolabel -> ""
@@ -106,7 +106,14 @@ let rec ttype_of_core_type ~opt ~rec_ ~free ({ ptyp_loc = loc ; _ } as ct) =
           (* TODO: How do you actually represent optional arguments? *)
         | Optional s -> "?" ^ s
       in
-      [%expr ttype_of_stype (DT_arrow ([%e str lab],[%e f l],[%e f r]))]
+      [%expr ttype_of_stype (DT_arrow ([%e str lab],[%e rcs l],[%e rcs r]))]
+    (* TODO: is the closed flag relevant? *)
+    | Ptyp_object (l, _closed_flag) ->
+      let fields = List.map (function
+          | Oinherit _ct -> raise_str ~loc "type not yet supported"
+          | Otag ({txt; _}, _attr, ct) -> tuple [str txt; rcs ct]) l
+      in
+      [%expr ttype_of_stype (DT_object [%e list fields])]
     | _ -> raise_str ~loc "type not yet supported"
   in
   match opt.abstract with
@@ -118,9 +125,9 @@ let stypes_of_free ~loc free =
   List.mapi (fun i _v -> [%expr DT_var [%e int i]]) free |> list
 
 (* Construct record ttypes *)
-let record_fields_of_record_labels ~opt ~rec_ ~free l =
+let fields_of_record_labels ~opt ~rec_ ~free l =
   List.map (fun {pld_loc = loc; pld_name; pld_type; _ } ->
-      let t = ttype_of_core_type ~opt ~rec_ ~free pld_type in
+      let t = core_type ~opt ~rec_ ~free pld_type in
       [%expr
         ([%e str pld_name.txt], [], stype_of_ttype [%e t])]
     ) l
@@ -129,7 +136,7 @@ let single_let_in pat expr =
   let_in [Vb.mk pat expr]
 
 let record_labels ~loc ~opt ~me ~free ~rec_ l =
-  let fields = record_fields_of_record_labels ~opt ~free ~rec_ l in
+  let fields = fields_of_record_labels ~opt ~free ~rec_ l in
   let createnode = single_let_in (pvar me.node)
       [%expr create_node [%e str me.typ] [%e stypes_of_free ~loc free]]
   and ttype = [%expr ttype_of_stype (DT_node [%e evar me.node])]
@@ -139,8 +146,8 @@ let record_labels ~loc ~opt ~me ~free ~rec_ l =
   in
   createnode, ttype, setnode
 
-let inline_record_stype_of_record_labels ~loc ~opt ~free ~rec_ ~name i l =
-  let fields = record_fields_of_record_labels ~opt ~free ~rec_ l in
+let record_labels_inline ~loc ~opt ~free ~rec_ ~name i l =
+  let fields = fields_of_record_labels ~opt ~free ~rec_ l in
   [%expr
     let [%p pvar "inline_node"] : Dynt.Types.node =
       create_node [%e str name] [%e stypes_of_free ~loc free]
@@ -158,14 +165,14 @@ let variant_constructors ~loc ~opt ~me ~free ~rec_ l =
       | Pcstr_tuple ctl ->
         if ctl <> [] then incr nconst_tag;
         let l = List.rev_map (fun ct ->
-            ttype_of_core_type ~opt ~rec_ ~free ct
+            core_type ~opt ~rec_ ~free ct
             |> fun e -> [%expr stype_of_ttype [%e e]]
           ) ctl in
         [%expr ([%e str pcd_name.txt], [],
                 C_tuple [%e expr_list ~loc l])]
       | Pcstr_record lbl ->
         let name = sprintf "%s.%s" me.typ pcd_name.txt in
-        let r = inline_record_stype_of_record_labels ~rec_ ~free ~opt ~loc
+        let r = record_labels_inline ~rec_ ~free ~opt ~loc
             ~name !nconst_tag lbl
         in
         incr nconst_tag;
@@ -232,7 +239,7 @@ let type_decl_str ~options ~path tds =
       | Ptype_abstract -> begin match td.ptype_manifest with
           | None -> raise_errorf ~loc "no manifest found"
           | Some ct ->
-            let t = ttype_of_core_type ~rec_ ~opt ~free ct in
+            let t = core_type ~rec_ ~opt ~free ct in
             cn, t, sn
         end
       | Ptype_record l ->
@@ -256,7 +263,7 @@ let type_decl_str ~options ~path tds =
   let prepare =
     let pattern, force =
       match patterns with
-      | [] -> assert false
+      | [] -> raise_str "internal error (type_decl_str)"
       | hd :: [] -> hd, List.hd forcelazy
       | _ -> Pat.tuple patterns, tuple forcelazy
     in
@@ -289,6 +296,13 @@ let type_decl_sig ~options ~path tds =
   List.map (sig_of_type_decl ~opt) tds
   |> List.map Sig.value
 
+(* inline types *)
+let core_type ct =
+  let opt = parse_options ~path:[] [] in
+  core_type ~rec_:[] ~free:[] ~opt ct
+  |> wrap_runtime
+
 (* Register the handler for type declarations in signatures and structures *)
 let () =
-  Ppx_deriving.(register (create deriver ~type_decl_str ~type_decl_sig ()))
+  Ppx_deriving.(register (create deriver ~type_decl_str ~type_decl_sig
+                            ~core_type ()))

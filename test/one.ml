@@ -336,3 +336,39 @@ module NonregRec = struct
          }) |}]
 
 end
+
+module Inline = struct
+
+  (* type bad = 'a int [@@deriving t] *)
+  (* let bad_t =  [%t: 'a int] *)
+
+  let%expect_test _ =
+    print [%t: int];
+    print [%t: int -> int];
+    print [%t: string list];
+    print [%t: int NonregRec.good1];
+    [%expect {|
+      int
+      (int -> int)
+      string list
+      (int good1 =
+         {
+           field: int good1 option;
+           v: int;
+         }) |}]
+end
+
+module Objects = struct
+
+  type 'a stack = < pop : 'a option; push : 'a -> unit > [@@deriving t]
+
+  let%expect_test _ =
+    print [%t: int stack];
+    [%expect {|
+       <
+         pop: int option;
+         push: (int -> unit);
+      > |}]
+
+end
+

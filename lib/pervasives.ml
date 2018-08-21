@@ -1,5 +1,7 @@
 open Types
 
+(* TODO: what is your actual representation of unit type? *)
+let unit_t = DT_abstract ("unit", []) |> Obj.magic
 let int_t = DT_int |> Obj.magic
 let string_t = DT_string |> Obj.magic
 let float_t = DT_float |> Obj.magic
