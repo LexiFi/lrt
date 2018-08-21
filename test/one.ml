@@ -119,16 +119,19 @@ let%expect_test _ =
 module M : sig
   type 'num rectangle = { a: 'num ; b: 'num} [@@deriving t]
   type ('a, 'b) alist = ('a * 'b) list [@@deriving t]
+  type ('a, 'b) alist2 = ('a * 'b) list [@@deriving t]
   type aalist = (int,string) alist [@@deriving t]
 end = struct
   type 'num rectangle = { a: 'num ; b: 'num} [@@deriving t]
   type ('a,'b) alist = ('a * 'b) list [@@deriving t]
+  type ('a,'b) alist2 = ('a, 'b) alist [@@deriving t]
   type aalist = (int,string) alist [@@deriving t]
 end
 
 let%expect_test _ =
   print (M.rectangle_t int_t);
   print (M.alist_t int_t string_t);
+  print (M.alist2_t int_t string_t);
   print M.aalist_t;
   [%expect {|
     (int rectangle =
@@ -136,6 +139,7 @@ let%expect_test _ =
          a: int;
          b: int;
        })
+    (int * string) list
     (int * string) list
     (int * string) list |}]
 
@@ -293,77 +297,25 @@ module Mutual = struct
 
 end
 
-module N = struct
-  open Types
-  open Internal
+module NonregRec = struct
 
-  type 'a t = { pred : ('a * int) t option } [@@deriving t]
+  type 'a good1 = { field: 'a good1 option; v : 'a }  [@@deriving t]
+  type ('a,'b) good2 = {field: ('a,'b) good2 option } [@@deriving t]
+  (* type 'a bad1 = { field: int bad1 option; v : 'a } [@@deriving t] *)
+  (* type ('a,'b) bad2 = {field: ('b,'a) bad2 option } [@@deriving t] *)
 
-  let stype_marc =
-    let outer_node = create_node "t" [ DT_var 0 ] in
-    let inner_node = create_node "t" [DT_tuple [DT_var 0; DT_int]] in
-    let descr = ["pred", [], DT_option (DT_node inner_node)], Record_regular in
-    set_node_record outer_node descr;
-    set_node_record inner_node descr;
-    DT_node outer_node
+  let%expect_test _ =
+    print (good1_t (array_t int_t));
+    print (good2_t string_t (array_t int_t));
+    [%expect {|
+      (int array good1 =
+         {
+           field: int array good1 option;
+           v: int array;
+         })
+      ((string, int array) good2 =
+         {
+           field: (string, int array) good2 option;
+         }) |}]
 
-  let t_marc (a : 'a ttype) : 'a t ttype =
-    substitute [| stype_of_ttype a |] stype_marc |> Obj.magic
-
-  let stype_p =
-    let node = create_node "t" [ DT_var 0 ] in
-    let descr = ["pred", [], DT_option (DT_node node)], Record_regular in
-    set_node_record node descr;
-    DT_node node
-
-  let t_p (a : 'a ttype) : 'a t ttype =
-    substitute [| stype_of_ttype a |] stype_p |> Obj.magic
-
-  let t_p2 = DT_node (create_node "t" [ DT_var 0 ])
-
-  let set_record descr = function
-    | DT_node n -> set_node_record n descr
-    | _ -> assert false
-
-  let t_p2 =
-    let descr = ["pred", [], DT_option t_p2], Record_regular in
-    set_record descr t_p2 ;
-    t_p2
-
-  let t_p2 (type a) (a: a ttype) : a t ttype =
-    substitute [| stype_of_ttype a |] t_p2 |> Obj.magic
-
-  let zero = { pred = None }
-  let succ (type a) (p : (a * int) t) : a t = { pred = Some p }
-  let () =
-    let _three : string t = succ (succ (succ zero)) in
-    let _t : string t ttype = t string_t in
-    (* Debug.print ~t three *) ()
 end
-
-let%expect_test _ =
-  print (N.t string_t);
-  print (N.t_marc string_t);
-  print (N.t_p string_t);
-  print (N.t_p2 string_t);
-  [%expect {|
-    (string t =
-       {
-         pred: string t option;
-       })
-    (string t =
-       {
-         pred:
-         ((string * int) t =
-            {
-              pred: (string * int) t option;
-            }) option;
-       })
-    (string t =
-       {
-         pred: string t option;
-       })
-    (string t =
-       {
-         pred: string t option;
-       }) |}]

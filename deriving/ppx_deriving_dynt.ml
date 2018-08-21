@@ -21,9 +21,6 @@ let names_of_type_decl td =
     node = mangle_type_decl ~n:"node" td
   }
 
-(* Name of the stype, used in recursive type definitions*)
-let rec_stype_label="__rec_stype"
-
 (* Make accesible the runtime module at runtime *)
 let wrap_runtime decls =
   Ppx_deriving.sanitize ~module_:(Lident "Ppx_deriving_dynt_runtime") decls
@@ -66,10 +63,6 @@ let find_index_opt (l : 'a list) (el : 'a) : int option =
     | _ :: tl -> incr i ; f tl
   in f l
 
-let check_rec lid rec_ =
-  let prop el = lid = Lident el in
-  List.exists prop rec_
-
 (* helpers for lazy recursion *)
 
 let lazy_value_binding ~loc name basetyp expr =
@@ -85,18 +78,28 @@ let rec ttype_of_core_type ~opt ~rec_ ~free ({ ptyp_loc = loc ; _ } as ct) =
   let rc = ttype_of_core_type ~opt ~rec_ ~free in
   let t = match ct.ptyp_desc with
     | Ptyp_tuple l ->
-      let args = List.rev_map rc l |> List.fold_left (fun acc e ->
-          [%expr stype_of_ttype [%e e] :: [%e acc]]) [%expr []]
+      let args =
+        List.fold_left (fun acc e ->
+            [%expr stype_of_ttype [%e rc e] :: [%e acc]]) [%expr []]
+          (List.rev l)
       in
       [%expr ttype_of_stype (DT_tuple [%e args])]
-    | Ptyp_constr (id, args) ->
-      let id' = { id with txt = mangle_lid id.txt} in
-      if check_rec id.txt rec_ then
-        Exp.ident id' |> force_lazy ~loc
-      else
-        List.fold_left
-          (fun acc e -> [%expr [%e acc] [%e rc e]])
-          (Exp.ident id') args
+    | Ptyp_constr (id, args) -> begin
+        let id' = { id with txt = mangle_lid id.txt} in
+        (* recursive identifier? regular recursion? *)
+        match List.assoc_opt (Longident.last id.txt) rec_ with
+        | Some l ->
+          let is = List.rev_map (fun x -> x.ptyp_desc) args
+          and should = List.map (fun a -> Ptyp_var a) l in
+          if is = should then
+            Exp.ident id' |> force_lazy ~loc
+          else
+            raise_str ~loc "non-regular type recursion not supported"
+        | None ->
+          List.fold_left
+            (fun acc e -> [%expr [%e acc] [%e rc e]])
+            (Exp.ident id') args
+      end
     | Ptyp_var vname -> begin
         match find_index_opt free vname with
         | None -> assert false
@@ -208,13 +211,15 @@ let substitution_of_free_vars ~loc ~me basetyp free =
   in
   Vb.mk (Pat.constraint_ (pvar me.ttype) typ) (wrap_runtime subst)
 
-(* list of recursive identifiers *)
-type recargs = label list
+(* alist mapping recursive identifiers to their type args *)
+type recargs = (label * label list) list
 
 let type_decl_str ~options ~path tds =
   let extend_let new_ was expr = new_ (was expr) in
   let opt = parse_options ~path options in
-  let rec_ : recargs = List.map (fun td -> td.ptype_name.txt) tds in
+  let rec_ : recargs = List.map (fun td ->
+      td.ptype_name.txt, free_vars_of_type_decl td) tds
+  in
   let parse (pats, cn, lr, sn, fl, subs) ({ ptype_loc = loc ; _} as td) =
     let me = names_of_type_decl td in
     let basetyp = basetyp_of_type_decl ~loc td in
