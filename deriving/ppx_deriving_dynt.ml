@@ -72,9 +72,8 @@ let lazy_value_binding ~loc name basetyp expr =
 
 let force_lazy ~loc var = [%expr Lazy.force [%e var]]
 
-(* Construct ttype generator from core type *)
+(* Construct ttype expression from core type *)
 let rec ttype_of_core_type ~opt ~rec_ ~free ({ ptyp_loc = loc ; _ } as ct) =
-  let fail () = raise_str ~loc "type not yet supported" in
   let rc = ttype_of_core_type ~opt ~rec_ ~free in
   let t = match ct.ptyp_desc with
     | Ptyp_tuple l ->
@@ -98,7 +97,17 @@ let rec ttype_of_core_type ~opt ~rec_ ~free ({ ptyp_loc = loc ; _ } as ct) =
         | None -> assert false
         | Some i -> [%expr ttype_of_stype (DT_var [%e int i])]
       end
-    | _ -> fail ()
+    | Ptyp_arrow (label, l, r) ->
+      let f x = [%expr stype_of_ttype [%e rc x]] in
+      let lab =
+        match label with
+        | Nolabel -> ""
+        | Labelled s -> s
+          (* TODO: How do you actually represent optional arguments? *)
+        | Optional s -> "?" ^ s
+      in
+      [%expr ttype_of_stype (DT_arrow ([%e str lab],[%e f l],[%e f r]))]
+    | _ -> raise_str ~loc "type not yet supported"
   in
   match opt.abstract with
   | Some name ->

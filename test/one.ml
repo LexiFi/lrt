@@ -116,6 +116,23 @@ let%expect_test _ =
              b: natural2;
            })) |}]
 
+module Arrows = struct
+
+  type int_arrow = int -> int [@@deriving t]
+  type 'a identity = 'a -> 'a [@@deriving t]
+  type 'a advanced = ?n:int -> name:'a -> (string -> 'a) -> int [@@deriving t]
+
+  let%expect_test _ =
+    print int_arrow_t;
+    print (identity_t (array_t string_t));
+    print (advanced_t string_t);
+    [%expect {|
+      (int -> int)
+      (string array -> string array)
+      (?n:int -> (name:string -> ((string -> string) -> int))) |}]
+
+end
+
 module M : sig
   type 'num rectangle = { a: 'num ; b: 'num} [@@deriving t]
   type ('a, 'b) alist = ('a * 'b) list [@@deriving t]
