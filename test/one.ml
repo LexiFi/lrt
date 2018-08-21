@@ -9,7 +9,7 @@ type pair1 = string * int [@@deriving t]
 type pair2 = int * string [@@deriving t]
 type triple = float * int * string [@@deriving t]
 type quartet = float * int * string * int [@@deriving t]
-type quintet = float * int * string * int * int [@@deriving t]
+type quintet = float * int * string array * int * int [@@deriving t]
 
 let%expect_test _ =
   print t;
@@ -24,7 +24,7 @@ let%expect_test _ =
     (int * string)
     (float * int * string)
     (float * int * string * int)
-    (float * int * string * int * int) |}]
+    (float * int * string array * int * int) |}]
 
 type two_public = Two.public [@@deriving t]
 type two_hidden = Two.hidden [@@deriving t]

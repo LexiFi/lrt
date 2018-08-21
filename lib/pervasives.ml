@@ -11,3 +11,7 @@ let option_t a =
 let list_t a =
   let t = stype_of_ttype a in
   DT_list t |> Obj.magic
+
+let array_t a =
+  let t = stype_of_ttype a in
+  DT_array t |> Obj.magic
