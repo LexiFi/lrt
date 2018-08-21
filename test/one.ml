@@ -148,7 +148,7 @@ type ('a,'b,'c,'d,'e) weird_type = A of 'a | B of 'b | C of 'c | D of 'd
 let%expect_test _ =
   print (weird_type_t int_t float_t string_t (M.alist_t int_t float_t) int_t);
   [%expect {|
-    ((int, (int * float) list, string, float, int) weird_type =
+    ((int, float, string, (int * float) list, int) weird_type =
        | A of int
        | B of float
        | C of string
@@ -185,14 +185,14 @@ let%expect_test _ =
     (int bbtree =
        | Inner of (int * int bbtree * int bbtree)
        | Leave of int)
-    ((int, string) either_list =
+    ((string, int) either_list =
        | Either of
-        ((int, string) either_list.Either =
+        ((string, int) either_list.Either =
            {
              v: string list;
            })
        | Or of
-        ((int, string) either_list.Or =
+        ((string, int) either_list.Or =
            {
              v: int list;
            }))  |}]

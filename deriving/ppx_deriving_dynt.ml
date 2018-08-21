@@ -78,27 +78,20 @@ let rec ttype_of_core_type ~opt ~rec_ ~free ({ ptyp_loc = loc ; _ } as ct) =
   let rc = ttype_of_core_type ~opt ~rec_ ~free in
   let t = match ct.ptyp_desc with
     | Ptyp_tuple l ->
-      let args =
-        List.fold_left (fun acc e ->
-            [%expr stype_of_ttype [%e rc e] :: [%e acc]]) [%expr []]
-          (List.rev l)
-      in
-      [%expr ttype_of_stype (DT_tuple [%e args])]
+      let args = List.map (fun x -> [%expr stype_of_ttype [%e rc x]]) l in
+      [%expr ttype_of_stype (DT_tuple [%e list args])]
     | Ptyp_constr (id, args) -> begin
         let id' = { id with txt = mangle_lid id.txt} in
         (* recursive identifier? regular recursion? *)
         match List.assoc_opt (Longident.last id.txt) rec_ with
         | Some l ->
           let is = List.rev_map (fun x -> x.ptyp_desc) args
-          and should = List.map (fun a -> Ptyp_var a) l in
+          and should = List.rev_map (fun a -> Ptyp_var a) l in
           if is = should then
             Exp.ident id' |> force_lazy ~loc
           else
             raise_str ~loc "non-regular type recursion not supported"
-        | None ->
-          List.fold_left
-            (fun acc e -> [%expr [%e acc] [%e rc e]])
-            (Exp.ident id') args
+        | None -> app (Exp.ident id') (List.map rc args)
       end
     | Ptyp_var vname -> begin
         match find_index_opt free vname with
@@ -180,7 +173,7 @@ let variant_constructors ~loc ~opt ~me ~free ~rec_ l =
   createnode, ttype, setnode
 
 let free_vars_of_type_decl td =
-  List.rev_map (fun (ct, _variance) ->
+  List.map (fun (ct, _variance) ->
       match ct.ptyp_desc with
       | Ptyp_var name -> name
       | _ -> raise_str "type parameter not yet supported"
@@ -195,7 +188,7 @@ let basetyp_of_type_decl ~loc td =
 let typ_of_free_vars ~loc ~basetyp free =
   List.fold_left (fun acc name ->
       [%type: [%t Typ.var name] Dynt.Types.ttype -> [%t acc]])
-    basetyp free
+    basetyp (List.rev free)
 
 let substitution_of_free_vars ~loc ~me basetyp free =
   let typ = typ_of_free_vars ~loc ~basetyp free in
@@ -207,7 +200,7 @@ let substitution_of_free_vars ~loc ~me basetyp free =
       [%expr ttype_of_stype (
           substitute [%e Exp.array arr]
             (stype_of_ttype [%e evar me.ttype]))]
-      free
+      (List.rev free)
   in
   Vb.mk (Pat.constraint_ (pvar me.ttype) typ) (wrap_runtime subst)
 
