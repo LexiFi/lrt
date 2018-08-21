@@ -193,17 +193,105 @@ let%expect_test _ =
              v: int list;
            }))  |}]
 
-(* type 'a weirdtree = *)
-  (* { node : 'a node *)
-  (* ; children : 'a weirdtree list *)
-  (* } *)
-(* and 'a node = *)
-  (* { basic : 'a *)
-  (* ; weird : 'a weirdtree *)
-  (* } [@@deriving t] *)
+module Mutual = struct
 
-(* type foo = bar *)
-(* and bar = int [@@deriving t] *)
+  type foo = bar
+  and bar = int [@@deriving t]
+
+  let%expect_test _ =
+    print (foo_t);
+    print (bar_t);
+    [%expect {|
+      int
+      int |}]
+
+  type 'a weirdtree =
+    { node : 'a wnode
+    ; children : 'a weirdtree list
+    }
+  and 'a wnode =
+    { basic : 'a
+    ; weird : 'a weirdtree
+    } [@@deriving t]
+
+  let%expect_test _ =
+    print (weirdtree_t string_t);
+    print (wnode_t int_t);
+    [%expect {|
+      (string weirdtree =
+         {
+           node:
+           (string wnode =
+              {
+                basic: string;
+                weird: string weirdtree;
+              });
+           children: string weirdtree list;
+         })
+      (int wnode =
+         {
+           basic: int;
+           weird:
+           (int weirdtree =
+              {
+                node: int wnode;
+                children: int weirdtree list;
+              });
+         }) |}]
+
+  type 'a opt_list = None | Some of 'a value
+  and 'a value = 'a list
+  and 'a opt_llist = 'a opt_list list
+  [@@deriving t]
+
+  let%expect_test _ =
+    print (opt_list_t int_t);
+    print (value_t int_t);
+    print (opt_llist_t int_t);
+    [%expect {|
+      (int opt_list =
+         | None
+         | Some of int list)
+      int list
+      (int opt_list =
+         | None
+         | Some of int list) list |}]
+
+  type 'a forward_ref = 'a target
+  and 'a target = 'a list
+  [@@deriving t]
+
+  let%expect_test _ =
+    print (forward_ref_t int_t);
+    print (target_t int_t);
+    [%expect {|
+      int list
+      int list |}]
+
+  type 'a ambiguous_list = Nil | Cons of 'a el
+  and 'a el = Singleton of 'a | More of ('a * 'a ambiguous_list)
+  [@@deriving t]
+
+  let%expect_test _ =
+    print (ambiguous_list_t int_t);
+    print (el_t int_t);
+    [%expect {|
+      (int ambiguous_list =
+         | Nil
+         | Cons of
+          (int el =
+             | Singleton of int
+             | More of (int * int ambiguous_list)))
+      (int el =
+         | Singleton of int
+         | More of
+          (int
+           *
+           (int ambiguous_list =
+              | Nil
+              | Cons of int el))) |}]
+
+end
 
 module N = struct
   open Types
@@ -279,140 +367,3 @@ let%expect_test _ =
        {
          pred: string t option;
        }) |}]
-
-module Mutual = struct
-  open Ppx_deriving_dynt_runtime
-  type 'a opt_list = None | Some of 'a value
-  and 'a value = 'a list
-  and 'a opt_llist = 'a opt_list list
-
-  (* 1. unclosed ttypes *)
-  let (opt_list_t : 'a opt_list ttype),
-      (value_t: 'a value ttype),
-      (opt_llist_t: 'a opt_llist ttype) =
-
-    let opt_list_node = create_node "opt_list" [DT_var 0] in
-
-    let rec opt_list_t : 'a opt_list ttype Lazy.t =
-      lazy (DT_node opt_list_node |> ttype_of_stype)
-    and value_t : 'a value ttype Lazy.t =
-      lazy (list_t (ttype_of_stype (DT_var 0)))
-    and opt_llist_t : 'a opt_llist ttype Lazy.t =
-      lazy (list_t (Lazy.force opt_list_t))
-    in
-
-    set_node_variant opt_list_node
-      [("None", [], C_tuple []);
-       ("Some", [], C_tuple [stype_of_ttype (Lazy.force value_t)])] ;
-
-    Lazy.force opt_list_t, Lazy.force value_t, Lazy.force opt_llist_t
-
-  (* 2. substitutions *)
-
-  let opt_list_t (a : 'a ttype) : 'a opt_list ttype =
-    substitute [| stype_of_ttype a |] (stype_of_ttype opt_list_t)
-    |> ttype_of_stype
-
-  let value_t (a: 'a ttype) : 'a value ttype =
-    substitute [| stype_of_ttype a |] (stype_of_ttype value_t)
-    |> ttype_of_stype
-
-  let opt_llist_t (a: 'a ttype) : 'a opt_llist ttype =
-    substitute [| stype_of_ttype a |] (stype_of_ttype opt_llist_t)
-    |> ttype_of_stype
-
-  let%expect_test _ =
-    print (opt_list_t int_t);
-    print (value_t int_t);
-    print (opt_llist_t int_t);
-    [%expect {|
-      (int opt_list =
-         | None
-         | Some of int list)
-      int list
-      (int opt_list =
-         | None
-         | Some of int list) list |}]
-
-  type 'a forward_ref = 'a target
-  and 'a target = 'a list
-
-  let (forward_ref_t : 'a forward_ref ttype),
-      (target_t : 'a target ttype) =
-    let rec forward_ref_t : 'a forward_ref ttype Lazy.t =
-      lazy (ttype_of_stype (stype_of_ttype (Lazy.force target_t)))
-    and target_t : 'a target ttype Lazy.t =
-      lazy (list_t (ttype_of_stype (DT_var 0)))
-    in
-    Lazy.force forward_ref_t, Lazy.force target_t
-
-  let forward_ref_t (a: 'a ttype) : 'a forward_ref ttype =
-    substitute [| stype_of_ttype a |] (stype_of_ttype forward_ref_t)
-    |> ttype_of_stype
-
-  let target_t (a: 'a ttype) : 'a target ttype =
-    substitute [| stype_of_ttype a |] (stype_of_ttype target_t)
-    |> ttype_of_stype
-
-  let%expect_test _ =
-    print (forward_ref_t int_t);
-    print (target_t int_t);
-    [%expect {|
-      int list
-      int list |}]
-
-
-  type 'a ambiguous_list = Nil | Cons of 'a el
-  and 'a el = Singleton of 'a | More of ('a * 'a ambiguous_list)
-
-  let (ambiguous_list_t : 'a ambiguous_list ttype),
-      (el_t : 'a el ttype) =
-
-    let ambiguous_list_node = create_node "ambiguous_list" [DT_var 0] in
-    let el_node = create_node "el" [DT_var 0] in
-
-    let ambiguous_list_t : 'a ambiguous_list ttype Lazy.t =
-      lazy (DT_node ambiguous_list_node |> ttype_of_stype)
-    and el_t : 'a el ttype Lazy.t =
-      lazy (DT_node el_node |> ttype_of_stype)
-    in
-
-    set_node_variant ambiguous_list_node
-      [("Nil", [], C_tuple []);
-       ("Cons", [], C_tuple [stype_of_ttype (Lazy.force el_t)])];
-    set_node_variant el_node
-      [("Singleton", [], C_tuple []);
-       ("More", [],
-        C_tuple [DT_var 0; stype_of_ttype (Lazy.force ambiguous_list_t)])];
-
-    Lazy.force ambiguous_list_t, Lazy.force el_t
-
-  let ambiguous_list_t (a : 'a ttype) : 'a ambiguous_list ttype =
-    substitute [| stype_of_ttype a |] (stype_of_ttype ambiguous_list_t)
-    |> ttype_of_stype
-
-  let el_t (a : 'a ttype) : 'a el ttype =
-    substitute [| stype_of_ttype a |] (stype_of_ttype el_t)
-    |> ttype_of_stype
-
-  let%expect_test _ =
-    print (ambiguous_list_t int_t);
-    print (el_t int_t);
-    [%expect {|
-      (int ambiguous_list =
-         | Nil
-         | Cons of
-          (int el =
-             | Singleton
-             | More of (int * int ambiguous_list)))
-      (int el =
-         | Singleton
-         | More of
-          (int
-           *
-           (int ambiguous_list =
-              | Nil
-              | Cons of int el))) |}]
-
-end
-

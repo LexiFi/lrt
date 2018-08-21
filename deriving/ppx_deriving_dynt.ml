@@ -70,6 +70,15 @@ let check_rec lid rec_ =
   let prop el = lid = Lident el in
   List.exists prop rec_
 
+(* helpers for lazy recursion *)
+
+let lazy_value_binding ~loc name basetyp expr =
+  let pat = Pat.constraint_ (pvar name) [%type: [%t basetyp] Lazy.t] in
+  let expr = [%expr lazy [%e expr]] in
+  Vb.mk pat expr
+
+let force_lazy ~loc var = [%expr Lazy.force [%e var]]
+
 (* Construct ttype generator from core type *)
 let rec ttype_of_core_type ~opt ~rec_ ~free ({ ptyp_loc = loc ; _ } as ct) =
   let fail () = raise_str ~loc "type not yet supported" in
@@ -83,11 +92,11 @@ let rec ttype_of_core_type ~opt ~rec_ ~free ({ ptyp_loc = loc ; _ } as ct) =
     | Ptyp_constr (id, args) ->
       let id' = { id with txt = mangle_lid id.txt} in
       if check_rec id.txt rec_ then
-        [%expr [%e Exp.ident id']]
+        Exp.ident id' |> force_lazy ~loc
       else
         List.fold_left
           (fun acc e -> [%expr [%e acc] [%e rc e]])
-          [%expr [%e Exp.ident id']] args
+          (Exp.ident id') args
     | Ptyp_var vname -> begin
         match find_index_opt free vname with
         | None -> assert false
@@ -111,15 +120,19 @@ let record_fields_of_record_labels ~opt ~rec_ ~free l =
         ([%e str pld_name.txt], [], stype_of_ttype [%e t])]
     ) l
 
-let record_ttype_of_record_labels ~loc ~opt ~me ~free ~rec_ l =
+let single_let_in pat expr =
+  let_in [Vb.mk pat expr]
+
+let record_labels ~loc ~opt ~me ~free ~rec_ l =
   let fields = record_fields_of_record_labels ~opt ~free ~rec_ l in
-  [%expr
-    let [%p pvar me.ttype] : 'a ttype =
-      DT_node (create_node [%e str me.typ] [%e stypes_of_free ~loc free])
-      |> ttype_of_stype
-    in
-    set_record ([%e list fields], Record_regular) [%e evar me.ttype] ;
-    [%e evar me.ttype]]
+  let createnode = single_let_in (pvar me.node)
+      [%expr create_node [%e str me.typ] [%e stypes_of_free ~loc free]]
+  and ttype = [%expr DT_node [%e evar me.node] |> ttype_of_stype ]
+  and setnode = single_let_in (punit ())
+      [%expr
+        set_node_record [%e evar me.node] ([%e list fields], Record_regular) ]
+  in
+  createnode, ttype, setnode
 
 let inline_record_stype_of_record_labels ~loc ~opt ~free ~rec_ ~name i l =
   let fields = record_fields_of_record_labels ~opt ~free ~rec_ l in
@@ -132,7 +145,7 @@ let inline_record_stype_of_record_labels ~loc ~opt ~free ~rec_ ~name i l =
     DT_node [%e evar "inline_node"]]
 
 (* Construct variant ttypes *)
-let str_of_variant_constructors ~loc ~opt ~me ~free ~rec_ l =
+let variant_constructors ~loc ~opt ~me ~free ~rec_ l =
   let nconst_tag = ref 0 in
   let constructors =
     List.map (fun {pcd_loc = loc; pcd_name; pcd_args; _ } ->
@@ -154,13 +167,14 @@ let str_of_variant_constructors ~loc ~opt ~me ~free ~rec_ l =
         [%expr ([%e str pcd_name.txt], [], C_inline [%e r])]
     ) l
   in
-  [%expr
-    let [%p pvar me.ttype] : 'a ttype =
-      DT_node (create_node [%e str me.typ] [%e stypes_of_free ~loc free])
-      |> ttype_of_stype
-    in
-    set_variant [%e list constructors] [%e evar me.ttype] ;
-    [%e evar me.ttype]]
+  let createnode = single_let_in (pvar me.node)
+      [%expr create_node [%e str me.typ] [%e stypes_of_free ~loc free]]
+  and ttype = [%expr DT_node [%e evar me.node] |> ttype_of_stype ]
+  and setnode = single_let_in (punit ())
+      [%expr
+        set_node_variant [%e evar me.node] [%e list constructors] ]
+  in
+  createnode, ttype, setnode
 
 let free_vars_of_type_decl td =
   List.rev_map (fun (ct, _variance) ->
@@ -180,44 +194,6 @@ let typ_of_free_vars ~loc ~basetyp free =
       [%type: [%t Typ.var name] Dynt.Types.ttype -> [%t acc]])
     basetyp free
 
-(* Type declarations in structure.  Builds e.g.
- * let <type>_t : (<a> * <b>) ttype = pair <b>_t <a>_t
- *)
-let str_of_type_decl ~opt ({ ptype_loc = loc ; _} as td) =
-  let me = names_of_type_decl td in
-  let rec_ = [me.typ] in
-  let free = free_vars_of_type_decl td in
-  let unclosed = match td.ptype_kind with
-    | Ptype_abstract -> begin match td.ptype_manifest with
-        | None -> raise_errorf ~loc "no manifest found"
-        | Some ct -> ttype_of_core_type ~opt ~rec_ ~free ct
-      end
-    | Ptype_variant l ->
-      str_of_variant_constructors ~loc ~opt ~me ~rec_ ~free l
-    | Ptype_record l -> record_ttype_of_record_labels ~loc ~opt ~me ~rec_
-                          ~free l
-    | Ptype_open ->
-      raise_str ~loc "type kind not yet supported"
-  in
-  let basetyp = basetyp_of_type_decl ~loc td in
-  if free = [] then
-    [Vb.mk (Pat.constraint_ (pvar me.ttype) basetyp) (wrap_runtime unclosed)]
-  else begin
-    let typ = typ_of_free_vars ~loc ~basetyp free in
-    let subst =
-      let arr = List.map (fun v ->
-          [%expr stype_of_ttype [%e evar v]]) free
-      in
-      List.fold_left (fun acc v -> lam (pvar v) acc)
-        [%expr ttype_of_stype (
-            substitute [%e Exp.array arr]
-              (stype_of_ttype [%e evar me.ttype]))]
-        free
-    in
-    [Vb.mk (pvar me.ttype) (wrap_runtime unclosed);
-     Vb.mk (Pat.constraint_ (pvar me.ttype) typ) (wrap_runtime subst)]
-  end
-
 let substitution_of_free_vars ~loc ~me basetyp free =
   let typ = typ_of_free_vars ~loc ~basetyp free in
   let subst =
@@ -232,17 +208,11 @@ let substitution_of_free_vars ~loc ~me basetyp free =
   in
   Vb.mk (Pat.constraint_ (pvar me.ttype) typ) (wrap_runtime subst)
 
-let lazy_value_binding ~loc name basetyp expr =
-  let pat = Pat.constraint_ (pvar name) [%type: [%t basetyp] Lazy.t] in
-  let expr = [%expr lazy [%e expr]] in
-  Vb.mk pat expr
-
-let force_lazy ~loc var = [%expr Lazy.force [%e evar var]]
-
 (* list of recursive identifiers *)
 type recargs = label list
 
 let type_decl_str ~options ~path tds =
+  let extend_let new_ was expr = new_ (was expr) in
   let opt = parse_options ~path options in
   let rec_ : recargs = List.map (fun td -> td.ptype_name.txt) tds in
   let parse (pats, cn, lr, sn, fl, subs) ({ ptype_loc = loc ; _} as td) =
@@ -258,15 +228,19 @@ let type_decl_str ~options ~path tds =
             let t = ttype_of_core_type ~rec_ ~opt ~free ct in
             cn, t, sn
         end
-        (* TODO: Bring back support for these two *)
-      | Ptype_variant _
-      | Ptype_record _
+      | Ptype_record l ->
+        let c, t, s = record_labels ~me ~free ~loc ~opt ~rec_ l in
+        extend_let c cn, t, extend_let s sn
+      | Ptype_variant l ->
+        let c, t, s = variant_constructors ~me ~free ~loc ~opt ~rec_ l in
+        extend_let c cn, t, extend_let s sn
       | Ptype_open ->
         raise_str ~loc "type kind not yet supported"
     in
     let lr = lazy_value_binding ~loc me.ttype basetyp ttype :: lr in
-    let fl = force_lazy ~loc me.ttype :: fl in
-    let subs = (substitution_of_free_vars ~loc ~me basetyp free) :: subs in
+    let fl = force_lazy ~loc (evar me.ttype) :: fl in
+    let subs = if free = [] then subs else
+        (substitution_of_free_vars ~loc ~me basetyp free) :: subs in
     pats, cn, lr, sn, fl, subs
   in
   let patterns, createnode, lazyrec, setnode, forcelazy, substitutions =
