@@ -127,7 +127,7 @@ let record_labels ~loc ~opt ~me ~free ~rec_ l =
   let fields = record_fields_of_record_labels ~opt ~free ~rec_ l in
   let createnode = single_let_in (pvar me.node)
       [%expr create_node [%e str me.typ] [%e stypes_of_free ~loc free]]
-  and ttype = [%expr DT_node [%e evar me.node] |> ttype_of_stype ]
+  and ttype = [%expr ttype_of_stype (DT_node [%e evar me.node])]
   and setnode = single_let_in (punit ())
       [%expr
         set_node_record [%e evar me.node] ([%e list fields], Record_regular) ]
@@ -137,7 +137,7 @@ let record_labels ~loc ~opt ~me ~free ~rec_ l =
 let inline_record_stype_of_record_labels ~loc ~opt ~free ~rec_ ~name i l =
   let fields = record_fields_of_record_labels ~opt ~free ~rec_ l in
   [%expr
-    let [%p pvar "inline_node"] : node =
+    let [%p pvar "inline_node"] : Dynt.Types.node =
       create_node [%e str name] [%e stypes_of_free ~loc free]
     in
     set_node_record [%e evar "inline_node"]
@@ -169,7 +169,7 @@ let variant_constructors ~loc ~opt ~me ~free ~rec_ l =
   in
   let createnode = single_let_in (pvar me.node)
       [%expr create_node [%e str me.typ] [%e stypes_of_free ~loc free]]
-  and ttype = [%expr DT_node [%e evar me.node] |> ttype_of_stype ]
+  and ttype = [%expr ttype_of_stype (DT_node [%e evar me.node])]
   and setnode = single_let_in (punit ())
       [%expr
         set_node_variant [%e evar me.node] [%e list constructors] ]
