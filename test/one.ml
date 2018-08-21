@@ -372,3 +372,16 @@ module Objects = struct
 
 end
 
+module Properties = struct
+
+  type 'a propped =
+    { we : 'a [@need "some"] [@more "stuff"]
+    ; fields : 'a [@with_ "properties"]
+    } [@@deriving t]
+
+  let%expect_test _ =
+    print [%t: int propped]
+
+end
+
+

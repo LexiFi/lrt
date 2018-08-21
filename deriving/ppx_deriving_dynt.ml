@@ -39,6 +39,12 @@ let expr_list ~loc lst =
   Ppx_deriving.fold_exprs (fun acc el ->
       [%expr [%e el] :: [%e acc]]) ([%expr []] :: lst)
 
+(* Deconstruct expression to string. Fail otherwise *)
+let string_of_expr ~loc expr =
+  match expr.pexp_desc with
+  | Pexp_constant (Pconst_string (name, None )) -> name
+  | _ -> raise_str ~loc "this should be a string expression"
+
 (* read options from e.g. [%deriving t { abstract = "Hashtbl.t" }] *)
 type options = { abstract : label option ; path : label list }
 let parse_options ~path options : options =
@@ -47,10 +53,8 @@ let parse_options ~path options : options =
     let loc = expr.pexp_loc in
       match name with
       | "abstract" ->
-        let name = match expr.pexp_desc with
-          | Pexp_constant (Pconst_string (name, None )) -> name
-          | _ -> raise_str ~loc "please provide a string as abstract name"
-        in  { acc with abstract = Some name }
+        let name = string_of_expr ~loc expr in
+        { acc with abstract = Some name }
       | _ -> raise_str ~loc
                ( sprintf "option %s not supported" name )
     ) default options
@@ -124,12 +128,18 @@ let rec core_type ~opt ~rec_ ~free ({ ptyp_loc = loc ; _ } as ct) =
 let stypes_of_free ~loc free =
   List.mapi (fun i _v -> [%expr DT_var [%e int i]]) free |> list
 
+let properties_of_attributes l =
+  List.map (fun ({txt;loc},e) ->
+      (tuple [str txt; str (string_of_expr ~loc e)])) l |> list
+
 (* Construct record ttypes *)
 let fields_of_record_labels ~opt ~rec_ ~free l =
-  List.map (fun {pld_loc = loc; pld_name; pld_type; _ } ->
-      let t = core_type ~opt ~rec_ ~free pld_type in
+  (* TODO: use Ppx_deriving.Arg and suffer less *)
+  List.map (fun ({pld_loc = loc; _ } as x) ->
+      let props = properties_of_attributes x.pld_attributes in
+      let t = core_type ~opt ~rec_ ~free x.pld_type in
       [%expr
-        ([%e str pld_name.txt], [], stype_of_ttype [%e t])]
+        ([%e str x.pld_name.txt], [%e props], stype_of_ttype [%e t])]
     ) l
 
 let single_let_in pat expr =
