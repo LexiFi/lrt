@@ -414,6 +414,18 @@ module Properties = struct
                field + [w = "field"]: string + [w = "b"];
              })) + [w = "combined"] |}]
 
+  type foo = int [@w "foo"]
+  [@@deriving t {abstract = "abstract.foo"}]
+  and bar = foo [@w "bar"]
+  [@@deriving t]
+
+  let%expect_test _ =
+    print [%t: foo];
+    print [%t: bar];
+    [%expect {|
+      int + [w = "foo"]
+      int + [w = "foo"] + [w = "bar"] |}]
+
 end
 
 
