@@ -45,19 +45,15 @@ let string_of_expr ~loc expr =
   | Pexp_constant (Pconst_string (name, None )) -> name
   | _ -> raise_str ~loc "this should be a string expression"
 
-(* read options from e.g. [%deriving t { abstract = "Hashtbl.t" }] *)
-type options = { abstract : label option ; path : label list }
-let parse_options ~path options : options =
-  let default = { abstract = None ; path } in
-  List.fold_left (fun acc (name, expr) ->
+(* read options from e.g. [%deriving t { abstract = "Hashtbl.t" }]
+ * we do not read any, so check that there are none *)
+let parse_options options: unit =
+  List.iter (fun (name, expr) ->
     let loc = expr.pexp_loc in
       match name with
-      | "abstract" ->
-        let name = string_of_expr ~loc expr in
-        { acc with abstract = Some name }
       | _ -> raise_str ~loc
                ( sprintf "option %s not supported" name )
-    ) default options
+    ) options
 
 let find_index_opt (l : 'a list) (el : 'a) : int option =
   let i = ref 0 in
@@ -90,8 +86,8 @@ let abstract_attr_of_type_decl td =
   |> Ppx_deriving.Arg.(get_attr ~deriver string)
 
 (* Construct ttype expression from core type *)
-let rec core_type ~opt ~rec_ ~free ({ ptyp_loc = loc ; _ } as ct) =
-  let rc = core_type ~opt ~rec_ ~free in
+let rec core_type ~rec_ ~free ({ ptyp_loc = loc ; _ } as ct) =
+  let rc = core_type ~rec_ ~free in
   let rcs ct = [%expr stype_of_ttype [%e rc ct]] in
   let t = match ct.ptyp_desc with
     | Ptyp_tuple l ->
@@ -142,10 +138,10 @@ let stypes_of_free ~loc free =
   List.mapi (fun i _v -> [%expr DT_var [%e int i]]) free |> list
 
 (* Construct record ttypes *)
-let fields_of_record_labels ~opt ~rec_ ~free l =
+let fields_of_record_labels ~rec_ ~free l =
   List.map (fun ({pld_loc = loc; _ } as x) ->
       let props = properties_of_attributes x.pld_attributes in
-      let t = core_type ~opt ~rec_ ~free x.pld_type in
+      let t = core_type ~rec_ ~free x.pld_type in
       [%expr
         ([%e str x.pld_name.txt], [%e list props], stype_of_ttype [%e t])]
     ) l
@@ -153,8 +149,8 @@ let fields_of_record_labels ~opt ~rec_ ~free l =
 let single_let_in pat expr =
   let_in [Vb.mk pat expr]
 
-let record_labels ~loc ~opt ~me ~free ~rec_ l =
-  let fields = fields_of_record_labels ~opt ~free ~rec_ l in
+let record_labels ~loc ~me ~free ~rec_ l =
+  let fields = fields_of_record_labels ~free ~rec_ l in
   let createnode = single_let_in (pvar me.node)
       [%expr create_node [%e str me.typ] [%e stypes_of_free ~loc free]]
   and ttype = [%expr ttype_of_stype (DT_node [%e evar me.node])]
@@ -164,8 +160,8 @@ let record_labels ~loc ~opt ~me ~free ~rec_ l =
   in
   createnode, ttype, setnode
 
-let record_labels_inline ~loc ~opt ~free ~rec_ ~name i l =
-  let fields = fields_of_record_labels ~opt ~free ~rec_ l in
+let record_labels_inline ~loc ~free ~rec_ ~name i l =
+  let fields = fields_of_record_labels ~free ~rec_ l in
   [%expr
     let [%p pvar "inline_node"] : Dynt.Types.node =
       create_node [%e str name] [%e stypes_of_free ~loc free]
@@ -175,7 +171,7 @@ let record_labels_inline ~loc ~opt ~free ~rec_ ~name i l =
     DT_node [%e evar "inline_node"]]
 
 (* Construct variant ttypes *)
-let variant_constructors ~loc ~opt ~me ~free ~rec_ l =
+let variant_constructors ~loc ~me ~free ~rec_ l =
   let nconst_tag = ref 0 in
   let constructors =
     List.map (fun ({pcd_loc = loc; _ } as x) ->
@@ -184,14 +180,14 @@ let variant_constructors ~loc ~opt ~me ~free ~rec_ l =
         | Pcstr_tuple ctl ->
           if ctl <> [] then incr nconst_tag;
           let l = List.rev_map (fun ct ->
-              core_type ~opt ~rec_ ~free ct
+              core_type ~rec_ ~free ct
               |> fun e -> [%expr stype_of_ttype [%e e]]
             ) ctl in
           [%expr ([%e str x.pcd_name.txt], [%e list props],
                   C_tuple [%e expr_list ~loc l])]
         | Pcstr_record lbl ->
           let name = sprintf "%s.%s" me.typ x.pcd_name.txt in
-          let r = record_labels_inline ~rec_ ~free ~opt ~loc
+          let r = record_labels_inline ~rec_ ~free ~loc
               ~name !nconst_tag lbl
           in
           incr nconst_tag;
@@ -243,8 +239,8 @@ let substitution_of_free_vars ~loc ~me basetyp free =
 type recargs = (label * label list) list
 
 let type_decl_str ~options ~path tds =
+  ignore path; parse_options options;
   let extend_let new_ was expr = new_ (was expr) in
-  let opt = parse_options ~path options in
   let rec_ : recargs = List.map (fun td ->
       td.ptype_name.txt, free_vars_of_type_decl td) tds
   in
@@ -265,14 +261,14 @@ let type_decl_str ~options ~path tds =
         | Ptype_abstract -> begin match td.ptype_manifest with
             | None -> raise_errorf ~loc "no manifest found"
             | Some ct ->
-              let t = core_type ~rec_ ~opt ~free ct in
+              let t = core_type ~rec_ ~free ct in
               cn, t, sn
           end
         | Ptype_record l ->
-          let c, t, s = record_labels ~me ~free ~loc ~opt ~rec_ l in
+          let c, t, s = record_labels ~me ~free ~loc ~rec_ l in
           extend_let c cn, t, extend_let s sn
         | Ptype_variant l ->
-          let c, t, s = variant_constructors ~me ~free ~loc ~opt ~rec_ l in
+          let c, t, s = variant_constructors ~me ~free ~loc ~rec_ l in
           extend_let c cn, t, extend_let s sn
         | Ptype_open ->
           raise_str ~loc "type kind not yet supported"
@@ -305,8 +301,7 @@ let type_decl_str ~options ~path tds =
 (* Type declarations in signature. Generates
  * val <type>_t : <type> ttype
  *)
-let sig_of_type_decl ~opt ({ ptype_loc = loc ; _} as td) =
-  ignore (opt) ;
+let sig_of_type_decl ({ ptype_loc = loc ; _} as td) =
   let basetyp =
     match td.ptype_kind with
     | Ptype_abstract
@@ -318,14 +313,13 @@ let sig_of_type_decl ~opt ({ ptype_loc = loc ; _} as td) =
   Val.mk {txt=(mangle_type_decl td); loc} typ
 
 let type_decl_sig ~options ~path tds =
-  let opt = parse_options ~path options in
-  List.map (sig_of_type_decl ~opt) tds
+  ignore path; parse_options options;
+  List.map sig_of_type_decl tds
   |> List.map Sig.value
 
 (* inline types *)
 let core_type ct =
-  let opt = parse_options ~path:[] [] in
-  core_type ~rec_:[] ~free:[] ~opt ct
+  core_type ~rec_:[] ~free:[] ct
   |> wrap_runtime
 
 (* Register the handler for type declarations in signatures and structures *)

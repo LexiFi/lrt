@@ -414,7 +414,7 @@ module Abstract = struct
 
     type hidden = string * int
     [@@abstract "One.Abstract.Two.hidden"]
-    [@@deriving t { abstract = "Two.hidden" }]
+    [@@deriving t]
   end
 
   type two_public = Two.public [@@deriving t]
@@ -453,5 +453,11 @@ module Abstract = struct
     print [%t: (int,string) Hashtable.t];
     [%expect {| (int, string) Hashtable.t |}]
 
+end
+
+type nr = int [@@deriving t]
+module Nonrec = struct
+  (* This fails due to deriving's lack of support *)
+  (* type nonrec nr = nr [@@deriving t] *)
 end
 
