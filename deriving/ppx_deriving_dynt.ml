@@ -76,6 +76,15 @@ let lazy_value_binding ~loc name basetyp expr =
 
 let force_lazy ~loc var = [%expr Lazy.force [%e var]]
 
+(* extract properties = (string * string) list from attribute list *)
+let properties_of_attributes attrs =
+  List.map (fun ({txt; loc},_) ->
+      match Ppx_deriving.attr ~deriver txt attrs
+            |> Ppx_deriving.Arg.(get_attr ~deriver string) with
+      | Some v -> tuple [str txt; str v]
+      | None -> raise_str ~loc "internal error (properties_of_attributes)"
+    ) attrs
+
 (* Construct ttype expression from core type *)
 let rec core_type ~opt ~rec_ ~free ({ ptyp_loc = loc ; _ } as ct) =
   let rc = core_type ~opt ~rec_ ~free in
@@ -120,26 +129,29 @@ let rec core_type ~opt ~rec_ ~free ({ ptyp_loc = loc ; _ } as ct) =
       [%expr ttype_of_stype (DT_object [%e list fields])]
     | _ -> raise_str ~loc "type not yet supported"
   in
+  let with_prop =
+    match properties_of_attributes ct.ptyp_attributes with
+    | [] -> t
+    | l -> [%expr
+      ttype_of_stype (DT_prop ([%e list l], stype_of_ttype [%e t]))]
+  in
+  (* TODO: This is weird. We construct the ttype but do not use it.
+   * TODO: Also, what about free variables? *)
   match opt.abstract with
   | Some name ->
     [%expr ttype_of_stype( DT_abstract ([%e str name],[]))]
-  | None -> t
+  | None -> with_prop
 
 let stypes_of_free ~loc free =
   List.mapi (fun i _v -> [%expr DT_var [%e int i]]) free |> list
 
-let properties_of_attributes l =
-  List.map (fun ({txt;loc},e) ->
-      (tuple [str txt; str (string_of_expr ~loc e)])) l |> list
-
 (* Construct record ttypes *)
 let fields_of_record_labels ~opt ~rec_ ~free l =
-  (* TODO: use Ppx_deriving.Arg and suffer less *)
   List.map (fun ({pld_loc = loc; _ } as x) ->
       let props = properties_of_attributes x.pld_attributes in
       let t = core_type ~opt ~rec_ ~free x.pld_type in
       [%expr
-        ([%e str x.pld_name.txt], [%e props], stype_of_ttype [%e t])]
+        ([%e str x.pld_name.txt], [%e list props], stype_of_ttype [%e t])]
     ) l
 
 let single_let_in pat expr =
@@ -170,24 +182,25 @@ let record_labels_inline ~loc ~opt ~free ~rec_ ~name i l =
 let variant_constructors ~loc ~opt ~me ~free ~rec_ l =
   let nconst_tag = ref 0 in
   let constructors =
-    List.map (fun {pcd_loc = loc; pcd_name; pcd_args; _ } ->
-      match pcd_args with
-      | Pcstr_tuple ctl ->
-        if ctl <> [] then incr nconst_tag;
-        let l = List.rev_map (fun ct ->
-            core_type ~opt ~rec_ ~free ct
-            |> fun e -> [%expr stype_of_ttype [%e e]]
-          ) ctl in
-        [%expr ([%e str pcd_name.txt], [],
-                C_tuple [%e expr_list ~loc l])]
-      | Pcstr_record lbl ->
-        let name = sprintf "%s.%s" me.typ pcd_name.txt in
-        let r = record_labels_inline ~rec_ ~free ~opt ~loc
-            ~name !nconst_tag lbl
-        in
-        incr nconst_tag;
-        [%expr ([%e str pcd_name.txt], [], C_inline [%e r])]
-    ) l
+    List.map (fun ({pcd_loc = loc; _ } as x) ->
+        let props = properties_of_attributes x.pcd_attributes in
+        match x.pcd_args with
+        | Pcstr_tuple ctl ->
+          if ctl <> [] then incr nconst_tag;
+          let l = List.rev_map (fun ct ->
+              core_type ~opt ~rec_ ~free ct
+              |> fun e -> [%expr stype_of_ttype [%e e]]
+            ) ctl in
+          [%expr ([%e str x.pcd_name.txt], [%e list props],
+                  C_tuple [%e expr_list ~loc l])]
+        | Pcstr_record lbl ->
+          let name = sprintf "%s.%s" me.typ x.pcd_name.txt in
+          let r = record_labels_inline ~rec_ ~free ~opt ~loc
+              ~name !nconst_tag lbl
+          in
+          incr nconst_tag;
+          [%expr ([%e str x.pcd_name.txt], [%e list props], C_inline [%e r])]
+      ) l
   in
   let createnode = single_let_in (pvar me.node)
       [%expr create_node [%e str me.typ] [%e stypes_of_free ~loc free]]
