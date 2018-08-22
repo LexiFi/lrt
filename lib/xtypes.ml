@@ -637,7 +637,8 @@ let sttype_of_stype s = Ttype (Obj.magic s)
 
 let rec all_paths: type root target. root:root ttype -> target:target ttype -> (root, target, _) Path.t list = fun ~root ~target ->
   match ttypes_equality root target with
-  | Some TypEq.Eq -> Obj.magic ([])
+  (* TODO: Patrik's wild guess *)
+  | Some TypEq.Eq -> [Path.root] |> Obj.magic
   | None ->
       match xtype_of_ttype root with
       | Unit -> []
