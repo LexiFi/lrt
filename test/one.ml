@@ -26,18 +26,6 @@ let%expect_test _ =
     (float * int * string * int)
     (float * int * string array * int * int) |}]
 
-type two_public = Two.public [@@deriving t]
-type two_hidden = Two.hidden [@@deriving t]
-type two_hidden2 = two_hidden [@@deriving t]
-let%expect_test _ =
-  print two_public_t ;
-  print two_hidden_t ;
-  print two_hidden2_t ;
-  [%expect{|
-    (int * int)
-    Two.hidden
-    Two.hidden |}]
-
 type enum = North | East | South | West [@@deriving t]
 let%expect_test _ = print enum_t ;
   [%expect{| (enum = North | East | South | West) |}]
@@ -46,7 +34,7 @@ type sum1 =
   | Option1 of string * int
   | Option2 of int * int * string
   | Option3
-  | Option4 of Two.public * Two.hidden
+  | Option4 of unit * int
 [@@deriving t]
 let%expect_test _ = print sum1_t ;
   [%expect{|
@@ -54,13 +42,13 @@ let%expect_test _ = print sum1_t ;
        | Option1 of (string * int)
        | Option2 of (int * int * string)
        | Option3
-       | Option4 of ((int * int) * Two.hidden)) |}]
+       | Option4 of (unit * int)) |}]
 
 type record1 =
   { field1 : int
   ; field2 : string
-  ; field3 : Two.hidden
-  ; field4 : Two.public
+  ; field3 : float
+  ; field4 : int
   }
 [@@deriving t]
 let%expect_test _ = print record1_t ;
@@ -69,23 +57,23 @@ let%expect_test _ = print record1_t ;
        {
          field1: int;
          field2: string;
-         field3: Two.hidden;
-         field4: (int * int);
+         field3: float;
+         field4: int;
        }) |}]
 
 type inline_record =
-  | Basic of Two.public
-  | Inline of { h : Two.hidden ; p : Two.public }
+  | Basic of int
+  | Inline of { h : string ; p : float }
 [@@deriving t]
 let%expect_test _ = print inline_record_t ;
   [%expect{|
     (inline_record =
-       | Basic of (int * int)
+       | Basic of int
        | Inline of
         (inline_record.Inline =
            {
-             h: Two.hidden;
-             p: (int * int);
+             h: string;
+             p: float;
            }))
     |}]
 
@@ -414,18 +402,56 @@ module Properties = struct
                field + [w = "field"]: string + [w = "b"];
              })) + [w = "combined"] |}]
 
+end
+
+module Abstract = struct
+
+  module Two : sig
+    type public = int * int [@@deriving t]
+    type hidden [@@deriving t]
+  end = struct
+    type public = int * int [@@deriving t]
+
+    type hidden = string * int
+    [@@abstract "One.Abstract.Two.hidden"]
+    [@@deriving t { abstract = "Two.hidden" }]
+  end
+
+  type two_public = Two.public [@@deriving t]
+  type two_hidden = Two.hidden [@@deriving t]
+  type two_hidden2 = two_hidden [@@deriving t]
+  let%expect_test _ =
+    print two_public_t ;
+    print two_hidden_t ;
+    print two_hidden2_t ;
+    [%expect{|
+    (int * int)
+    One.Abstract.Two.hidden
+    One.Abstract.Two.hidden |}]
+
   type foo = int [@w "foo"]
-  [@@deriving t {abstract = "abstract.foo"}]
+  [@@abstract "One.Abstract.foo"]
   and bar = foo [@w "bar"]
   [@@deriving t]
 
   let%expect_test _ =
     print [%t: foo];
     print [%t: bar];
-    [%expect {|
-      int + [w = "foo"]
-      int + [w = "foo"] + [w = "bar"] |}]
+      [%expect {|
+        One.Abstract.foo
+        One.Abstract.foo + [w = "bar"] |}]
+
+  module Hashtable : sig
+    type ('a,'b) t [@@deriving t]
+  end = struct
+    type ('a,'b) t = ('a * 'b) list
+    [@@abstract "Hashtable.t"]
+    [@@deriving t]
+  end
+
+  let%expect_test _ =
+    print [%t: (int,string) Hashtable.t];
+    [%expect {| (int, string) Hashtable.t |}]
 
 end
-
 

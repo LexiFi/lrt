@@ -85,6 +85,10 @@ let properties_of_attributes attrs =
       | None -> raise_str ~loc "internal error (properties_of_attributes)"
     ) attrs
 
+let abstract_attr_of_type_decl td =
+  Ppx_deriving.attr ~deriver "abstract" td.ptype_attributes
+  |> Ppx_deriving.Arg.(get_attr ~deriver string)
+
 (* Construct ttype expression from core type *)
 let rec core_type ~opt ~rec_ ~free ({ ptyp_loc = loc ; _ } as ct) =
   let rc = core_type ~opt ~rec_ ~free in
@@ -129,18 +133,10 @@ let rec core_type ~opt ~rec_ ~free ({ ptyp_loc = loc ; _ } as ct) =
       [%expr ttype_of_stype (DT_object [%e list fields])]
     | _ -> raise_str ~loc "type not yet supported"
   in
-  let with_prop =
-    match properties_of_attributes ct.ptyp_attributes with
-    | [] -> t
-    | l -> [%expr
-      ttype_of_stype (DT_prop ([%e list l], stype_of_ttype [%e t]))]
-  in
-  (* TODO: This is weird. We construct the ttype but do not use it.
-   * TODO: Also, what about free variables? *)
-  match opt.abstract with
-  | Some name ->
-    [%expr ttype_of_stype( DT_abstract ([%e str name],[]))]
-  | None -> with_prop
+  match properties_of_attributes ct.ptyp_attributes with
+  | [] -> t
+  | l -> [%expr
+    ttype_of_stype (DT_prop ([%e list l], stype_of_ttype [%e t]))]
 
 let stypes_of_free ~loc free =
   List.mapi (fun i _v -> [%expr DT_var [%e int i]]) free |> list
@@ -258,21 +254,28 @@ let type_decl_str ~options ~path tds =
     let free = free_vars_of_type_decl td in
     let pats = (Pat.constraint_ (pvar me.ttype) basetyp) :: pats in
     let cn, ttype, sn =
-      match td.ptype_kind with
-      | Ptype_abstract -> begin match td.ptype_manifest with
-          | None -> raise_errorf ~loc "no manifest found"
-          | Some ct ->
-            let t = core_type ~rec_ ~opt ~free ct in
-            cn, t, sn
-        end
-      | Ptype_record l ->
-        let c, t, s = record_labels ~me ~free ~loc ~opt ~rec_ l in
-        extend_let c cn, t, extend_let s sn
-      | Ptype_variant l ->
-        let c, t, s = variant_constructors ~me ~free ~loc ~opt ~rec_ l in
-        extend_let c cn, t, extend_let s sn
-      | Ptype_open ->
-        raise_str ~loc "type kind not yet supported"
+      match abstract_attr_of_type_decl td with
+      | Some name ->
+        let f = stypes_of_free ~loc free in
+        let t = [%expr
+          ttype_of_stype(DT_abstract ([%e str name],[%e f]))] in
+        cn, t, sn
+      | None ->
+        match td.ptype_kind with
+        | Ptype_abstract -> begin match td.ptype_manifest with
+            | None -> raise_errorf ~loc "no manifest found"
+            | Some ct ->
+              let t = core_type ~rec_ ~opt ~free ct in
+              cn, t, sn
+          end
+        | Ptype_record l ->
+          let c, t, s = record_labels ~me ~free ~loc ~opt ~rec_ l in
+          extend_let c cn, t, extend_let s sn
+        | Ptype_variant l ->
+          let c, t, s = variant_constructors ~me ~free ~loc ~opt ~rec_ l in
+          extend_let c cn, t, extend_let s sn
+        | Ptype_open ->
+          raise_str ~loc "type kind not yet supported"
     in
     let lr = lazy_value_binding ~loc me.ttype basetyp ttype :: lr in
     let fl = force_lazy ~loc (evar me.ttype) :: fl in
