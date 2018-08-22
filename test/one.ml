@@ -331,14 +331,17 @@ module Inline = struct
   (* let bad_t =  [%t: list list ] *)
   (* let bad_t =  [%t: 'a list ] *)
 
-  let list_t (type typ) (typ_t : typ Types.ttype) = [%t: (typ * int) list]
+  let t1 (type t) (t : t Types.ttype) = [%t: (t * int) array]
+  let t2 (type typ) (typ_t : typ Types.ttype) = [%t: (typ * int) list]
+
 
   let%expect_test _ =
     print [%t: int];
     print [%t: int -> int];
     print [%t: string list];
     print [%t: int NonregRec.good1];
-    print (list_t int_t);
+    print (t1 int_t);
+    print (t2 int_t);
     [%expect {|
       int
       (int -> int)
@@ -347,7 +350,9 @@ module Inline = struct
          {
            field: int good1 option;
            v: int;
-         }) |}]
+         })
+      (int * int) array
+      (int * int) list |}]
 end
 
 module Objects = struct
@@ -383,7 +388,7 @@ module Properties = struct
     } [@@deriving t]
 
   type 'a constructors =
-    | A of 'a [@prop "value"]
+    | A of 'a [@key "value"]
     | B of 'a [@k "v"] [@@deriving t]
 
   type 'a coretype = ('a [@some "prop"]) list [@@deriving t]
