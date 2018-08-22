@@ -44,7 +44,7 @@ type 'node gtype =
   | DT_int
   | DT_float
   | DT_string
-  | DT_date
+  (* | DT_date *)
   | DT_tuple of 'node gtype list
   | DT_list of 'node gtype
   | DT_array of 'node gtype
@@ -64,7 +64,7 @@ let nonrec_map fnode f = function
   | DT_int -> DT_int
   | DT_float -> DT_float
   | DT_string -> DT_string
-  | DT_date -> DT_date
+  (* | DT_date -> DT_date *)
   | DT_tuple tl -> DT_tuple (List.map f tl)
   | DT_list t -> DT_list (f t)
   | DT_array t -> DT_array (f t)
@@ -165,7 +165,7 @@ let print_stype ~show_enumerations ppf =
     | DT_int -> fprintf ppf "int"
     | DT_float -> fprintf ppf "float"
     | DT_string -> fprintf ppf "string"
-    | DT_date -> fprintf ppf "date"
+    (* | DT_date -> fprintf ppf "date" *)
     | DT_tuple tl -> tlist STAR ppf tl
     | DT_list t -> fprintf ppf "%a list" aux t
     | DT_array t -> fprintf ppf "%a array" aux t
@@ -475,7 +475,7 @@ module Internal = struct
         end
     and aux = function
       | DT_var _ -> true
-      | DT_int | DT_float | DT_string | DT_date -> false
+      | DT_int | DT_float | DT_string -> false
       | DT_prop (_, t) | DT_list t | DT_array t | DT_option t -> aux t
       | DT_abstract (_, tl) | DT_tuple tl -> List.exists aux tl
       | DT_arrow (_, t1, t2) -> aux t1 || aux t2

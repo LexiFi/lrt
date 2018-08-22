@@ -29,7 +29,7 @@ type 'node gtype =
   | DT_int
   | DT_float
   | DT_string
-  | DT_date
+  (* | DT_date *)
   | DT_tuple of 'node gtype list
   | DT_list of 'node gtype
   | DT_array of 'node gtype
