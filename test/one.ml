@@ -328,13 +328,17 @@ end
 module Inline = struct
 
   (* type bad = 'a int [@@deriving t] *)
-  (* let bad_t =  [%t: 'a int] *)
+  (* let bad_t =  [%t: list list ] *)
+  (* let bad_t =  [%t: 'a list ] *)
+
+  let list_t (type typ) (typ_t : typ Types.ttype) = [%t: (typ * int) list]
 
   let%expect_test _ =
     print [%t: int];
     print [%t: int -> int];
     print [%t: string list];
     print [%t: int NonregRec.good1];
+    print (list_t int_t);
     [%expect {|
       int
       (int -> int)
@@ -350,8 +354,19 @@ module Objects = struct
 
   type 'a stack = < pop : 'a option; push : 'a -> unit > [@@deriving t]
 
+  class type ['a] steak = object
+    method pop : 'a option
+    method push: 'a -> unit
+  end [@@deriving t]
+
+  class type ['a] tartare = object
+    inherit ['a] steak
+    method sauce: float
+  end
+
   let%expect_test _ =
     print [%t: int stack];
+    (* print [%t: int steak]; *)
     [%expect {|
        <
          pop: int option;
@@ -368,7 +383,7 @@ module Properties = struct
     } [@@deriving t]
 
   type 'a constructors =
-    | A of 'a [@key "value"]
+    | A of 'a [@prop "value"]
     | B of 'a [@k "v"] [@@deriving t]
 
   type 'a coretype = ('a [@some "prop"]) list [@@deriving t]
@@ -377,7 +392,7 @@ module Properties = struct
     | Core of ((('a [@w "a"]) * ('b [@w "b"]) [@w "a*b"]) list [@w "(a*b)list"])
           [@w "Core"]
     | Inline of { field : ('b [@w "b"]) [@w "field"] } [@w "Inline"]
-  [@@deriving t]
+  [@@deriving t] [@@prop "key" "value"]
 
   let%expect_test _ =
     print [%t: int fields];

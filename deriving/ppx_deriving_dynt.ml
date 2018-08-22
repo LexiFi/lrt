@@ -108,7 +108,7 @@ let rec core_type ~rec_ ~free ({ ptyp_loc = loc ; _ } as ct) =
       end
     | Ptyp_var vname -> begin
         match find_index_opt free vname with
-        | None -> raise_str ~loc "invalid use of type variable"
+        | None -> raise_str ~loc "please provide closed type"
         | Some i -> [%expr ttype_of_stype (DT_var [%e int i])]
       end
     | Ptyp_arrow (label, l, r) ->
@@ -318,9 +318,10 @@ let type_decl_sig ~options ~path tds =
   |> List.map Sig.value
 
 (* inline types *)
-let core_type ct =
-  core_type ~rec_:[] ~free:[] ct
-  |> wrap_runtime
+let core_type ({ ptyp_loc = loc ; _ } as ct) =
+  let t = core_type ~rec_:[] ~free:[] ct in
+  (* prepend ignore statement to produce nicer error message *)
+  wrap_runtime [%expr ignore(Obj.magic () : [%t ct]); [%e t]]
 
 (* Register the handler for type declarations in signatures and structures *)
 let () =
