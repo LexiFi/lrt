@@ -387,3 +387,47 @@ module Objects = struct
       > |}]
 
 end
+
+module Properties = struct
+
+  type 'a fields =
+    { we : 'a [@need "some"] [@more "stuff"]
+    ; fields : 'a [@with_ "properties"]
+    } [@@deriving t]
+
+  type 'a constructors =
+    | A of 'a [@key "value"]
+    | B of 'a [@k "v"] [@@deriving t]
+
+  type 'a coretype = ('a [@some "prop"]) list [@@deriving t]
+
+  type ('a, 'b) combined =
+    | Core of ((('a [@w "a"]) * ('b [@w "b"]) [@w "a*b"]) list [@w "(a*b)list"])
+          [@w "Core"]
+    | Inline of { field : ('b [@w "b"]) [@w "field"] } [@w "Inline"]
+  [@@deriving t] [@@prop "key" "value"]
+
+  let%expect_test _ =
+    print [%t: int fields];
+    print [%t: int constructors];
+    print [%t: int coretype];
+    print [%t: (int,string) combined [@w "combined"]];
+    [%expect {|
+      (int fields =
+         {
+           we + [need = "some"; more = "stuff"]: int;
+           fields + [with_ = "properties"]: int;
+         })
+      (int constructors =
+         | A + [key = "value"] of int
+         | B + [k = "v"] of int)
+      int + [some = "prop"] list
+      ((int, string) combined =
+         | Core + [w = "Core"] of (int + [w = "a"] * string + [w = "b"]) + [w = "a*b"] list + [w = "(a*b)list"]
+         | Inline + [w = "Inline"] of
+          ((int, string) combined.Inline =
+             {
+               field + [w = "field"]: string + [w = "b"];
+             })) + [w = "combined"] |}]
+
+end
