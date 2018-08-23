@@ -391,20 +391,20 @@ end
 module Properties = struct
 
   type 'a fields =
-    { we : 'a [@need "some"] [@more "stuff"]
-    ; fields : 'a [@with_ "properties"]
+    { we : 'a [@prop "need" "some"] [@prop "more" "stuff"]
+    ; fields : 'a [@prop "with_" "properties"]
     } [@@deriving t]
 
   type 'a constructors =
-    | A of 'a [@key "value"]
-    | B of 'a [@k "v"] [@@deriving t]
+    | A of 'a [@prop "key" "value"]
+    | B of 'a [@prop "k" "v"] [@@deriving t]
 
-  type 'a coretype = ('a [@some "prop"]) list [@@deriving t]
+  type 'a coretype = ('a [@prop "key" "value"]) list [@@deriving t]
 
   type ('a, 'b) combined =
-    | Core of ((('a [@w "a"]) * ('b [@w "b"]) [@w "a*b"]) list [@w "(a*b)list"])
-          [@w "Core"]
-    | Inline of { field : ('b [@w "b"]) [@w "field"] } [@w "Inline"]
+    | Core of ((('a [@prop "w" "a"]) * ('b [@prop "w" "b"]) [@prop "w" "a*b"]) list [@prop "w" "(a*b)list"])
+          [@prop "w" "Core"]
+    | Inline of { field : ('b [@prop "w" "b"]) [@prop "w" "field"] } [@prop "w" "Inline"]
   [@@deriving t] [@@prop "key" "value"]
 
   let%expect_test _ =

@@ -18,33 +18,38 @@ module Cookies = struct
       ~f:(function x -> t.libname <- x)
 end
 
-(* Generate regularly used AST fragments *)
-module Gen = struct
+(*
+ * generate regularly used AST fragments
+ *
+ *)
 
-  let ignore ~loc expr : expression -> expression =
-    let pat = ppat_any ~loc in
-    pexp_let ~loc Nonrecursive [value_binding ~loc ~expr ~pat]
+let ignore ~loc expr : expression -> expression =
+  let pat = ppat_any ~loc in
+  pexp_let ~loc Nonrecursive [value_binding ~loc ~expr ~pat]
 
-  let lazy_value_binding ~loc txt basetyp expr =
-    let (module M) = Ast_builder.make loc in
-    let open M in
-    let pat = ppat_constraint (ppat_var {loc;txt})
-        [%type: [%t basetyp] Lazy.t] in
-    let expr = ignore ~loc (evar txt) [%expr lazy [%e expr]] in
-    value_binding ~pat ~expr
+let lazy_value_binding ~loc txt basetyp expr =
+  let (module M) = Ast_builder.make loc in
+  let open M in
+  let pat = ppat_constraint (ppat_var {loc;txt})
+      [%type: [%t basetyp] Lazy.t] in
+  let expr = ignore ~loc (evar txt) [%expr lazy [%e expr]] in
+  value_binding ~pat ~expr
 
-  let force_lazy ~loc var = [%expr Lazy.force [%e var]]
+let force_lazy ~loc var = [%expr Lazy.force [%e var]]
 
-  let stypes_of_free ~loc free =
-    let (module M) = Ast_builder.make loc in
-    let open M in
-    List.mapi (fun i _v -> [%expr DT_var [%e eint i]]) free |> elist
+let stypes_of_free ~loc free =
+  let (module M) = Ast_builder.make loc in
+  let open M in
+  List.mapi (fun i _v -> [%expr DT_var [%e eint i]]) free |> elist
 
-  let wrap_runtime ~loc =
-    let txt = (Longident.parse "Ppx_dynt_runtime") in
-    pexp_open ~loc Override {txt;loc}
+let wrap_runtime ~loc =
+  let txt = (Longident.parse "Ppx_dynt_runtime") in
+  pexp_open ~loc Override {txt;loc}
 
-end
+(*
+ * mangle names
+ *
+ *)
 
 let mangle_label = function
   | "t" -> ppx.id
@@ -58,51 +63,64 @@ let mangle_lid = function
 let mangle_label_loc t = { t with txt = mangle_label t.txt }
 let mangle_lid_loc t = { t with txt = mangle_lid t.txt }
 
-(* Extract information from ast fragments *)
+(*
+ * Read information from AST fragments
+ *
+ *)
+
 type names = { typ : string; ttyp : string; node : string }
-module Read = struct
 
-  let free_vars_of_type_decl td =
-    List.map (fun (ct, _variance) ->
-        match ct.ptyp_desc with
-        | Ptyp_var s -> s
-        | _ -> raise_errorf ~loc:ct.ptyp_loc "This should be a type variable")
-      td.ptype_params
+let free_vars_of_type_decl td =
+  List.map (fun (ct, _variance) ->
+      match ct.ptyp_desc with
+      | Ptyp_var s -> s
+      | _ -> raise_errorf ~loc:ct.ptyp_loc "This should be a type variable")
+    td.ptype_params
 
-  let names_of_type_decl td =
-    let typ = td.ptype_name.txt in
-    { typ ; ttyp = mangle_label typ ; node = typ ^ "_node"}
+let names_of_type_decl td =
+  let typ = td.ptype_name.txt in
+  { typ ; ttyp = mangle_label typ ; node = typ ^ "_node"}
 
-  let type_of_type_decl ~loc td : core_type =
-    let (module M) = Ast_builder.make loc in
-    let open M in
-    ptyp_constr {txt=Lident td.ptype_name.txt; loc}
-      (List.map (fun (ct, _variance) -> ct) td.ptype_params)
+let type_of_type_decl ~loc td : core_type =
+  let (module M) = Ast_builder.make loc in
+  let open M in
+  ptyp_constr {txt=Lident td.ptype_name.txt; loc}
+    (List.map (fun (ct, _variance) -> ct) td.ptype_params)
 
-  let ttype_of_type_decl ~loc td : core_type =
-    let (module M) = Ast_builder.make loc in
-    let open M in
-    let ct  = type_of_type_decl ~loc td in
-    ptyp_constr {txt=Longident.parse "Dynt.Types.ttype"; loc} [ct]
+let ttype_of_type_decl ~loc td : core_type =
+  let (module M) = Ast_builder.make loc in
+  let open M in
+  let ct  = type_of_type_decl ~loc td in
+  ptyp_constr {txt=Longident.parse "Dynt.Types.ttype"; loc} [ct]
 
-  (* TODO *)
-  let abstract_attr_of_type_decl _td = None
+(* TODO *)
+let abstract_attr_of_type_decl _td = None
 
-end
+let attr_ct_prop =
+  Attribute.declare (ppx.id ^ ".prop")
+    Attribute.Context.core_type
+    Ast_pattern.(single_expr_payload (
+        pexp_apply (estring __') ( no_label (estring __') ^:: nil)
+      ))
+    (fun a b  -> (a,b))
 
-(* General helpers *)
-module X = struct
+(*
+ * general helpers
+ *
+ *)
 
-  let find_index_opt (l : 'a list) (el : 'a) : int option =
-    let i = ref 0 in
-    let rec f = function
-      | [] -> None
-      | hd :: _ when hd = el -> Some !i
-      | _ :: tl -> incr i ; f tl
-    in f l
+let find_index_opt (l : 'a list) (el : 'a) : int option =
+  let i = ref 0 in
+  let rec f = function
+    | [] -> None
+    | hd :: _ when hd = el -> Some !i
+    | _ :: tl -> incr i ; f tl
+  in f l
 
-end
-
+(*
+ * The actual workers
+ *
+ *)
 
 (* We use this to store information about recursive types. Which identifiers
  * are used recursively? Is the recursion regular?
@@ -124,14 +142,14 @@ let rec core_type ~rec_ ~free ({ ptyp_loc = loc ; _ } as ct) : expression =
           let is = List.rev_map (fun x -> x.ptyp_desc) args
           and should = List.rev_map (fun a -> Ptyp_var a) l in
           if is = should then
-            pexp_ident ~loc id' |> Gen.force_lazy ~loc
+            pexp_ident ~loc id' |> force_lazy ~loc
           else
             raise_errorf ~loc "non-regular type recursion not supported"
         | None -> pexp_apply ~loc (pexp_ident ~loc id')
                     (List.map (fun x -> Nolabel, rc x) args)
       end
     | Ptyp_var vname -> begin
-        match X.find_index_opt free vname with
+        match find_index_opt free vname with
         | None -> raise_errorf ~loc "please provide closed type"
         | Some i -> [%expr ttype_of_stype (DT_var [%e eint ~loc i])]
       end
@@ -156,15 +174,14 @@ let rec core_type ~rec_ ~free ({ ptyp_loc = loc ; _ } as ct) : expression =
       [%expr ttype_of_stype (DT_object [%e elist ~loc fields])]
     | _ -> raise_errorf ~loc "type not yet supported"
   in
-  t
-  (* match properties_of_attributes ct.ptyp_attributes with *)
-  (* | [] -> t *)
-  (* | l -> [%expr *)
-    (* ttype_of_stype (DT_prop ([%e list l], stype_of_ttype [%e t]))] *)
+  match Attribute.get attr_ct_prop ct with
+  | None -> t
+  | Some (k,v) -> [%expr
+    ttype_of_stype (DT_prop ([[%e estring ~loc k.txt ], [%e estring ~loc v.txt ]]
+                            , stype_of_ttype [%e t]))]
 
 let fields_of_record_labels ~rec_ ~free l =
   List.map (fun ({pld_loc = loc; _ } as x) ->
-      (* let props = properties_of_attributes x.pld_attributes in *)
       let props = [] in
       let t = core_type ~rec_ ~free x.pld_type in
       [%expr
@@ -178,7 +195,7 @@ let record_labels ~loc ~me ~free ~rec_ l =
     and expr =
       [%expr create_node
           [%e estring ~loc me.typ]
-          [%e Gen.stypes_of_free ~loc free]]
+          [%e stypes_of_free ~loc free]]
     in
     pexp_let ~loc Nonrecursive [ value_binding ~loc ~pat ~expr]
   and ttype = [%expr ttype_of_stype (DT_node [%e evar ~loc me.node])]
@@ -197,7 +214,7 @@ let record_labels_inline ~loc ~free ~rec_ ~name i l =
   let fields = fields_of_record_labels ~free ~rec_ l in
   [%expr
     let [%p pvar ~loc "inline_node"] : Dynt.Types.node =
-      create_node [%e estring ~loc name] [%e Gen.stypes_of_free ~loc free]
+      create_node [%e estring ~loc name] [%e stypes_of_free ~loc free]
     in
     set_node_record [%e evar ~loc "inline_node"]
       ([%e elist ~loc fields], Record_inline [%e eint ~loc i]);
@@ -207,7 +224,6 @@ let variant_constructors ~loc ~me ~free ~rec_ l =
   let nconst_tag = ref 0 in
   let constructors =
     List.map (fun ({pcd_loc = loc; _ } as x) ->
-        (* let props = properties_of_attributes x.pcd_attributes in *)
         let props = [] in
         match x.pcd_args with
         | Pcstr_tuple ctl ->
@@ -232,7 +248,7 @@ let variant_constructors ~loc ~me ~free ~rec_ l =
     let pat = pvar ~loc me.node
     and expr =
       [%expr create_node [%e estring ~loc me.typ]
-          [%e Gen.stypes_of_free ~loc free]]
+          [%e stypes_of_free ~loc free]]
     in
     pexp_let ~loc Nonrecursive [ value_binding ~loc ~pat ~expr]
   and ttype = [%expr ttype_of_stype (DT_node [%e evar ~loc me.node])]
@@ -246,14 +262,12 @@ let variant_constructors ~loc ~me ~free ~rec_ l =
   in
   createnode, ttype, setnode
 
-(* generate type expresseion of the form 'a ttype -> 'a list ttype *)
-let typ_of_free_vars ~loc ~basetyp free =
-  List.fold_left (fun acc name ->
-      [%type: [%t ptyp_var ~loc name] Dynt.Types.ttype -> [%t acc]])
-    basetyp (List.rev free)
-
 let substitution_of_free_vars ~loc ~me basetyp free =
-  let typ = typ_of_free_vars ~loc ~basetyp free in
+  let typ =
+    List.fold_left (fun acc name ->
+        [%type: [%t ptyp_var ~loc name] Dynt.Types.ttype -> [%t acc]])
+      basetyp (List.rev free)
+  in
   let expr =
     let arr = List.map (fun v ->
         [%expr stype_of_ttype [%e evar ~loc v]]) free
@@ -263,29 +277,27 @@ let substitution_of_free_vars ~loc ~me basetyp free =
           substitute [%e pexp_array ~loc arr]
             (stype_of_ttype [%e evar ~loc me.ttyp]))]
       (List.rev free)
-    |> Gen.wrap_runtime ~loc
+    |> wrap_runtime ~loc
   and pat = ppat_constraint ~loc (pvar ~loc me.ttyp) typ
   in value_binding ~loc ~expr ~pat
 
 let str_type_decl ~loc ~path (_recflag, tds) =
-  ignore path;
+  let _ = path in
   let extend_let new_ was expr = new_ (was expr) in
   let rec_ : recargs = List.map (fun td ->
-      td.ptype_name.txt, Read.free_vars_of_type_decl td) tds
+      td.ptype_name.txt, free_vars_of_type_decl td) tds
   in
   let parse (pats, cn, lr, sn, fl, subs) ({ ptype_loc = loc ; _} as td) =
-    let (module M) = Ast_builder.make loc in
-    let open M in
-    let me = Read.names_of_type_decl td in
-    let basetyp = Read.ttype_of_type_decl ~loc td in
-    let free = Read.free_vars_of_type_decl td in
-    let pats = (ppat_constraint (pvar me.ttyp) basetyp) :: pats in
+    let me = names_of_type_decl td in
+    let basetyp = ttype_of_type_decl ~loc td in
+    let free = free_vars_of_type_decl td in
+    let pats = (ppat_constraint ~loc (pvar ~loc me.ttyp) basetyp) :: pats in
     let cn, ttype, sn =
-      match Read.abstract_attr_of_type_decl td with
+      match abstract_attr_of_type_decl td with
       | Some name ->
-        let f = Gen.stypes_of_free ~loc free in
+        let f = stypes_of_free ~loc free in
         let t = [%expr
-          ttype_of_stype(DT_abstract ([%e estring name],[%e f]))] in
+          ttype_of_stype(DT_abstract ([%e estring ~loc name],[%e f]))] in
         cn, t, sn
       | None ->
         match td.ptype_kind with
@@ -304,8 +316,8 @@ let str_type_decl ~loc ~path (_recflag, tds) =
         | Ptype_open ->
           raise_errorf ~loc "type kind not yet supported"
     in
-    let lr = Gen.lazy_value_binding ~loc me.ttyp basetyp ttype :: lr in
-    let fl = Gen.force_lazy ~loc (evar me.ttyp) :: fl in
+    let lr = lazy_value_binding ~loc me.ttyp basetyp ttype :: lr in
+    let fl = force_lazy ~loc (evar ~loc me.ttyp) :: fl in
     let subs = if free = [] then subs else
         (substitution_of_free_vars ~loc ~me basetyp free) :: subs in
     pats, cn, lr, sn, fl, subs
@@ -320,7 +332,7 @@ let str_type_decl ~loc ~path (_recflag, tds) =
       | hd :: [] -> hd, List.hd forcelazy
       | _ -> ppat_tuple ~loc patterns, pexp_tuple ~loc forcelazy
     in
-    let expr = Gen.wrap_runtime ~loc (
+    let expr = wrap_runtime ~loc (
         createnode @@
         pexp_let ~loc Recursive lazyrec @@
         setnode @@
@@ -333,10 +345,10 @@ let str_type_decl ~loc ~path (_recflag, tds) =
 
 (* inline types *)
 let extension ~loc ~path ct =
-  ignore path;
+  let _ = path in
   let t = core_type ~rec_:[] ~free:[] ct in
   (* prepend ignore statement to produce nicer error message *)
-  Gen.wrap_runtime ~loc [%expr let _ = fun (_ : [%t ct])  -> () in [%e t]]
+  wrap_runtime ~loc [%expr let _ = fun (_ : [%t ct])  -> () in [%e t]]
 
 (* Register the generator functions *)
 let () =
