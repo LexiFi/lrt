@@ -10,17 +10,10 @@
  (name ppx_dynt)
  (synopsis "[@@deriving t]")
  (libraries ppxlib)
- (preprocess (pps ppxlib.metaquot ppxlib.runner))
+ (preprocess (pps ppxlib.metaquot))
  (modules ppx_dynt)
  (ppx_runtime_libraries ppx_dynt_runtime)
- (kind ppx_rewriter))
-
-(library
- (name ppx_dynt_test)
- (libraries dynt)
- (inline_tests)
- (modules test)
- (preprocess (pps ppx_expect ppx_dynt ppxlib.runner)))
+ (kind ppx_deriver))
 
 (executable
  (name standalone)
