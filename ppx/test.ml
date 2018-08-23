@@ -362,3 +362,28 @@ module Inline = struct
       (int * int) array
       (int * int) list |}]
 end
+
+module Objects = struct
+
+  type 'a stack = < pop : 'a option; push : 'a -> unit > [@@deriving t]
+
+  class type ['a] steak = object
+    method pop : 'a option
+    method push: 'a -> unit
+  end [@@deriving t]
+
+  class type ['a] tartare = object
+    inherit ['a] steak
+    method sauce: float
+  end
+
+  let%expect_test _ =
+    print [%t: int stack];
+    (* print [%t: int steak]; *)
+    [%expect {|
+       <
+         pop: int option;
+         push: (int -> unit);
+      > |}]
+
+end
