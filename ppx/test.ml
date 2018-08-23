@@ -115,3 +115,97 @@ module Recursion = struct
            })) |}]
 
 end
+
+module Open = struct
+
+  type 'num rectangle = { a: 'num ; b: 'num} [@@deriving t]
+  type ('a,'b) alist = ('a * 'b) list [@@deriving t]
+  type ('a,'b) alist2 = ('a, 'b) alist [@@deriving t]
+  type aalist = (int,string) alist [@@deriving t]
+
+  let%expect_test _ =
+    print (rectangle_t int_t);
+    print (alist_t int_t string_t);
+    print (alist2_t int_t string_t);
+    [%expect {|
+      (int rectangle =
+         {
+           a: int;
+           b: int;
+         })
+      (int * string) list
+      (int * string) list |}]
+
+  type ('a,'b,'c,'d,'e) weird_type = A of 'a | B of 'b | C of 'c | D of 'd
+                                   | E of 'e [@@deriving t]
+  let%expect_test _ =
+    print (weird_type_t int_t float_t string_t (alist_t int_t float_t) int_t);
+    [%expect {|
+      ((int, float, string, (int * float) list, int) weird_type =
+         | A of int
+         | B of float
+         | C of string
+         | D of (int * float) list
+         | E of int) |}]
+
+  type 'a btree =
+    { v: 'a
+    ; l: 'a btree option
+    ; r: 'a btree option
+    } [@@deriving t]
+
+  type 'a bbtree =
+    | Inner of 'a * 'a bbtree * 'a bbtree
+    | Leave of 'a
+  [@@deriving t]
+
+  type ('a,'b) either_list =
+    | Either of { v : 'a list }
+    | Or of { v : 'b list }
+  [@@deriving t]
+
+  let%expect_test _ =
+    print (btree_t int_t);
+    print (bbtree_t int_t);
+    print (either_list_t string_t int_t);
+    [%expect {|
+    (int btree =
+       {
+         v: int;
+         l: int btree option;
+         r: int btree option;
+       })
+    (int bbtree =
+       | Inner of (int * int bbtree * int bbtree)
+       | Leave of int)
+    ((string, int) either_list =
+       | Either of
+        ((string, int) either_list.Either =
+           {
+             v: string list;
+           })
+       | Or of
+        ((string, int) either_list.Or =
+           {
+             v: int list;
+           }))  |}]
+
+
+end
+
+module Arrows = struct
+
+  type int_arrow = int -> int [@@deriving t]
+  type 'a identity = 'a -> 'a [@@deriving t]
+  type 'a advanced = ?n:int -> name:'a -> (string -> 'a) -> int [@@deriving t]
+
+  let%expect_test _ =
+    print int_arrow_t;
+    print (identity_t (array_t string_t));
+    print (advanced_t string_t);
+    [%expect {|
+      (int -> int)
+      (string array -> string array)
+      (?n:int -> (name:string -> ((string -> string) -> int))) |}]
+
+end

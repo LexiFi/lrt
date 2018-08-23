@@ -5,6 +5,9 @@ open Ast_builder.Default
 type ppx = { pp: string; id: string }
 let ppx = { pp = "[@@deriving t]" ; id = "t" }
 
+let raise_errorf ~loc =
+  Format.ksprintf (Location.raise_errorf ~loc "%s: %s" ppx.pp)
+
 (* Data stored between invocations of the ppx driver *)
 module Cookies = struct
   type t = { mutable libname: string option }
@@ -50,18 +53,21 @@ let mangle_label = function
 let rec mangle_lid = function
   | Lident s -> Lident (mangle_label s)
   | Ldot (t, s) -> Ldot (mangle_lid t, s)
-  | Lapply _-> assert false (* TODO *)
+  | Lapply _-> raise_errorf ~loc:Location.none "Internal error in mangle_lid"
 
 let mangle_label_loc t = { t with txt = mangle_label t.txt }
 let mangle_lid_loc t = { t with txt = mangle_lid t.txt }
 
-
-(* Extract information from ast fragemnts *)
+(* Extract information from ast fragments *)
 type names = { typ : string; ttyp : string; node : string }
 module Read = struct
 
-  (* TODO *)
-  let free_vars_of_type_decl _td = []
+  let free_vars_of_type_decl td =
+    List.map (fun (ct, _variance) ->
+        match ct.ptyp_desc with
+        | Ptyp_var s -> s
+        | _ -> raise_errorf ~loc:ct.ptyp_loc "This should be a type variable")
+      td.ptype_params
 
   let names_of_type_decl td =
     let typ = td.ptype_name.txt in
@@ -120,15 +126,13 @@ let rec core_type ~rec_ ~free ({ ptyp_loc = loc ; _ } as ct) : expression =
           if is = should then
             pexp_ident ~loc id' |> Gen.force_lazy ~loc
           else
-            assert false
-            (* raise_str ~loc "non-regular type recursion not supported" *)
+            raise_errorf ~loc "non-regular type recursion not supported"
         | None -> pexp_apply ~loc (pexp_ident ~loc id')
                     (List.map (fun x -> Nolabel, rc x) args)
       end
     | Ptyp_var vname -> begin
         match X.find_index_opt free vname with
-        | None -> assert false
-        (* | None -> raise_str ~loc "please provide closed type" *)
+        | None -> raise_errorf ~loc "please provide closed type"
         | Some i -> [%expr ttype_of_stype (DT_var [%e eint ~loc i])]
       end
     | Ptyp_arrow (label, l, r) ->
@@ -149,8 +153,7 @@ let rec core_type ~rec_ ~free ({ ptyp_loc = loc ; _ } as ct) : expression =
             ({txt; loc}, _attr, ct) -> pexp_tuple ~loc [estring ~loc txt; rcs ct]) l
       in
       [%expr ttype_of_stype (DT_object [%e elist ~loc fields])]
-    (* | _ -> raise_str ~loc "type not yet supported" *)
-    | _ -> assert false
+    | _ -> raise_errorf ~loc "type not yet supported"
   in
   t
   (* match properties_of_attributes ct.ptyp_attributes with *)
@@ -286,8 +289,7 @@ let str_type_decl ~loc ~path (_recflag, tds) =
       | None ->
         match td.ptype_kind with
         | Ptype_abstract -> begin match td.ptype_manifest with
-            | None -> assert false
-            (* | None -> raise_errorf ~loc "no manifest found" *)
+            | None -> raise_errorf ~loc "no manifest found"
             | Some ct ->
               let t = core_type ~rec_ ~free ct in
               cn, t, sn
@@ -299,8 +301,7 @@ let str_type_decl ~loc ~path (_recflag, tds) =
           let c, t, s = variant_constructors ~me ~free ~loc ~rec_ l in
           extend_let c cn, t, extend_let s sn
         | Ptype_open ->
-          (* raise_str ~loc "type kind not yet supported" *)
-          assert false
+          raise_errorf ~loc "type kind not yet supported"
     in
     let lr = Gen.lazy_value_binding ~loc me.ttyp basetyp ttype :: lr in
     let fl = Gen.force_lazy ~loc (evar me.ttyp) :: fl in
@@ -314,8 +315,7 @@ let str_type_decl ~loc ~path (_recflag, tds) =
   let prepare =
     let pat, force =
       match patterns with
-      | [] -> assert false
-      (* | [] -> raise_str "internal error (type_decl_str)" *)
+      | [] -> raise_errorf ~loc "internal error (type_decl_str)"
       | hd :: [] -> hd, List.hd forcelazy
       | _ -> ppat_tuple ~loc patterns, pexp_tuple ~loc forcelazy
     in
