@@ -1,0 +1,11 @@
+opam-version: "2.0"
+version: "dev"
+maintainer: ""
+authors: [""]
+homepage: ""
+bug-reports: ""
+dev-repo: ""
+license: "MIT"
+build: [
+  ["dune" "build" "-j" jobs "@install"]
+]
