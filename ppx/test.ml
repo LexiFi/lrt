@@ -310,3 +310,25 @@ module Mutual = struct
 
 end
 
+module NonregRec = struct
+
+  type 'a good1 = { field: 'a good1 option; v : 'a }  [@@deriving t]
+  type ('a,'b) good2 = {field: ('a,'b) good2 option } [@@deriving t]
+  (* type 'a bad1 = { field: int bad1 option; v : 'a } [@@deriving t] *)
+  (* type ('a,'b) bad2 = {field: ('b,'a) bad2 option } [@@deriving t] *)
+
+  let%expect_test _ =
+    print (good1_t (array_t int_t));
+    print (good2_t string_t (array_t int_t));
+    [%expect {|
+      (int array good1 =
+         {
+           field: int array good1 option;
+           v: int array;
+         })
+      ((string, int array) good2 =
+         {
+           field: (string, int array) good2 option;
+         }) |}]
+
+end
