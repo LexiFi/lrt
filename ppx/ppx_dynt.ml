@@ -50,9 +50,9 @@ let mangle_label = function
   | "t" -> ppx.id
   | s -> Format.sprintf "%s_%s" s ppx.id
 
-let rec mangle_lid = function
+let mangle_lid = function
   | Lident s -> Lident (mangle_label s)
-  | Ldot (t, s) -> Ldot (mangle_lid t, s)
+  | Ldot (t, s) -> Ldot (t, mangle_label s)
   | Lapply _-> raise_errorf ~loc:Location.none "Internal error in mangle_lid"
 
 let mangle_label_loc t = { t with txt = mangle_label t.txt }
@@ -150,7 +150,8 @@ let rec core_type ~rec_ ~free ({ ptyp_loc = loc ; _ } as ct) : expression =
     | Ptyp_object (l, _closed_flag) ->
       let fields = List.map (function
           (* TODO attributes! *)
-            ({txt; loc}, _attr, ct) -> pexp_tuple ~loc [estring ~loc txt; rcs ct]) l
+            ({txt; loc}, _attr, ct) ->
+            pexp_tuple ~loc [estring ~loc txt; rcs ct]) l
       in
       [%expr ttype_of_stype (DT_object [%e elist ~loc fields])]
     | _ -> raise_errorf ~loc "type not yet supported"
@@ -330,8 +331,16 @@ let str_type_decl ~loc ~path (_recflag, tds) =
   List.map (fun x -> pstr_value ~loc Nonrecursive [x])
     (prepare :: substitutions)
 
+(* inline types *)
+let extension ~loc ~path ct =
+  ignore path;
+  let t = core_type ~rec_:[] ~free:[] ct in
+  (* prepend ignore statement to produce nicer error message *)
+  Gen.wrap_runtime ~loc [%expr let _ = fun (_ : [%t ct])  -> () in [%e t]]
+
 (* Register the generator functions *)
 let () =
   let open Deriving in
   let str_type_decl = Generator.make_noarg str_type_decl in
-  Deriving.add ~str_type_decl ppx.id |> Deriving.ignore
+  Deriving.add ~str_type_decl ~extension
+    ppx.id |> Deriving.ignore

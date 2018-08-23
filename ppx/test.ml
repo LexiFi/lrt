@@ -332,3 +332,33 @@ module NonregRec = struct
          }) |}]
 
 end
+
+module Inline = struct
+
+  (* type bad = 'a int [@@deriving t] *)
+  (* let bad_t =  [%t: list list ] *)
+  (* let bad_t =  [%t: 'a list ] *)
+
+  let t1 (type t) (t : t Types.ttype) = [%t: (t * int) array]
+  let t2 (type typ) (typ_t : typ Types.ttype) = [%t: (typ * int) list]
+
+
+  let%expect_test _ =
+    print [%t: int];
+    print [%t: int -> int];
+    print [%t: string list];
+    print [%t: int NonregRec.good1];
+    print (t1 int_t);
+    print (t2 int_t);
+    [%expect {|
+      int
+      (int -> int)
+      string list
+      (int good1 =
+         {
+           field: int good1 option;
+           v: int;
+         })
+      (int * int) array
+      (int * int) list |}]
+end
