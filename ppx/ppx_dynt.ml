@@ -99,8 +99,10 @@ let ttype_of_type_decl ~loc td : core_type =
   let ct  = type_of_type_decl ~loc td in
   ptyp_constr {txt=Longident.parse "Dynt.Types.ttype"; loc} [ct]
 
-(* TODO *)
-let abstract_attr_of_type_decl _td = None
+let close_ttype ~loc ~free ttype =
+    List.fold_left (fun acc name ->
+        [%type: [%t ptyp_var ~loc name] Dynt.Types.ttype -> [%t acc]])
+      ttype (List.rev free)
 
 (*
  * Declare attributes on type declarations, core types,
@@ -115,14 +117,13 @@ let attr_prop ctx =
   Attribute.declare (ppx.id ^ ".prop")
     ctx
     Ast_pattern.(
-      alt
-        (pexp_apply (estring __') ( no_label (estring __') ^:: nil )
-         |> map2 ~f:prop
-         |> elist)
-        (pexp_apply (estring __') ( no_label (estring __') ^:: nil )
-         |> map2 ~f:prop
-         |> map1 ~f:(fun x -> [x])
-        )
+      (pexp_apply (estring __') ( no_label (estring __') ^:: nil )
+       |> map2 ~f:prop
+       |> elist) |||
+      (pexp_apply (estring __') ( no_label (estring __') ^:: nil )
+       |> map2 ~f:prop
+       |> map1 ~f:(fun x -> [x])
+      )
       |> single_expr_payload
     )
     (fun l -> l)
@@ -147,6 +148,8 @@ let attr_td_abstract =
     Attribute.Context.type_declaration
     Ast_pattern.(single_expr_payload (estring __'))
     (fun name -> name)
+
+let abstract_of_td td = Attribute.get attr_td_abstract td
 
 (*
  * general helpers
@@ -302,12 +305,8 @@ let variant_constructors ~loc ~me ~free ~rec_ l =
   in
   createnode, ttype, setnode
 
-let substitution_of_free_vars ~loc ~me basetyp free =
-  let typ =
-    List.fold_left (fun acc name ->
-        [%type: [%t ptyp_var ~loc name] Dynt.Types.ttype -> [%t acc]])
-      basetyp (List.rev free)
-  in
+let substitution_of_free_vars ~loc ~me ttype free =
+  let typ = close_ttype ~loc ~free ttype in
   let expr =
     let arr = List.map (fun v ->
         [%expr stype_of_ttype [%e evar ~loc v]]) free
@@ -333,8 +332,8 @@ let str_type_decl ~loc ~path (_recflag, tds) =
     let free = free_vars_of_type_decl td in
     let pats = (ppat_constraint ~loc (pvar ~loc me.ttyp) basetyp) :: pats in
     let cn, ttype, sn =
-      match abstract_attr_of_type_decl td with
-      | Some name ->
+      match abstract_of_td td with
+      | Some {txt=name;loc} ->
         let f = stypes_of_free ~loc free in
         let t = [%expr
           ttype_of_stype(DT_abstract ([%e estring ~loc name],[%e f]))] in
@@ -384,6 +383,27 @@ let str_type_decl ~loc ~path (_recflag, tds) =
   List.map (fun x -> pstr_value ~loc Nonrecursive [x])
     (prepare :: substitutions)
 
+(* Type declarations in signature. Generates
+ * val <type>_t : <type> ttype
+ *)
+let sig_of_type_decl ({ ptype_loc = loc ; _} as td) =
+  match td.ptype_kind with
+  | Ptype_abstract
+  | Ptype_record _
+  | Ptype_variant _ ->
+    let type_ =
+      let free = free_vars_of_type_decl td in
+      close_ttype ~loc ~free (ttype_of_type_decl ~loc td)
+    and name = mangle_label_loc td.ptype_name
+    and prim = []
+    in value_description ~loc ~type_~name ~prim
+  | _ -> raise_errorf ~loc "cannot handle this type in signatures yet"
+
+let sig_type_decl ~loc ~path (_recflag, tds) =
+  let _ = path in
+  List.map sig_of_type_decl tds
+  |> List.map (psig_value ~loc)
+
 (* inline types *)
 let extension ~loc ~path ct =
   let _ = path in
@@ -395,5 +415,6 @@ let extension ~loc ~path ct =
 let () =
   let open Deriving in
   let str_type_decl = Generator.make_noarg str_type_decl in
-  Deriving.add ~str_type_decl ~extension
+  let sig_type_decl = Generator.make_noarg sig_type_decl in
+  Deriving.add ~str_type_decl ~sig_type_decl ~extension
     ppx.id |> Deriving.ignore

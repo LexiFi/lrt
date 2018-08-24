@@ -431,3 +431,61 @@ module Properties = struct
              })) + [key = "value"] + [w = "combined"] |}]
 
 end
+
+module Abstract = struct
+
+  module Two : sig
+    type public = int * int
+    and  hidden
+    [@@deriving t]
+  end = struct
+    type public = int * int
+    and hidden = string * int
+    [@@abstract "One.Abstract.Two.hidden"]
+    [@@deriving t]
+  end
+
+  type two_public = Two.public [@@deriving t]
+  type two_hidden = Two.hidden [@@deriving t]
+  type two_hidden2 = two_hidden [@@deriving t]
+  let%expect_test _ =
+    print two_public_t ;
+    print two_hidden_t ;
+    print two_hidden2_t ;
+    [%expect{|
+    (int * int)
+    One.Abstract.Two.hidden
+    One.Abstract.Two.hidden |}]
+
+  type foo = int [@prop "w" "foo"]
+  [@@abstract "One.Abstract.foo"]
+  and bar = foo [@prop "w" "bar"]
+  [@@deriving t]
+
+  let%expect_test _ =
+    print [%t: foo];
+    print [%t: bar];
+      [%expect {|
+        One.Abstract.foo
+        One.Abstract.foo + [w = "bar"] |}]
+
+  module Hashtable : sig
+    type ('a,'b) t [@@deriving t]
+  end = struct
+    type ('a,'b) t = ('a * 'b) list
+    [@@abstract "Hashtable.t"]
+    [@@deriving t]
+  end
+
+  let%expect_test _ =
+    print [%t: (int,string) Hashtable.t];
+    [%expect {| (int, string) Hashtable.t |}]
+
+end
+
+type nr = int [@@deriving t]
+module Nonrec = struct
+  (* This fails due to deriving's lack of support *)
+  (* type nonrec nr = nr [@@deriving t] *)
+end
+
