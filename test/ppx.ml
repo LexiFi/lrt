@@ -428,6 +428,6 @@ module Properties = struct
           ((int, string) combined.Inline =
              {
                field + [w = "field"]: string + [w = "b"];
-             })) + [w = "combined"] |}]
+             })) + [key = "value"] + [w = "combined"] |}]
 
 end

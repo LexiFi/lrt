@@ -46,6 +46,12 @@ let wrap_runtime ~loc =
   let txt = (Longident.parse "Ppx_dynt_runtime") in
   pexp_open ~loc Override {txt;loc}
 
+let wrap_props ~loc props t =
+  match props with
+  | [] -> t
+  | l -> [%expr
+    ttype_of_stype (DT_prop ([%e elist ~loc l] , stype_of_ttype [%e t]))]
+
 (*
  * mangle names
  *
@@ -212,10 +218,7 @@ let rec core_type ~rec_ ~free ({ ptyp_loc = loc ; _ } as ct) : expression =
       [%expr ttype_of_stype (DT_object [%e elist ~loc fields])]
     | _ -> raise_errorf ~loc "type not yet supported"
   in
-  match props_of_ct ct with
-  | [] -> t
-  | l -> [%expr
-    ttype_of_stype (DT_prop ([%e elist ~loc l] , stype_of_ttype [%e t]))]
+  wrap_props ~loc (props_of_ct ct) t
 
 let fields_of_record_labels ~rec_ ~free l =
   List.map (fun ({pld_loc = loc; _ } as x) ->
@@ -353,6 +356,7 @@ let str_type_decl ~loc ~path (_recflag, tds) =
         | Ptype_open ->
           raise_errorf ~loc "type kind not yet supported"
     in
+    let ttype = wrap_props ~loc (props_of_td td) ttype in
     let lr = lazy_value_binding ~loc me.ttyp basetyp ttype :: lr in
     let fl = force_lazy ~loc (evar ~loc me.ttyp) :: fl in
     let subs = if free = [] then subs else
