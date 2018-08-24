@@ -172,29 +172,42 @@ let find_index_opt (l : 'a list) (el : 'a) : int option =
 (* We use this to store information about recursive types. Which identifiers
  * are used recursively? Is the recursion regular?
  * alist mapping recursive identifiers to their type args *)
-type recargs = (label * label list) list
+type rec_ =
+  | Nonrec
+  | Rec of (label * label list) list
 
 let rec core_type ~rec_ ~free ({ ptyp_loc = loc ; _ } as ct) : expression =
   let rc = core_type ~rec_ ~free in
   let rcs ct = [%expr stype_of_ttype [%e rc ct]] in
-  let t = match ct.ptyp_desc with
-    | Ptyp_tuple l ->
-      let args = List.map rcs l in
-      [%expr ttype_of_stype (DT_tuple [%e elist ~loc args])]
-    | Ptyp_constr (id, args) -> begin
+  let constr =
+    (* type constructors are handled depending on nonrec flag *)
+    match rec_ with
+    | Nonrec -> fun id args ->
         let id' = mangle_lid_loc id in
-        (* recursive identifier? regular recursion? *)
-        match List.assoc_opt (Longident.name id.txt) rec_ with
+        pexp_apply ~loc (pexp_ident ~loc id')
+          (List.map (fun x -> Nolabel, rc x) args)
+    | Rec l -> fun id args -> begin
+        let id' = mangle_lid_loc id in
+        (* recursive identifier? *)
+        match List.assoc_opt (Longident.name id.txt) l with
         | Some l ->
+          (* regular recursion *)
           let is = List.rev_map (fun x -> x.ptyp_desc) args
           and should = List.rev_map (fun a -> Ptyp_var a) l in
           if is = should then
             pexp_ident ~loc id' |> force_lazy ~loc
           else
             raise_errorf ~loc "non-regular type recursion not supported"
-        | None -> pexp_apply ~loc (pexp_ident ~loc id')
-                    (List.map (fun x -> Nolabel, rc x) args)
+        | None ->
+          pexp_apply ~loc (pexp_ident ~loc id')
+            (List.map (fun x -> Nolabel, rc x) args)
       end
+  in
+  let t = match ct.ptyp_desc with
+    | Ptyp_tuple l ->
+      let args = List.map rcs l in
+      [%expr ttype_of_stype (DT_tuple [%e elist ~loc args])]
+    | Ptyp_constr (id, args) -> constr id args
     | Ptyp_var vname -> begin
         match find_index_opt free vname with
         | None -> raise_errorf ~loc "please provide closed type"
@@ -205,7 +218,7 @@ let rec core_type ~rec_ ~free ({ ptyp_loc = loc ; _ } as ct) : expression =
         match label with
         | Nolabel -> ""
         | Labelled s -> s
-          (* TODO: How do you actually represent optional arguments? *)
+        (* TODO: How do you actually represent optional arguments? *)
         | Optional s -> "?" ^ s
       in
       [%expr ttype_of_stype (DT_arrow ([%e estring ~loc lab],
@@ -320,11 +333,14 @@ let substitution_of_free_vars ~loc ~me ttype free =
   and pat = ppat_constraint ~loc (pvar ~loc me.ttyp) typ
   in value_binding ~loc ~expr ~pat
 
-let str_type_decl ~loc ~path (_recflag, tds) =
+let str_type_decl ~loc ~path (recflag, tds) =
   let _ = path in
   let extend_let new_ was expr = new_ (was expr) in
-  let rec_ : recargs = List.map (fun td ->
-      td.ptype_name.txt, free_vars_of_type_decl td) tds
+  let rec_ =
+    match recflag with
+    | Nonrecursive -> Nonrec
+    | Recursive -> Rec (List.map (fun td ->
+        td.ptype_name.txt, free_vars_of_type_decl td) tds)
   in
   let parse (pats, cn, lr, sn, fl, subs) ({ ptype_loc = loc ; _} as td) =
     let me = names_of_type_decl td in
@@ -372,9 +388,11 @@ let str_type_decl ~loc ~path (_recflag, tds) =
       | hd :: [] -> hd, List.hd forcelazy
       | _ -> ppat_tuple ~loc patterns, pexp_tuple ~loc forcelazy
     in
-    let expr = wrap_runtime ~loc (
+    let expr =
+      let recflag = match rec_ with Nonrec -> Nonrecursive | _ -> Recursive in
+      wrap_runtime ~loc (
         createnode @@
-        pexp_let ~loc Recursive lazyrec @@
+        pexp_let ~loc recflag lazyrec @@
         setnode @@
         force)
     in
@@ -407,7 +425,7 @@ let sig_type_decl ~loc ~path (_recflag, tds) =
 (* inline types *)
 let extension ~loc ~path ct =
   let _ = path in
-  let t = core_type ~rec_:[] ~free:[] ct in
+  let t = core_type ~rec_:Nonrec ~free:[] ct in
   (* prepend ignore statement to produce nicer error message *)
   wrap_runtime ~loc [%expr let _ = fun (_ : [%t ct])  -> () in [%e t]]
 

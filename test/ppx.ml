@@ -485,7 +485,10 @@ end
 
 type nr = int [@@deriving t]
 module Nonrec = struct
-  (* This fails due to deriving's lack of support *)
-  (* type nonrec nr = nr [@@deriving t] *)
+  type nonrec nr = nr * int [@@deriving t]
+
+  let%expect_test _ =
+    print [%t: nr];
+    [%expect {| (int * int) |}]
 end
 
