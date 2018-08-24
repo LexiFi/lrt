@@ -103,14 +103,23 @@ let abstract_attr_of_type_decl _td = None
  *)
 
 let attr_prop ctx =
+  let prop a b = pexp_tuple ~loc:a.loc
+      [estring ~loc:a.loc a.txt; estring ~loc:b.loc b.txt]
+  in
   Attribute.declare (ppx.id ^ ".prop")
     ctx
-    Ast_pattern.(single_expr_payload (
-        pexp_apply (estring __') ( no_label (estring __') ^:: nil)
-      ))
-    (fun a b ->
-       [pexp_tuple ~loc:a.loc
-           [estring ~loc:a.loc a.txt; estring ~loc:b.loc b.txt]])
+    Ast_pattern.(
+      alt
+        (pexp_apply (estring __') ( no_label (estring __') ^:: nil )
+         |> map2 ~f:prop
+         |> elist)
+        (pexp_apply (estring __') ( no_label (estring __') ^:: nil )
+         |> map2 ~f:prop
+         |> map1 ~f:(fun x -> [x])
+        )
+      |> single_expr_payload
+    )
+    (fun l -> l)
 
 let attr_ct_prop = attr_prop Attribute.Context.core_type
 let attr_rf_prop = attr_prop Attribute.Context.label_declaration
@@ -122,6 +131,7 @@ let props_of_attr attr x =
   | None -> []
   | Some l -> l
 
+let props_of_ct = props_of_attr attr_ct_prop
 let props_of_rf = props_of_attr attr_rf_prop
 let props_of_vc = props_of_attr attr_vc_prop
 let props_of_td = props_of_attr attr_td_prop
@@ -202,9 +212,9 @@ let rec core_type ~rec_ ~free ({ ptyp_loc = loc ; _ } as ct) : expression =
       [%expr ttype_of_stype (DT_object [%e elist ~loc fields])]
     | _ -> raise_errorf ~loc "type not yet supported"
   in
-  match Attribute.get attr_ct_prop ct with
-  | None -> t
-  | Some l -> [%expr
+  match props_of_ct ct with
+  | [] -> t
+  | l -> [%expr
     ttype_of_stype (DT_prop ([%e elist ~loc l] , stype_of_ttype [%e t]))]
 
 let fields_of_record_labels ~rec_ ~free l =

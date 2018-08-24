@@ -391,8 +391,8 @@ end
 module Properties = struct
 
   type 'a fields =
-    { we : 'a [@prop "need" "some"]
-    ; fields : 'a [@prop "with_" "properties"]
+    { we : 'a [@prop ["need" "some"; "more" "record"]]
+    ; fields : 'a [@prop "with" "properties"]
     } [@@deriving t]
 
   type 'a constructors =
@@ -415,8 +415,8 @@ module Properties = struct
     [%expect {|
       (int fields =
          {
-           we + [need = "some"]: int;
-           fields + [with_ = "properties"]: int;
+           we + [need = "some"; more = "record"]: int;
+           fields + [with = "properties"]: int;
          })
       (int constructors =
          | A + [key = "value"] of int
