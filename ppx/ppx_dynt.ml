@@ -227,7 +227,7 @@ let rec core_type ~rec_ ~free ({ ptyp_loc = loc ; _ } as ct) : expression =
     (* TODO: is the closed flag relevant? *)
     | Ptyp_object (l, _closed_flag) ->
       let fields = List.map (function
-          (* TODO attributes! *)
+          (* TODO properties. But where should they be placed? *)
             ({txt; loc}, _attr, ct) ->
             pexp_tuple ~loc [estring ~loc txt; rcs ct]) l
       in
