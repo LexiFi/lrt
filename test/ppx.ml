@@ -367,6 +367,7 @@ module Objects = struct
 
   type 'a stack = < pop : 'a option; push : 'a -> unit > [@@deriving t]
 
+  (* This does not trigger deriving *)
   class type ['a] steak = object
     method pop : 'a option
     method push: 'a -> unit
@@ -492,3 +493,21 @@ module Nonrec = struct
     [%expect {| (int * int) |}]
 end
 
+module Overwrite = struct
+  (* Pervasives have the be toplevel, not locally by the
+   * derived code
+   *
+   * This test fails when ppx runtime includes Dynt.Pervasives
+   *)
+
+  type string = int [@@deriving t]
+  type int = string [@@deriving t]
+
+  let%expect_test _ =
+    print [%t: string];
+    print [%t: int];
+    [%expect {|
+      int
+      int |}]
+
+end
