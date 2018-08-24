@@ -9,14 +9,22 @@ let raise_errorf ~loc =
   Format.ksprintf (Location.raise_errorf ~loc "%s: %s" ppx.pp)
 
 (* Data stored between invocations of the ppx driver *)
-module Cookies = struct
-  type t = { mutable libname: string option }
-  let t = { libname = None }
+type cookies = { mutable libname: string option }
+let cookies = { libname = None }
 
-  let () =
-    Driver.Cookies.add_simple_handler "library-name" Ast_pattern.(estring __)
-      ~f:(function x -> t.libname <- x)
-end
+let () =
+  Driver.Cookies.add_simple_handler "library-name" Ast_pattern.(estring __)
+    ~f:(function x -> cookies.libname <- x)
+
+(*
+ * Automatically generate names for abstract types
+ *
+ *)
+
+let abstract_name ~path name =
+  match cookies.libname with
+    | None -> Format.sprintf "%s.%s" path name
+    | Some lib -> Format.sprintf "%s#%s.%s" lib path name
 
 (*
  * generate regularly used AST fragments
@@ -143,13 +151,29 @@ let props_of_rf = props_of_attr attr_rf_prop
 let props_of_vc = props_of_attr attr_vc_prop
 let props_of_td = props_of_attr attr_td_prop
 
+type abstract =
+  | No
+  | Auto
+  | Name of label loc
+
 let attr_td_abstract =
   Attribute.declare (ppx.id ^ ".abstract")
     Attribute.Context.type_declaration
-    Ast_pattern.(single_expr_payload (estring __'))
-    (fun name -> name)
+    Ast_pattern.(
+      (estring __'
+       |> single_expr_payload
+       |> map1 ~f:(fun s -> Name s)
+      ) |||
+      (pstr nil
+       |> map0 ~f:Auto
+      )
+    )
+    (fun x -> x)
 
-let abstract_of_td td = Attribute.get attr_td_abstract td
+let abstract_of_td td =
+  match Attribute.get attr_td_abstract td with
+  | Some x -> x
+  | None -> No
 
 (*
  * general helpers
@@ -241,7 +265,9 @@ let fields_of_record_labels ~rec_ ~free l =
       let props = props_of_rf x in
       let t = core_type ~rec_ ~free x.pld_type in
       [%expr
-        ([%e estring ~loc x.pld_name.txt], [%e elist ~loc props], stype_of_ttype [%e t])]
+        ([%e estring ~loc x.pld_name.txt],
+         [%e elist ~loc props],
+         stype_of_ttype [%e t])]
     ) l
 
 let record_labels ~loc ~me ~free ~rec_ l =
@@ -349,12 +375,18 @@ let str_type_decl ~loc ~path (recflag, tds) =
     let pats = (ppat_constraint ~loc (pvar ~loc me.ttyp) basetyp) :: pats in
     let cn, ttype, sn =
       match abstract_of_td td with
-      | Some {txt=name;loc} ->
+      | Name {txt=name;loc} ->
         let f = stypes_of_free ~loc free in
         let t = [%expr
           ttype_of_stype(DT_abstract ([%e estring ~loc name],[%e f]))] in
         cn, t, sn
-      | None ->
+      | Auto ->
+        let f = stypes_of_free ~loc free in
+        let name = abstract_name ~path me.typ in
+        let t = [%expr
+          ttype_of_stype(DT_abstract ([%e estring ~loc name],[%e f]))] in
+        cn, t, sn
+      | No ->
         match td.ptype_kind with
         | Ptype_abstract -> begin match td.ptype_manifest with
             | None -> raise_errorf ~loc "no manifest found"

@@ -482,6 +482,31 @@ module Abstract = struct
     print [%t: (int,string) Hashtable.t];
     [%expect {| (int, string) Hashtable.t |}]
 
+  (* automatic names *)
+  module A : sig
+    type t [@@deriving t]
+  end = struct
+    type t = int [@@abstract] [@@deriving t]
+  end
+  module B = struct
+    type t = A.t [@@deriving t]
+  end
+  module C : sig
+    type t [@@deriving t]
+  end = struct
+    type t = A.t [@@abstract] [@@deriving t]
+  end
+
+  let%expect_test _ =
+    print [%t: A.t];
+    print [%t: B.t];
+    print [%t: C.t];
+    [%expect {|
+      ppx_test#test/ppx.ml.Abstract.A.t
+      ppx_test#test/ppx.ml.Abstract.A.t
+      ppx_test#test/ppx.ml.Abstract.C.t |}]
+
+
 end
 
 type nr = int [@@deriving t]
@@ -509,5 +534,12 @@ module Overwrite = struct
     [%expect {|
       int
       int |}]
+
+end
+
+module ExtVar = struct
+
+  (* type t = .. [@@deriving t] *)
+  (* type t += A | B [@@deriving t] *)
 
 end
