@@ -391,7 +391,7 @@ end
 module Properties = struct
 
   type 'a fields =
-    { we : 'a [@prop "need" "some"] [@prop "more" "stuff"]
+    { we : 'a [@prop "need" "some"]
     ; fields : 'a [@prop "with_" "properties"]
     } [@@deriving t]
 
@@ -399,7 +399,7 @@ module Properties = struct
     | A of 'a [@prop "key" "value"]
     | B of 'a [@prop "k" "v"] [@@deriving t]
 
-  type 'a coretype = ('a [@prop "key" "value"]) list [@@deriving t]
+  type 'a coretype = ('a [@prop "some" "prop"]) list [@@deriving t]
 
   type ('a, 'b) combined =
     | Core of ((('a [@prop "w" "a"]) * ('b [@prop "w" "b"]) [@prop "w" "a*b"]) list [@prop "w" "(a*b)list"])
@@ -411,11 +411,11 @@ module Properties = struct
     print [%t: int fields];
     print [%t: int constructors];
     print [%t: int coretype];
-    print [%t: (int,string) combined [@w "combined"]];
+    print [%t: (int,string) combined [@prop "w" "combined"]];
     [%expect {|
       (int fields =
          {
-           we + [need = "some"; more = "stuff"]: int;
+           we + [need = "some"]: int;
            fields + [with_ = "properties"]: int;
          })
       (int constructors =

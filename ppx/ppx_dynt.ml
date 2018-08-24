@@ -96,13 +96,41 @@ let ttype_of_type_decl ~loc td : core_type =
 (* TODO *)
 let abstract_attr_of_type_decl _td = None
 
-let attr_ct_prop =
+(*
+ * Declare attributes on type declarations, core types,
+ * record field labels and variant constructors
+ *
+ *)
+
+let attr_prop ctx =
   Attribute.declare (ppx.id ^ ".prop")
-    Attribute.Context.core_type
+    ctx
     Ast_pattern.(single_expr_payload (
         pexp_apply (estring __') ( no_label (estring __') ^:: nil)
       ))
-    (fun a b  -> (a,b))
+    (fun a b ->
+       [pexp_tuple ~loc:a.loc
+           [estring ~loc:a.loc a.txt; estring ~loc:b.loc b.txt]])
+
+let attr_ct_prop = attr_prop Attribute.Context.core_type
+let attr_rf_prop = attr_prop Attribute.Context.label_declaration
+let attr_vc_prop = attr_prop Attribute.Context.constructor_declaration
+let attr_td_prop = attr_prop Attribute.Context.type_declaration
+
+let props_of_attr attr x =
+  match Attribute.get attr x with
+  | None -> []
+  | Some l -> l
+
+let props_of_rf = props_of_attr attr_rf_prop
+let props_of_vc = props_of_attr attr_vc_prop
+let props_of_td = props_of_attr attr_td_prop
+
+let attr_td_abstract =
+  Attribute.declare (ppx.id ^ ".abstract")
+    Attribute.Context.type_declaration
+    Ast_pattern.(single_expr_payload (estring __'))
+    (fun name -> name)
 
 (*
  * general helpers
@@ -176,13 +204,12 @@ let rec core_type ~rec_ ~free ({ ptyp_loc = loc ; _ } as ct) : expression =
   in
   match Attribute.get attr_ct_prop ct with
   | None -> t
-  | Some (k,v) -> [%expr
-    ttype_of_stype (DT_prop ([[%e estring ~loc k.txt ], [%e estring ~loc v.txt ]]
-                            , stype_of_ttype [%e t]))]
+  | Some l -> [%expr
+    ttype_of_stype (DT_prop ([%e elist ~loc l] , stype_of_ttype [%e t]))]
 
 let fields_of_record_labels ~rec_ ~free l =
   List.map (fun ({pld_loc = loc; _ } as x) ->
-      let props = [] in
+      let props = props_of_rf x in
       let t = core_type ~rec_ ~free x.pld_type in
       [%expr
         ([%e estring ~loc x.pld_name.txt], [%e elist ~loc props], stype_of_ttype [%e t])]
@@ -224,7 +251,7 @@ let variant_constructors ~loc ~me ~free ~rec_ l =
   let nconst_tag = ref 0 in
   let constructors =
     List.map (fun ({pcd_loc = loc; _ } as x) ->
-        let props = [] in
+        let props = props_of_vc x in
         match x.pcd_args with
         | Pcstr_tuple ctl ->
           if ctl <> [] then incr nconst_tag;
