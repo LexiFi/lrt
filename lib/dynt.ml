@@ -7,3 +7,4 @@ module DynPervasives = Pervasives
 include Pervasives
 
 type 'a ttype = 'a Types.ttype
+type ('a,'b) path = ('a,'b, Path.kind) Path.t

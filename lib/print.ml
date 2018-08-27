@@ -315,6 +315,12 @@ let () =
     let t = Pervasives.unit_t
     let printer ppf _t =  Format.fprintf ppf "()"
   end) ;
+  add_abstract_type_dynamic_print_2 (module struct
+    type ('a,'b) t = ('a,'b, Path.kind) Path.t
+    let t = Pervasives.path_t
+    let printer ppf _a _b t =
+      Path.steps_of_path t |> Path.Internal.print_steps ppf
+  end) ;
   add_abstract_type_dynamic_print_1 (module struct
     type 'a t = 'a ttype
     let t (type a) (a: a ttype) = Pervasives.ttype_t a

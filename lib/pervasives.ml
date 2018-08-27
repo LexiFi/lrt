@@ -37,3 +37,7 @@ let hashtbl_t a b =
   let b = stype_of_ttype b in
   DT_abstract ("Lazy.t", [a;b]) |> Obj.magic
 
+let path_t a b =
+  let a = stype_of_ttype a in
+  let b = stype_of_ttype b in
+  DT_abstract ("Path.t", [a;b]) |> Obj.magic
