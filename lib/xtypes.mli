@@ -173,26 +173,6 @@ val is_object: 'a ttype -> 'a Object.t option
 val is_prop: 'a ttype -> ((string * string) list * 'a ttype) option
 val is_abstract: 'a ttype -> (string * 'a ttype * stype list) option
 
-module type ABSTRACT_1 =
-sig
-  type 'a t
-  val t: unit t ttype
-end
-
-module type ABSTRACT_1_MATCHER_SIG = sig
-  type 'a t
-  type _ is_t = Is: 'b ttype * ('a, 'b t) TypEq.t -> 'a is_t
-  val is_t: 'a ttype -> 'a is_t option
-end
-
-module ABSTRACT_1_MATCHER (T : ABSTRACT_1) : sig
-  include ABSTRACT_1_MATCHER_SIG with type 'a t = 'a T.t
-  val name: string
-end
-
-module COMPOSE_ABSTRACT_1_MATCHER (T : ABSTRACT_1_MATCHER_SIG) (S : ABSTRACT_1_MATCHER_SIG) :
-  ABSTRACT_1_MATCHER_SIG with type 'a t = 'a T.t S.t
-
 val make_abstract: 'a ttype -> 'a ttype
 
 type 'a xtype
@@ -238,3 +218,49 @@ val all_paths: root:'root ttype -> target:'target ttype -> ('root, 'target, Path
     a value of type ['root]. Does not traverse list, array, lazy, objects.
     Will loop on recursive types.
  *)
+
+(*
+ * Type Matchers
+ *
+ *)
+
+module type TYPE_0 = sig
+  type t
+  val t: t ttype
+end
+
+module type TYPE_1 = sig
+  type 'a t
+  val t: 'a ttype -> 'a t ttype
+end
+
+module type TYPE_2 = sig
+  type ('a, 'b) t
+  val t: 'a ttype -> 'b ttype -> ('a, 'b) t ttype
+end
+
+module type MATCHER_0 = sig
+  include TYPE_0
+  type _ is_t = Is: ('a, t) TypEq.t -> 'a is_t
+  val is_t: ?modulo_props : bool -> 'a ttype -> 'a is_t option
+  val is_abstract: string option
+end
+
+module type MATCHER_1 = sig
+  include TYPE_1
+  type _ is_t = Is: 'b ttype * ('a, 'b t) TypEq.t -> 'a is_t
+  val is_t: ?modulo_props : bool -> 'a ttype -> 'a is_t option
+  val is_abstract: string option
+end
+
+module type MATCHER_2 = sig
+  include TYPE_2
+  type _ is_t = Is: 'b ttype * 'c ttype * ('a, ('b, 'c) t) TypEq.t -> 'a is_t
+  val is_t: ?modulo_props : bool -> 'a ttype -> 'a is_t option
+  val is_abstract: string option
+end
+
+module Matcher_0 (T : TYPE_0) : MATCHER_0 with type t = T.t
+module Matcher_1 (T : TYPE_1) : MATCHER_1 with type 'a t = 'a T.t
+module Matcher_2 (T : TYPE_2) : MATCHER_2 with type ('a, 'b) t = ('a, 'b) T.t
+

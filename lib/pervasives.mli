@@ -13,4 +13,7 @@ val int64_t: int64 ttype
 val option_t: 'a ttype -> 'a option ttype
 val list_t: 'a ttype -> 'a list ttype
 val array_t: 'a ttype -> 'a array ttype
-val lazy_t_t: 'a ttype -> 'a lazy_t ttype
+
+val ttype_t: 'a ttype -> 'a ttype ttype
+val lazy_t: 'a ttype -> 'a Lazy.t ttype
+val hashtbl_t: 'a ttype -> 'b ttype -> ('a,'b) Hashtbl.t ttype

@@ -2,5 +2,4 @@
  (name ppx_test)
  (libraries dynt)
  (inline_tests)
- (modules ppx)
  (preprocess (pps ppx_expect ppx_dynt)))

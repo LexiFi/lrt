@@ -24,6 +24,16 @@ let array_t a =
   let t = stype_of_ttype a in
   DT_array t |> Obj.magic
 
-let lazy_t_t a =
+let ttype_t a =
+  let t = stype_of_ttype a in
+  DT_abstract ("Dynt.Types.ttype", [t]) |> Obj.magic
+
+let lazy_t a =
   let t = stype_of_ttype a in
   DT_abstract ("Lazy.t", [t]) |> Obj.magic
+
+let hashtbl_t a b =
+  let a = stype_of_ttype a in
+  let b = stype_of_ttype b in
+  DT_abstract ("Lazy.t", [a;b]) |> Obj.magic
+
