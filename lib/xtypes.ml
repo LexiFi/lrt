@@ -1,5 +1,4 @@
 open Dynt_core
-open Types
 
 let cast_ttype: stype -> 'a ttype = Obj.magic
 
@@ -363,7 +362,7 @@ let build_sum ttype variant_constrs : _ Sum.t =
              let tag = Obj.magic !nb_cst in
              cst_ids := i :: !cst_ids;
              incr nb_cst;
-             mk 0 false (stype_of_ttype Primitives.unit_t)
+             mk 0 false (stype_of_ttype [%t: unit])
                (fun x ->
                   if x == tag then () (* if x is a block, it won't be equal to the tag *)
                   else raise Not_found)
@@ -457,28 +456,28 @@ type 'a xtype
   | Abstract: (string * 'a ttype * stype list) -> 'a xtype
 
 let ttype_of_xtype : type t. t xtype -> t ttype = function
-  | Unit -> Primitives.unit_t
-  | Bool -> Primitives.bool_t
-  | Int -> Primitives.int_t
-  | Float -> Primitives.float_t
-  | String -> Primitives.string_t
+  | Unit -> unit_t
+  | Bool -> bool_t
+  | Int -> int_t
+  | Float -> float_t
+  | String -> string_t
   (* | Date -> (ttype_of: date) *)
-  | Char -> Primitives.char_t
-  | Int32 -> Primitives.int32_t
-  | Int64 -> Primitives.int64_t
-  | Nativeint -> Primitives.nativeint_t
-  | Option (t, _) -> Primitives.option_t t
-  | List (t, _) -> Primitives.list_t t
-  | Array (t, _) -> Primitives.array_t t
+  | Char -> char_t
+  | Int32 -> int32_t
+  | Int64 -> int64_t
+  | Nativeint -> nativeint_t
+  | Option (t, _) -> option_t t
+  | List (t, _) -> list_t t
+  | Array (t, _) -> array_t t
   | Function (label, (t1, _), (t2, _)) -> arrow ~label t1 t2
   | Sum sum -> Sum.ttype sum
   | Tuple r | Record r -> Record.ttype r
-  | Lazy (t, _) -> Primitives.lazy_t t
+  | Lazy (t, _) -> lazy_t t
   | Prop (props, t, _) -> add_props props t
   | Object o -> Object.ttype o
   | Abstract (_, t, _) -> t
 
-type Types.memoized_type_prop += Xtype of Obj.t xtype
+type memoized_type_prop += Xtype of Obj.t xtype
 
 
 let rec search a n i =
@@ -495,7 +494,7 @@ let add_memoized_xtype node xt =
   let old = node.rec_memoized in
   let a = Array.make (Array.length old + 1) s in
   Array.blit old 0 a 1 (Array.length old);
-  Types.Internal.set_memoized node a;
+  Internal.set_memoized node a;
   xt
 
 let rec xtype_of_ttype (type s_) (s: s_ ttype) : s_ xtype =
@@ -773,7 +772,7 @@ module Matcher_0 (T : TYPE_0) = struct
     let () =
       (* Check for free trype variables and fail early *)
       if Internal.has_var s
-      then failwith (Format.asprintf "Xtypes: invalid MATCHER_0 witness: %a" Types.print_stype s)
+      then failwith (Format.asprintf "Xtypes: invalid MATCHER_0 witness: %a" print_stype s)
     in
     s
 
@@ -792,14 +791,14 @@ module Matcher_1 (T : TYPE_1) = struct
 
   type _ is_t = Is: 'b ttype * ('a, 'b T.t) TypEq.t -> 'a is_t
 
-  let s = T.t Primitives.unit_t |> stype_of_ttype
+  let s = T.t unit_t |> stype_of_ttype
   let is_abstract = get_abstract_name s
 
   let key =
     let () =
       (* Check for free trype variables and fail early *)
       if Internal.has_var s
-      then failwith (Format.asprintf "Xtypes: invalid MATCHER_1 witness: %a" Types.print_stype s)
+      then failwith (Format.asprintf "Xtypes: invalid MATCHER_1 witness: %a" print_stype s)
     in
     stype_of_ttype (T.t (cast_ttype (DT_var 0)))
 
@@ -819,14 +818,14 @@ module Matcher_2 (T : TYPE_2) = struct
 
   type _ is_t = Is: 'aa ttype * 'bb ttype * ('a, ('aa,'bb) t) TypEq.t -> 'a is_t
 
-  let s = T.t Primitives.unit_t Primitives.unit_t |> stype_of_ttype
+  let s = T.t unit_t unit_t |> stype_of_ttype
   let is_abstract = get_abstract_name s
 
   let key =
     let () =
       (* Check for free trype variables and fail early *)
       if Internal.has_var s
-      then failwith (Format.asprintf "Xtypes: invalid MATCHER_2 witness: %a" Types.print_stype s)
+      then failwith (Format.asprintf "Xtypes: invalid MATCHER_2 witness: %a" print_stype s)
     in
     stype_of_ttype (T.t (cast_ttype (DT_var 0)) (cast_ttype (DT_var 1)))
 

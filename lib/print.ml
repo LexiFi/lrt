@@ -1,5 +1,4 @@
 open Dynt_core
-open Dynt_core.Types
 
 type 'a printer = 'a -> unit
 
@@ -286,7 +285,7 @@ module Hashtbl_printer = struct
   open Format
 
   type ('a, 'b) t = ('a, 'b) Hashtbl.t
-  let t (type a) (type b) (a: a ttype) (b: b ttype) = Primitives.hashtbl_t a b
+  let t (type a) (type b) (a: a ttype) (b: b ttype) = hashtbl_t a b
 
   let printer ppf (print1 : 'a printer) (print2 : 'b printer)
       (h : ('a, 'b) Hashtbl.t) =
@@ -313,7 +312,7 @@ let () = add_abstract_type_dynamic_print_2 (module Hashtbl_printer)
 let () =
   add_abstract_type_dynamic_print_0 (module struct
     type t = unit
-    let t = Primitives.unit_t
+    let t = unit_t
     let printer ppf _t =  Format.fprintf ppf "()"
   end) ;
   add_abstract_type_dynamic_print_2 (module struct
@@ -325,13 +324,13 @@ let () =
   end) ;
   add_abstract_type_dynamic_print_1 (module struct
     type 'a t = 'a ttype
-    let t (type a) (a: a ttype) = Primitives.ttype_t a
+    let t (type a) (a: a ttype) = ttype_t a
     let printer ppf _ t = print_stype ppf (stype_of_ttype t)
   end)
 
 module Test = struct
   [@@@warning "-37"]
-  open Primitives
+
   let show t x = show ~t x
 
   let ht = Hashtbl.create 5

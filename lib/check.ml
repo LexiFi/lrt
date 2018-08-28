@@ -6,7 +6,6 @@
 (***************************************************************************)
 
 open Dynt_core
-open Dynt_core.Types
 
 (* Utils. *)
 
@@ -366,7 +365,7 @@ module H = Hashtbl.Make
     (struct
       type t = stype
       let equal = strict_types_equality
-      let hash = Types.Internal.hash0
+      let hash = Internal.hash0
     end)
 
 let is_leaf: type a . a ttype -> bool = fun tty ->
@@ -425,7 +424,6 @@ let is_leaf: type a . a ttype -> bool = fun tty ->
 
 module Test: sig end = struct
   [@@@warning "-37"]
-  open Primitives
 
   type il = Nil | Cons of int * il
   [@@deriving t]
@@ -511,11 +509,11 @@ let of_type_gen_sized: type a. UGen.t list -> t: a ttype -> int -> a gen =
 
 let of_type_gen gg ~t = sized (fun n -> of_type_gen_sized gg ~t n)
 
-let dt_unit : stype gen = Primitives.unit_t |> Obj.magic
-let dt_bool : stype gen = Primitives.bool_t |> Obj.magic
-let dt_int : stype gen = Primitives.int_t |> Obj.magic
-let dt_float : stype gen = Primitives.float_t |> Obj.magic
-let dt_string : stype gen = Primitives.string_t |> Obj.magic
+let dt_unit : stype gen = unit_t |> Obj.magic
+let dt_bool : stype gen = bool_t |> Obj.magic
+let dt_int : stype gen = int_t |> Obj.magic
+let dt_float : stype gen = float_t |> Obj.magic
+let dt_string : stype gen = string_t |> Obj.magic
 let dt_list t = (fun t -> DT_list t) <$> t
 let dt_array t = (fun t -> DT_array t) <$> t
 let dt_option t = (fun t -> DT_option t) <$> t

@@ -5,7 +5,7 @@
 (*  form or for any purpose without the express permission of LexiFi SAS.  *)
 (***************************************************************************)
 
-open Dynt_core.Types
+open Dynt_core
 
 (** A quickcheck-like library for LexiFi compiler. *)
 
