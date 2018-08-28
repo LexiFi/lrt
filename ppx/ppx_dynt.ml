@@ -257,6 +257,7 @@ let rec core_type ~rec_ ~free ({ ptyp_loc = loc ; _ } as ct) : expression =
             pexp_tuple ~loc [estring ~loc txt; rcs ct]) l
       in
       [%expr ttype_of_stype (DT_object [%e elist ~loc fields])]
+    | Ptyp_alias (ct, _label) -> rc ct
     | _ -> raise_errorf ~loc "type not yet supported"
   in
   wrap_props ~loc (props_of_ct ct) t

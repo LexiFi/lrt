@@ -509,6 +509,24 @@ module Abstract = struct
 
 end
 
+module Alias = struct
+  type t = Basic.sum1 =
+    | Option1 of string * int
+    | Option2 of int * int * string
+    | Option3
+    | Option4 of unit * int
+  [@@deriving t]
+
+  let%expect_test _ =
+    print [%t: t];
+    [%expect {|
+      (t =
+         | Option1 of (string * int)
+         | Option2 of (int * int * string)
+         | Option3
+         | Option4 of (unit * int)) |}]
+end
+
 type nr = int [@@deriving t]
 module Nonrec = struct
   type nonrec nr = nr * int [@@deriving t]
