@@ -222,7 +222,7 @@ let patch (type s) ~(t :s ttype) (path : (s, 'b, _) t) (x : s) (f : 'b -> 'b) : 
 let extract_step (type t) ~(t: t ttype) step x =
   match step with
   | Field _ -> stype_of_ttype (extract_field_type ~t [step]), extract_field ~t [step] (Obj.obj x), []
-  | Constructor(_, 0) -> stype_of_ttype Pervasives.unit_t, Obj.repr (), []
+  | Constructor(_, 0) -> stype_of_ttype Primitives.unit_t, Obj.repr (), []
   | Constructor(name, _) ->
       let id, parameters, props = non_constant_constructor_info ~t name in
       if id <> Obj.tag x then failwith (Printf.sprintf "Extract step: bad constructor (not %S %i %i)" name id (Obj.tag x));
@@ -274,7 +274,7 @@ let extract_type_step (type t) ~(t: t ttype) = function
   | Field _ as step -> stype_of_ttype (extract_field_type ~t [step]), []
   | Constructor(name, 0) ->
       let _, props = constant_constructor_info ~t name in
-      stype_of_ttype Pervasives.unit_t, props
+      stype_of_ttype Primitives.unit_t, props
   | Constructor(name, _) ->
       let _, parameters, props = non_constant_constructor_info ~t name in
       begin match uninline parameters with

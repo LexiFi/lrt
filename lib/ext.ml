@@ -1,5 +1,28 @@
 module List_ = struct
 
+  let rec fst_n acc n = function
+    | [] -> List.rev acc, []
+    | l when n = 0 -> List.rev acc, l
+    | x :: l -> fst_n (x :: acc) (n - 1) l
+
+  let fst_n n l = fst_n [] n l
+
+  let copy n x =
+    let rec aux accu n = if n = 0 then accu else aux (x :: accu) (n - 1) in
+    aux [] n
+
+  let rev_choose f l =
+    let rec aux accu = function
+      | [] -> accu
+      | x :: xs ->
+        begin match f x with
+          | None -> aux accu xs
+          | Some y -> aux (y :: accu) xs
+        end
+    in aux [] l
+
+  let choose f l = List.rev (rev_choose f l)
+
   let range n m =
     let rec range acc m =
       if n >= m then acc else
@@ -15,6 +38,17 @@ module List_ = struct
       | hd :: tl -> if prop hd then !i else (incr i; f tl)
     in f lst
 
+  let rev_flatten_map f l =
+    List.fold_left
+      (fun acc e -> List.rev_append (f e) acc)
+      []
+      l
+
+  let rev_flatten l = rev_flatten_map (fun x -> x) l
+
+  let flatten_map f l =
+    List.rev (rev_flatten_map f l)
+
 end
 
 module Array_ = struct
@@ -25,10 +59,10 @@ module Array_ = struct
   let of_list_rev = function
     | [] -> [||]
     | (hd :: _) as l ->
-        let i = ref (List.length l) in
-        let t = Array.make !i hd in
-        List.iter (fun e -> decr i; t.(!i) <- e) l;
-        t
+      let i = ref (List.length l) in
+      let t = Array.make !i hd in
+      List.iter (fun e -> decr i; t.(!i) <- e) l;
+      t
 end
 
 module String = struct
@@ -53,11 +87,11 @@ module String = struct
       | Fail -> (-1)
       | Leaf (i, s2) -> if s = s2 then i else (-1)
       | Node {pos; first; sub} ->
-          let c = Char.code (String.unsafe_get s pos) in
-          if c < first then (-1)
-          else let i = c - first in
-            if i >= Array.length sub then (-1)
-            else eval_tree s (Array.unsafe_get sub i)
+        let c = Char.code (String.unsafe_get s pos) in
+        if c < first then (-1)
+        else let i = c - first in
+          if i >= Array.length sub then (-1)
+          else eval_tree s (Array.unsafe_get sub i)
 
     let lookup trees s =
       let len = String.length s in
@@ -73,13 +107,13 @@ module String = struct
       let max_char = ref (-1) in
       let rec loop = function
         | ((_, s) as x) :: tl ->
-            let c = Char.code s.[i] in
-            if c > !max_char then max_char := c;
-            if c < !min_char then min_char := c;
-            buckets.(c) <- x :: buckets.(c);
-            loop tl
+          let c = Char.code s.[i] in
+          if c > !max_char then max_char := c;
+          if c < !min_char then min_char := c;
+          buckets.(c) <- x :: buckets.(c);
+          loop tl
         | [] ->
-            ()
+          ()
       in
       loop strings;
       (!min_char, !max_char, buckets)
@@ -96,27 +130,27 @@ module String = struct
       | [i, s] -> Leaf (i, s)
       | [] -> Fail
       | strings ->
-          let best_score = ref max_int in
-          let best_idx = ref (-1) in
-          let best_split = ref (0, 0, [||]) in
-          let rec loop = function
-            | i :: rest ->
-                let res = split_at strings i in
-                let score = score res in
-                if score < !best_score then (best_score := score; best_idx := i; best_split := res);
-                loop rest
-            | [] -> ()
-          in
-          loop idxs;
-          let pos = !best_idx in
-          let (first, last, buckets) = !best_split in
-          let idxs = List.filter ((!=) pos) idxs in (* optim *)
-          Node
-            {
-              pos;
-              first;
-              sub = Array.init (last - first + 1) (fun i -> split idxs buckets.(i + first));
-            }
+        let best_score = ref max_int in
+        let best_idx = ref (-1) in
+        let best_split = ref (0, 0, [||]) in
+        let rec loop = function
+          | i :: rest ->
+            let res = split_at strings i in
+            let score = score res in
+            if score < !best_score then (best_score := score; best_idx := i; best_split := res);
+            loop rest
+          | [] -> ()
+        in
+        loop idxs;
+        let pos = !best_idx in
+        let (first, last, buckets) = !best_split in
+        let idxs = List.filter ((!=) pos) idxs in (* optim *)
+        Node
+          {
+            pos;
+            first;
+            sub = Array.init (last - first + 1) (fun i -> split idxs buckets.(i + first));
+          }
 
 
     let prepare strings : t =
@@ -129,9 +163,9 @@ module String = struct
       let rec dispatch i = function
         | [] -> ()
         | hd :: tl ->
-            let len = String.length hd in
-            buckets.(len) <- (i, hd) :: buckets.(len);
-            dispatch (i + 1) tl
+          let len = String.length hd in
+          buckets.(len) <- (i, hd) :: buckets.(len);
+          dispatch (i + 1) tl
       in
       dispatch 0 strings;
       Array.mapi

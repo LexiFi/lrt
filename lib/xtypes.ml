@@ -362,7 +362,7 @@ let build_sum ttype variant_constrs : _ Sum.t =
              let tag = Obj.magic !nb_cst in
              cst_ids := i :: !cst_ids;
              incr nb_cst;
-             mk 0 false (stype_of_ttype Pervasives.unit_t)
+             mk 0 false (stype_of_ttype Primitives.unit_t)
                (fun x ->
                   if x == tag then () (* if x is a block, it won't be equal to the tag *)
                   else raise Not_found)
@@ -456,23 +456,23 @@ type 'a xtype
   | Abstract: (string * 'a ttype * stype list) -> 'a xtype
 
 let ttype_of_xtype : type t. t xtype -> t ttype = function
-  | Unit -> Pervasives.unit_t
-  | Bool -> Pervasives.bool_t
-  | Int -> Pervasives.int_t
-  | Float -> Pervasives.float_t
-  | String -> Pervasives.string_t
+  | Unit -> Primitives.unit_t
+  | Bool -> Primitives.bool_t
+  | Int -> Primitives.int_t
+  | Float -> Primitives.float_t
+  | String -> Primitives.string_t
   (* | Date -> (ttype_of: date) *)
-  | Char -> Pervasives.char_t
-  | Int32 -> Pervasives.int32_t
-  | Int64 -> Pervasives.int64_t
-  | Nativeint -> Pervasives.nativeint_t
-  | Option (t, _) -> Pervasives.option_t t
-  | List (t, _) -> Pervasives.list_t t
-  | Array (t, _) -> Pervasives.array_t t
+  | Char -> Primitives.char_t
+  | Int32 -> Primitives.int32_t
+  | Int64 -> Primitives.int64_t
+  | Nativeint -> Primitives.nativeint_t
+  | Option (t, _) -> Primitives.option_t t
+  | List (t, _) -> Primitives.list_t t
+  | Array (t, _) -> Primitives.array_t t
   | Function (label, (t1, _), (t2, _)) -> arrow ~label t1 t2
   | Sum sum -> Sum.ttype sum
   | Tuple r | Record r -> Record.ttype r
-  | Lazy (t, _) -> Pervasives.lazy_t t
+  | Lazy (t, _) -> Primitives.lazy_t t
   | Prop (props, t, _) -> add_props props t
   | Object o -> Object.ttype o
   | Abstract (_, t, _) -> t
@@ -791,7 +791,7 @@ module Matcher_1 (T : TYPE_1) = struct
 
   type _ is_t = Is: 'b ttype * ('a, 'b T.t) TypEq.t -> 'a is_t
 
-  let s = T.t Pervasives.unit_t |> stype_of_ttype
+  let s = T.t Primitives.unit_t |> stype_of_ttype
   let is_abstract = get_abstract_name s
 
   let key =
@@ -818,7 +818,7 @@ module Matcher_2 (T : TYPE_2) = struct
 
   type _ is_t = Is: 'aa ttype * 'bb ttype * ('a, ('aa,'bb) t) TypEq.t -> 'a is_t
 
-  let s = T.t Pervasives.unit_t Pervasives.unit_t |> stype_of_ttype
+  let s = T.t Primitives.unit_t Primitives.unit_t |> stype_of_ttype
   let is_abstract = get_abstract_name s
 
   let key =

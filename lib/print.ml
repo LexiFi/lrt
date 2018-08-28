@@ -285,7 +285,7 @@ module Hashtbl_printer = struct
   open Format
 
   type ('a, 'b) t = ('a, 'b) Hashtbl.t
-  let t (type a) (type b) (a: a ttype) (b: b ttype) = Pervasives.hashtbl_t a b
+  let t (type a) (type b) (a: a ttype) (b: b ttype) = Primitives.hashtbl_t a b
 
   let printer ppf (print1 : 'a printer) (print2 : 'b printer)
       (h : ('a, 'b) Hashtbl.t) =
@@ -312,18 +312,18 @@ let () = add_abstract_type_dynamic_print_2 (module Hashtbl_printer)
 let () =
   add_abstract_type_dynamic_print_0 (module struct
     type t = unit
-    let t = Pervasives.unit_t
+    let t = Primitives.unit_t
     let printer ppf _t =  Format.fprintf ppf "()"
   end) ;
   add_abstract_type_dynamic_print_2 (module struct
     type ('a,'b) t = ('a,'b, Path.kind) Path.t
-    let t = Pervasives.path_t
+    let t = Primitives.path_t
     let printer ppf _a _b t =
       Path.steps_of_path t |> Path.Internal.print_steps ppf
   end) ;
   add_abstract_type_dynamic_print_1 (module struct
     type 'a t = 'a ttype
-    let t (type a) (a: a ttype) = Pervasives.ttype_t a
+    let t (type a) (a: a ttype) = Primitives.ttype_t a
     let printer ppf _ t = print_stype ppf (stype_of_ttype t)
   end)
 
