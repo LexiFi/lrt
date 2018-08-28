@@ -509,11 +509,11 @@ let of_type_gen_sized: type a. UGen.t list -> t: a ttype -> int -> a gen =
 
 let of_type_gen gg ~t = sized (fun n -> of_type_gen_sized gg ~t n)
 
-let dt_unit : stype gen = unit_t |> Obj.magic
-let dt_bool : stype gen = bool_t |> Obj.magic
-let dt_int : stype gen = int_t |> Obj.magic
-let dt_float : stype gen = float_t |> Obj.magic
-let dt_string : stype gen = string_t |> Obj.magic
+let dt_unit : stype gen = unit_t |> stype_of_ttype |> return
+let dt_bool : stype gen = bool_t |> stype_of_ttype |> return
+let dt_int : stype gen = int_t |> stype_of_ttype |> return
+let dt_float : stype gen = float_t |> stype_of_ttype |> return
+let dt_string : stype gen = string_t |> stype_of_ttype |> return
 let dt_list t = (fun t -> DT_list t) <$> t
 let dt_array t = (fun t -> DT_array t) <$> t
 let dt_option t = (fun t -> DT_option t) <$> t

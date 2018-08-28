@@ -569,15 +569,27 @@ module FloatRecord = struct
   type regular =
     { x : float
     ; y : float
+    ; z : string
     } [@@deriving t]
 
-  let paths = Xtypes.all_paths ~root:regular_t ~target:float_t
+  let value = { x = 1.67 ; y = 3.14 ; z = "0." }
 
-  let geti i t = Path.extract ~t:regular_t (List.nth paths i) t |> snd
-  let get_x = geti 0
-  let get_y = geti 1
+  let fpaths = Xtypes.all_paths ~root:regular_t ~target:float_t
+  let geti ps i t = Path.extract ~t:regular_t (List.nth ps i) t |> snd
+  let get_x = geti fpaths 0
+  let get_y = geti fpaths 1
 
-  let value = { x = 1.67 ; y = 3.14 }
+  let generator = Check.of_type_gen_sized ~t:regular_t [] 101
+  let property t =
+    if Float.equal t.x (get_x t) |> not then
+      Format.eprintf "screwed: t.x=%f get_x=%f\n%!" t.x (get_x t) ;
+    Float.equal t.x (get_x t)
+
+  let%test _ =
+    Random.self_init ();
+    match Check.test 42 ~seed:(Random.bits ()) ~generator property with
+    | Succeed _ -> true
+    | _ -> false
 
   let%expect_test _ =
     print [%t: regular];
@@ -588,6 +600,7 @@ module FloatRecord = struct
          {
            x: float;
            y: float;
+           z: string;
          })
       1.67
       3.14 |}]
