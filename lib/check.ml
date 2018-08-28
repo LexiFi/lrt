@@ -425,7 +425,6 @@ let is_leaf: type a . a ttype -> bool = fun tty ->
 
 module Test: sig end = struct
   [@@@warning "-37"]
-
   open Primitives
 
   type il = Nil | Cons of int * il
@@ -444,12 +443,12 @@ module Test: sig end = struct
   type point = {x: int; y:toto}
   [@@deriving t]
 
-  let _ = assert (not (is_leaf il_t))
-  let _ = assert (not (is_leaf tata_t))
-  let _ = assert (is_leaf toto_t)
-  let _ = assert (not (is_leaf tree_t))
-  let _ = assert (not (is_leaf forest_t))
-  let _ = assert (is_leaf point_t)
+  let%test _ = not (is_leaf il_t)
+  let%test _ = not (is_leaf tata_t)
+  let%test _ = is_leaf toto_t
+  let%test _ = not (is_leaf tree_t)
+  let%test _ = not (is_leaf forest_t)
+  let%test _ = is_leaf point_t
 end
 
 let of_type_gen_sized: type a. UGen.t list -> t: a ttype -> int -> a gen =
