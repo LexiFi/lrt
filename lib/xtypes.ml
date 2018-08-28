@@ -1,3 +1,4 @@
+open Dynt_core
 open Types
 
 let cast_ttype: stype -> 'a ttype = Obj.magic

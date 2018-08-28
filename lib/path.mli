@@ -1,4 +1,4 @@
-open Types
+open Dynt_core.Types
 
 (** Abstract paths inside types or values.
 
@@ -32,9 +32,9 @@ open Types
 
 (** {2 Typed type paths} *)
 
-type kind = [`Root|`Constructor|`Field|`List|`Array|`Tuple]
+type kind = [`Root|`Constructor|`Field|`List|`Array|`Tuple] [@@deriving t]
 
-type ('a, 'b, +'c) t
+type ('a, 'b, +'c) t [@@deriving t]
       (** Type paths. A value of type [('a,'b,'c) t] represents a path
           within the tree structure of the type ['a], reaching a
           sub-type ['b].  The third type argument ['c] is used to

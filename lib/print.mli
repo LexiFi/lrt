@@ -1,4 +1,4 @@
-open Types
+open Dynt_core.Types
 
 val print: t:'a ttype -> Format.formatter -> 'a -> unit
 val show: t:'a ttype -> 'a -> unit

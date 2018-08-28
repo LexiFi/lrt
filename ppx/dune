@@ -3,7 +3,7 @@
  (public_name ppx_dynt.runtime)
  (synopsis "Runtime components of [@@deriving t]")
  (modules ppx_dynt_runtime)
- (libraries dynt))
+ (libraries dynt_core))
 
 (library
  (public_name ppx_dynt)

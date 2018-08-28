@@ -1,8 +1,12 @@
-module Types = Types
+module Types = Dynt_core.Types
+module Primitives = Dynt_core.Primitives
 module Path = Path
 module Xtypes = Xtypes
-module DynPrint = Print
-module Primitives = Primitives
+
+module DynTools = struct
+  module Print = Print
+  module Check = Check
+end
 
 include Primitives
 

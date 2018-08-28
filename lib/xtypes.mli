@@ -1,4 +1,4 @@
-open Types
+open Dynt_core.Types
 
 (** Operations on ttypes. *)
 

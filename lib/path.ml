@@ -1,4 +1,5 @@
-open Types
+open Dynt_core
+open Dynt_core.Types
 
 (***************************************************************************)
 (*  Copyright (C) 2000-2018 LexiFi SAS. All rights reserved.               *)
@@ -31,8 +32,10 @@ module Internal =
 open Internal
 
 type kind = [`Root|`Constructor|`Field|`List|`Array|`Tuple]
+[@@abstract]
+[@@deriving t]
 
-type ('a, 'b, +'c) t = step list
+type ('a, 'b, +'c) t = step list [@@deriving t][@@abstract]
 type ('a, 'b) field = ('a, 'b, [`Field]) t
 type ('a, 'b) constructor = ('a, 'b, [`Constructor]) t
 type ('a, 'b) tuple = ('a, 'b, [`Tuple]) t

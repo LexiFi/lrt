@@ -1,5 +1,5 @@
-open Dynt.Types
-open Internal
+open Dynt_core.Types
+open Dynt_core.Types.Internal
 
 let ttype_of_stype (type a) (s : stype) = (Obj.magic s : a ttype)
 

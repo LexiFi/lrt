@@ -1,3 +1,5 @@
 (library
   (public_name dynt)
-  (name dynt))
+  (libraries dynt_core)
+  (inline_tests)
+  (preprocess (pps ppx_expect ppx_dynt)))
