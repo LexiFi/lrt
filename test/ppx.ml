@@ -561,3 +561,35 @@ module ExtVar = struct
   (* type t += A | B [@@deriving t] *)
 
 end
+
+module FloatRecord = struct
+  (* TODO: The derived stype uses Record_regular instead of Record_float.
+   * This breaks the record builders in xtypes
+   * Getters are not affected. *)
+  type regular =
+    { x : float
+    ; y : float
+    } [@@deriving t]
+
+  let paths = Xtypes.all_paths ~root:regular_t ~target:float_t
+
+  let geti i t = Path.extract ~t:regular_t (List.nth paths i) t |> snd
+  let get_x = geti 0
+  let get_y = geti 1
+
+  let value = { x = 1.67 ; y = 3.14 }
+
+  let%expect_test _ =
+    print [%t: regular];
+    get_x value |> string_of_float |> print_endline;
+    get_y value |> string_of_float |> print_endline;
+    [%expect {|
+      (regular =
+         {
+           x: float;
+           y: float;
+         })
+      1.67
+      3.14 |}]
+end
+
