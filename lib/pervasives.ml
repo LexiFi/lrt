@@ -1,12 +1,15 @@
 open Types
 
-(* TODO: what is your actual representation of the following types? *)
+(* TODO: representation of pervasives
+ * what is your actual representation of the following types?
+ * This must be consistent with xtype_of_ttype
+ *)
 let unit_t = DT_abstract ("unit", []) |> Obj.magic
 let bool_t = DT_abstract ("bool", []) |> Obj.magic
 let char_t = DT_abstract ("char", []) |> Obj.magic
-let nativeint_t = DT_abstract ("nativeint", []) |> Obj.magic
 let int32_t = DT_abstract ("int32", []) |> Obj.magic
 let int64_t = DT_abstract ("int64", []) |> Obj.magic
+let nativeint_t = DT_abstract ("nativeint", []) |> Obj.magic
 
 let int_t = DT_int |> Obj.magic
 let string_t = DT_string |> Obj.magic

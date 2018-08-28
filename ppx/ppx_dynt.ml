@@ -242,16 +242,17 @@ let rec core_type ~rec_ ~free ({ ptyp_loc = loc ; _ } as ct) : expression =
         match label with
         | Nolabel -> ""
         | Labelled s -> s
-        (* TODO: How do you actually represent optional arguments? *)
         | Optional s -> "?" ^ s
       in
       [%expr ttype_of_stype (DT_arrow ([%e estring ~loc lab],
                                        [%e rcs l],
                                        [%e rcs r]))]
-    (* TODO: is the closed flag relevant? *)
     | Ptyp_object (l, _closed_flag) ->
       let fields = List.map (function
-          (* TODO properties. But where should they be placed? *)
+            (* TODO properties object fields.
+             * But where should they be placed?
+             * DT_prop (ct)?
+             *)
             ({txt; loc}, _attr, ct) ->
             pexp_tuple ~loc [estring ~loc txt; rcs ct]) l
       in

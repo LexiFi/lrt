@@ -585,7 +585,6 @@ let sttype_of_stype s = Ttype (Obj.magic s)
 
 let rec all_paths: type root target. root:root ttype -> target:target ttype -> (root, target, _) Path.t list = fun ~root ~target ->
   match ttypes_equality root target with
-  (* TODO: Patrik's wild guess *)
   | Some TypEq.Eq -> [Path.root] |> Obj.magic
   | None ->
       match xtype_of_ttype root with
@@ -601,8 +600,6 @@ let rec all_paths: type root target. root:root ttype -> target:target ttype -> (
       | Nativeint -> []
       | Option (t, _) ->
           let paths = all_paths ~root:t ~target in
-          (* List.map (Path.(^^) (.Some)) paths *)
-          (* TODO: Patrik's wild guess *)
           List.map Path.(
               (^^) (Internal.Constructor ("Some", 1) |> Obj.magic)) paths
       | Tuple record
