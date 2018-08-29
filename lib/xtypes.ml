@@ -207,9 +207,9 @@ let build_record (type s_) ttype record_repr record_fields : s_ Record.t =
       )
       record_fields
   in
-  let make ~default f =
+  let make ~default init =
     let b = Array.make len None in
-    f b;
+    init b;
     match record_repr with
     | Record_regular | Record_inline _ ->
         (* we could copy b directly except if it is a float array *)
@@ -239,6 +239,14 @@ let build_record (type s_) ttype record_repr record_fields : s_ Record.t =
             b
         in
         Obj.magic b (* b is already a float array *)
+    | Record_unboxed ->
+      assert (len = 1);
+      match b.(0) with
+      | Some x -> Obj.magic x
+      | None ->
+        match default with
+        | Some default -> Obj.magic default
+        | None -> raise Missing_field_in_record_builder
   in
   let fields_arr = Array.of_list fields in
   let build f =
@@ -258,6 +266,10 @@ let build_record (type s_) ttype record_repr record_fields : s_ Record.t =
           Array.unsafe_set r i (Obj.magic (f.mk field) : float)
         done;
         Obj.magic r
+    | Record_unboxed ->
+      assert (len = 1);
+      let (Field field) = Array.unsafe_get fields_arr 0 in
+      Obj.magic (f.mk field)
   in
   let tbl = lazy (Ext.String.Tbl.prepare (List.map (fun (Field f) -> f.name) fields)) in
   let find_field s =

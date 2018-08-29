@@ -564,7 +564,7 @@ end
 
 module FloatRecord = struct
   (* Check for correct use of Record_regular and Record_float.
-   * This might breaks the record builders in xtypes while getters are not
+   * This might break the record builders in xtypes while getters are not
    * affected. Thus we build values using xtypes and compare
    * ocaml getters with xtype getters *)
   type alias = float [@@deriving t]
@@ -617,4 +617,38 @@ module FloatRecord = struct
   let%test _ = test float2_t  (fun t -> t.f2x) (fun t -> t.f2y)
   let%test _ = test (record_t float_t)  (fun t -> t.f3x) (fun t -> t.f3y)
 end
+
+module Unboxed = struct
+  (* Check for correct use of Record_regular and Record_unboxed.
+   * This might break the record builders in xtypes while getters are not
+   * affected. Thus we build values using xtypes and compare
+   * ocaml getters with xtype getters *)
+
+  type r1 = { f1 : float } [@@deriving t]
+  type r2 = { f2 : float } [@@unboxed] [@@deriving t]
+  type r3 = { f3 : int } [@@deriving t]
+  type r4 = { f4 : int } [@@deriving t] [@@unboxed]
+  type 'a r5 = { f5 : 'a } [@@deriving t] [@@ocaml.unboxed]
+
+  let test root target gf eq =
+    let fpaths = Xtypes.all_paths ~root ~target in
+    let geti i t = Path.extract ~t:root (List.nth fpaths i) t |> snd in
+    let generator = Check.of_type_gen ~size:101 ~t:root [] in
+    let check a b t = eq (a t) (b t) in
+    let property t = check gf (geti 0) t in
+    match Check.test 42 ~seed:(Random.bits ()) ~generator property with
+    | Succeed _ -> true
+    | Fail _ -> Format.eprintf "fail\n%!"; false
+    | Throw _ -> Format.eprintf "throw\n%!"; false
+
+  let () = Random.self_init ()
+
+  let%test _ = test r1_t float_t (fun t -> t.f1) (=)
+  let%test _ = test r2_t float_t (fun t -> t.f2) Float.equal
+  let%test _ = test r3_t int_t (fun t -> t.f3) (=)
+  let%test _ = test r4_t int_t (fun t -> t.f4) (=)
+  let%test _ = test (r5_t int_t) int_t (fun t -> t.f5) (=)
+  let%test _ = test (r5_t float_t) float_t (fun t -> t.f5) Float.equal
+end
+
 

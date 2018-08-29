@@ -175,6 +175,17 @@ let abstract_of_td td =
   | Some x -> x
   | None -> No
 
+let attr_td_unboxed =
+  Attribute.declare (ppx.id ^ ".ocaml.unboxed")
+    Attribute.Context.type_declaration
+    Ast_pattern.(pstr nil |> map0 ~f:())
+    (fun x -> x)
+
+let unboxed_of_td td =
+  match Attribute.get attr_td_unboxed td with
+  | Some () -> true
+  | None -> false
+
 (*
  * general helpers
  *
@@ -270,7 +281,7 @@ let fields_of_record_labels ~rec_ ~free l =
       [%expr stype_of_ttype [%e ct]] :: args
     ) ([],[]) l
 
-let record_labels ~loc ~me ~free ~rec_ l =
+let record_labels ~loc ~me ~free ~rec_ ~unboxed l =
   let meta, args = fields_of_record_labels ~free ~rec_ l in
   let createnode =
     let pat = pvar ~loc me.node
@@ -284,12 +295,15 @@ let record_labels ~loc ~me ~free ~rec_ l =
   and setnode =
     let pat = punit ~loc
     and expr =
+      let repr = if unboxed then [%expr Record_unboxed]
+        else [%expr record_representation args]
+      in
       [%expr
         let meta = [%e elist ~loc meta ] in
         let args = [%e elist ~loc args ] in
         set_node_record [%e evar ~loc me.node]
           ( rev_map2 (fun (n,p) a -> (n,p,a)) meta args
-          , record_representation args ) ]
+          , [%e repr] ) ]
     in
     pexp_let ~loc Nonrecursive [ value_binding ~loc ~pat ~expr]
   in
@@ -402,7 +416,8 @@ let str_type_decl ~loc ~path (recflag, tds) =
               cn, t, sn
           end
         | Ptype_record l ->
-          let c, t, s = record_labels ~me ~free ~loc ~rec_ l in
+          let unboxed = unboxed_of_td td in
+          let c, t, s = record_labels ~me ~unboxed ~free ~loc ~rec_ l in
           extend_let c cn, t, extend_let s sn
         | Ptype_variant l ->
           let c, t, s = variant_constructors ~me ~free ~loc ~rec_ l in

@@ -22,7 +22,8 @@ end
 
 type stype_properties = (string * string) list
 
-type record_repr = Record_regular | Record_float | Record_inline of int
+type record_repr = Record_regular | Record_float | Record_unboxed
+                 | Record_inline of int
 
 type 'node gtype =
   | DT_node of 'node
