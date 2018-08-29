@@ -158,18 +158,22 @@ module UGen: sig
   val create: t:'a ttype -> (int -> 'a gen) -> t
 end
 
-val of_type_gen_sized: UGen.t list -> t:'a ttype -> int -> 'a gen
-val of_type_gen: UGen.t list -> t:'a ttype -> 'a gen
+val of_type_gen: ?size:int -> UGen.t list -> t:'a ttype -> 'a gen
 (** Generate a random value of type ['a].
 
     Useful for automatically creating generators for simple types, but may loop
     on recursive types or be too random for your use case.
 
-    Can be customized with a list of custom generators.
+    Can be customized with a list of custom generators. And an interger
+    determining the size of the drawn base values.
 *)
 
 val stype: stype gen
 (** Generate a random [stype]. *)
+
+val dynamic: ?size: int -> UGen.t list -> dynamic gen
+(** Generate a random [Dyn ('a ttype, 'a)]. Arguments correspond to
+ *  the ones of [of_type_gen]. *)
 
 type 'a shrink = 'a -> 'a list
 

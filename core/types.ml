@@ -684,6 +684,8 @@ end
 
 type 'a ttype = stype
 
+type dynamic = Dyn: 'a ttype * 'a -> dynamic
+
 external stype_of_ttype: _ ttype -> stype = "%identity"
 
 external internal_ttype_of: 'a -> 'a ttype = "%typeof"

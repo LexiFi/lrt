@@ -507,7 +507,10 @@ let of_type_gen_sized: type a. UGen.t list -> t: a ttype -> int -> a gen =
     in
     of_type_sized ~t sz
 
-let of_type_gen gg ~t = sized (fun n -> of_type_gen_sized gg ~t n)
+let of_type_gen ?size gg ~t =
+  match size with
+  | Some i -> of_type_gen_sized gg ~t i
+  | None -> sized (fun n -> of_type_gen_sized gg ~t n)
 
 let dt_unit : stype gen = unit_t |> stype_of_ttype |> return
 let dt_bool : stype gen = bool_t |> stype_of_ttype |> return
@@ -564,6 +567,13 @@ and stype_gen () =
     ]
 
 let stype = stype ()
+
+let dynamic ?size l =
+  stype >>= fun s ->
+    let open Xtypes in
+    let Ttype t = sttype_of_stype s in
+    let valgen = of_type_gen ?size l ~t in
+    map (fun v -> Dyn (t, v)) valgen
 
 (* Shrinkers *)
 

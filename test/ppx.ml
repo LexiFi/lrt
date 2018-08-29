@@ -594,7 +594,7 @@ module FloatRecord = struct
   let test ttype gx gy =
     let fpaths = Xtypes.all_paths ~root:ttype ~target:float_t in
     let geti i t = Path.extract ~t:ttype (List.nth fpaths i) t |> snd in
-    let generator = Check.of_type_gen_sized ~t:ttype [] 101 in
+    let generator = Check.of_type_gen ~size:101 ~t:ttype [] in
     let check a b t =
       if Float.equal (a t) (b t) then true else begin
         Format.eprintf "screwed: a:%f b:%f\n%!" (a t) (b t) ;

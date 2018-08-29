@@ -133,6 +133,10 @@ val add_props: (string * string) list -> 'a ttype -> 'a ttype
 val abstract_ttype: 'a ttype -> 'a ttype
 val abstract_stype: stype -> stype
 
+(** {2 Packed ttype and value} **)
+
+type dynamic = Dyn: 'a ttype * 'a -> dynamic
+
 (** {2 Internal definitions} *)
 
 module Internal: sig

@@ -1,18 +1,12 @@
 open Dynt
+open Check
 
-let f (t: 'a ttype) (x: 'a) : bool =
-  Print.show ~t x ; true
-
-let dynamic (f: 'a ttype -> 'a -> 'b) : 'b Check.gen =
-  let open Check in
-  stype >>= fun s ->
-    let open Xtypes in
-    let Ttype t = sttype_of_stype s in
-    let valgen = of_type_gen [] ~t in
-    map (f (Obj.magic t)) (Obj.magic valgen)
+(* Genate random ttypes with random witnesses and throw them at our
+ * printing function *)
 
 let%expect_test _ =
-  let _ = Check.test 99 ~seed:42 ~generator:(dynamic f) (fun x -> x) in ();
+  ignore (test 111 ~seed:42 ~generator:(dynamic []) (
+        fun (Dyn (t,x)) -> Print.show ~t x ; true));
   [%expect {|
     0
     true
@@ -26,98 +20,108 @@ let%expect_test _ =
     ()
     {l___ = 0; l____ = 0.; lMMM = (); m = ""}
     Some []
-    (-0.675761338323)
-    (-0.0188530888408)
+    0.
+    0.
     true
     (-0.067264970392)
     true
     0.184769557789
-    1.54182555899
-    (-0.655880186707)
+    0.770912779495
+    (-0.327940093353)
     true
     0.993392728269
     "M"
     [true]
-    Iqqqq
-    (-2.78220768459)
+    Ppppp
+    (-1.85480512306)
     true
     [0.0739572942257]
     false
     1
-    ("O", ([], true, Some (-1)), (-2),
-     ((-1), (1, [QOOOOOO(0., false, 0)], false, "O"),
-      {n7777 = "";
-       m88888 = "";
-       qiii = 0.301016207784;
-       i = ();
-       p5555 = {phhhhhh = false}}))
+    ("O", ([], true, Some 0), (-1),
+     (0, (0, [], false, ""),
+      {m5555 = ""; k11111 = ""; ljjj = 0.; q = (); l7777 = {pmmmmmm = false}}))
     true
-    ["OL"]
+    [""]
     [|Some (Oqq{r5 = false})|]
     "MP"
-    {jNNN = 0.433895051479}
-    (-0.0110682845116)
+    {kLLL = 0.32542128861}
+    (-0.00885462760925)
     false
     false
-    Qqq([|0|], (-0.80499282293), 1, false, (-0.352458316833), (-0.256986772642))
+    Jmm([||], 0., 0, false)
     1.94195456803
     false
     ""
-    1.85724999011
-    (-5.75120091811)
+    1.54770832509
+    (-4.79266743176)
     false
     false
-    0.807267816737
+    0.691943842918
     false
     true
     false
-    5.37888743915
+    4.61047494784
     None
-    "L"
-    (-2)
+    "J"
+    (-5)
     ()
-    V______{q_ = U______(0., (Some true, "")); k___ = ""}
-    (-2)
+    P______{m_ = K______(0., (Some true, ""), "", 0.); i___ = ""}
+    7
     Some true
-    1
-    "QRN"
-    (-0.131442943588)
-    (-2.71974756941)
-    (-3)
-    6.6916341763
+    (-6)
+    "GP"
+    (-0.116838172078)
+    (-2.41755339503)
+    5
+    5.94811926782
     false
     "NJ"
-    ((), (-7))
+    ((), 4)
     false
-    (-1.28235504031)
-    "XX"
-    "KUGY"
-    8.90315711871
-    [false; false; false; false; true]
-    "PLMLVG"
-    "DHY"
+    (-1.15411953628)
+    "R"
+    "TXMI"
+    8.09377919883
+    [false; false; false; false]
+    "KQEE"
+    ""
     ()
-    (-11)
+    1
     true
-    "JR"
-    (-3.95604461432)
-    (-7)
+    "QD"
+    (-3.62637422979)
+    8
     ()
     None
-    V000000(true, "RLP")
-    "J[\\OSH"
-    7
-    (-11)
-    [|true|]
-    ""
-    "QSFKL"
+    H000000
+     (true, "PS", true, [|1.76102723368; 2.58578483574|], (-1), false,
+      3.64284520596, "R", ())
+    "LSTIFU"
+    5
+    12
+    [|true; false; false|]
+    "UPPREE"
+    "KWMQ"
     ()
     false
-    6.94656500593
-    ("QZD]TMZ", (-1.26536427811), None)
-    ["OIG"; "O"; "ZRV"; "DGCTTKE"; ""; ""]
-    "I"
+    6.45038179122
+    ("", (-1.08459795266), None)
+    ["X[PFI"; "JXGE"; "OD"; "KD"]
+    ""
     false
-    () |}]
+    ()
+    9
+    8.0031125471
+    true
+    [|(-12.5799928382); 12.3106511999; (-5.02930833586); (-9.05753706023)|]
+    1.41754908115
+    5
+    1
+    true
+    inf
+    "TZ\\[MI"
+    (-3.64424432628)
+    "SN" |}]
 
 
