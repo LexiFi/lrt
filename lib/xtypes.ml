@@ -501,8 +501,6 @@ let rec xtype_of_ttype (type s_) (s: s_ ttype) : s_ xtype =
   (* This function is used quite a lot (e.g. in the "cst" combinator),
      so we accept some internal unsafety to improve performance. *)
   match stype_of_ttype s with
-  | DT_node{rec_name="unit"; _} -> Obj.magic Unit
-  | DT_node{rec_name="bool"; _} -> Obj.magic Bool
   | DT_int -> Obj.magic Int
   | DT_float -> Obj.magic Float
   | DT_string -> Obj.magic String
@@ -514,6 +512,8 @@ let rec xtype_of_ttype (type s_) (s: s_ ttype) : s_ xtype =
                                                     (cast_ttype t2, lazy (xtype_of_ttype (cast_ttype t2)))))
   | DT_prop (p, t) -> Obj.magic (Prop (p, cast_ttype t, lazy (xtype_of_ttype (cast_ttype t))))
   | DT_abstract ("lazy_t", [t]) -> Obj.magic (Lazy (cast_ttype t, lazy (xtype_of_ttype (cast_ttype t))))
+  | DT_abstract ("unit", []) -> Obj.magic Unit
+  | DT_abstract ("bool", []) -> Obj.magic Bool
   | DT_abstract ("char", []) -> Obj.magic Char
   | DT_abstract ("int32", []) -> Obj.magic Int32
   | DT_abstract ("int64", []) -> Obj.magic Int64
