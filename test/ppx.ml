@@ -584,6 +584,11 @@ module FloatRecord = struct
     ; f2y : alias
     ; f2z : float
     }
+  and 'a record =
+    { f3x : float
+    ; f3y : float
+    ; f3z : float
+    }
   [@@deriving t]
 
   let test ttype gx gy =
@@ -610,5 +615,6 @@ module FloatRecord = struct
   let%test _ = test regular_t (fun t -> t.rgx) (fun t -> t.rgy)
   let%test _ = test float1_t  (fun t -> t.f1x) (fun t -> t.f1y)
   let%test _ = test float2_t  (fun t -> t.f2x) (fun t -> t.f2y)
+  let%test _ = test (record_t float_t)  (fun t -> t.f3x) (fun t -> t.f3y)
 end
 
