@@ -563,46 +563,52 @@ module ExtVar = struct
 end
 
 module FloatRecord = struct
-  (* TODO: The derived stype uses Record_regular instead of Record_float.
-   * This breaks the record builders in xtypes
-   * Getters are not affected. *)
+  (* Check for correct use of Record_regular and Record_float.
+   * This might breaks the record builders in xtypes while getters are not
+   * affected. Thus we build values using xtypes and compare
+   * ocaml getters with xtype getters *)
+  type alias = float [@@deriving t]
+
   type regular =
-    { x : float
-    ; y : float
-    ; z : string
-    } [@@deriving t]
+    { rgx : float
+    ; rgy : float
+    ; rgz : string
+    }
+  and float1 =
+    { f1x : float
+    ; f1y : float
+    ; f1z : float
+    }
+  and float2 =
+    { f2x : float
+    ; f2y : alias
+    ; f2z : float
+    }
+  [@@deriving t]
 
-  let value = { x = 1.67 ; y = 3.14 ; z = "0." }
-
-  let fpaths = Xtypes.all_paths ~root:regular_t ~target:float_t
-  let geti ps i t = Path.extract ~t:regular_t (List.nth ps i) t |> snd
-  let get_x = geti fpaths 0
-  let get_y = geti fpaths 1
-
-  let generator = Check.of_type_gen_sized ~t:regular_t [] 101
-  let property t =
-    if Float.equal t.x (get_x t) |> not then
-      Format.eprintf "screwed: t.x=%f get_x=%f\n%!" t.x (get_x t) ;
-    Float.equal t.x (get_x t)
-
-  let%test _ =
-    Random.self_init ();
+  let test ttype gx gy =
+    let fpaths = Xtypes.all_paths ~root:ttype ~target:float_t in
+    let geti i t = Path.extract ~t:ttype (List.nth fpaths i) t |> snd in
+    let generator = Check.of_type_gen_sized ~t:ttype [] 101 in
+    let check a b t =
+      if Float.equal (a t) (b t) then true else begin
+        Format.eprintf "screwed: a:%f b:%f\n%!" (a t) (b t) ;
+        false
+      end
+    in
+    let property t =
+      check gx (geti 0) t &&
+      check gy (geti 1) t
+    in
     match Check.test 42 ~seed:(Random.bits ()) ~generator property with
     | Succeed _ -> true
-    | _ -> false
+    | Fail _ -> Format.eprintf "fail\n%!"; false
+    | Throw _ -> Format.eprintf "throw\n%!"; false
 
-  let%expect_test _ =
-    print [%t: regular];
-    get_x value |> string_of_float |> print_endline;
-    get_y value |> string_of_float |> print_endline;
-    [%expect {|
-      (regular =
-         {
-           x: float;
-           y: float;
-           z: string;
-         })
-      1.67
-      3.14 |}]
+  let () = Random.self_init ()
+
+  let%test _ = test regular_t (fun t -> t.rgx) (fun t -> t.rgy)
+  let%test _ = test float1_t  (fun t -> t.f1x) (fun t -> t.f1y)
+  let%test _ = test float2_t  (fun t -> t.f2x) (fun t -> t.f2y)
 end
 

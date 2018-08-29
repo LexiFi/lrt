@@ -35,15 +35,15 @@ let ignore ~loc expr : expression -> expression =
   let pat = ppat_any ~loc in
   pexp_let ~loc Nonrecursive [value_binding ~loc ~expr ~pat]
 
-let lazy_value_binding ~loc txt basetyp expr =
+let lazy_value_binding ~loc txt typ expr =
   let (module M) = Ast_builder.make loc in
   let open M in
   let pat = ppat_constraint (ppat_var {loc;txt})
-      [%type: [%t basetyp] Lazy.t] in
+      [%type: [%t typ] ttype lazy_t] in
   let expr = ignore ~loc (evar txt) [%expr lazy [%e expr]] in
   value_binding ~pat ~expr
 
-let force_lazy ~loc var = [%expr Lazy.force [%e var]]
+let force_lazy ~loc var = [%expr force [%e var]]
 
 let stypes_of_free ~loc free =
   let (module M) = Ast_builder.make loc in
@@ -263,17 +263,15 @@ let rec core_type ~rec_ ~free ({ ptyp_loc = loc ; _ } as ct) : expression =
   wrap_props ~loc (props_of_ct ct) t
 
 let fields_of_record_labels ~rec_ ~free l =
-  List.map (fun ({pld_loc = loc; _ } as x) ->
-      let props = props_of_rf x in
-      let t = core_type ~rec_ ~free x.pld_type in
-      [%expr
-        ([%e estring ~loc x.pld_name.txt],
-         [%e elist ~loc props],
-         stype_of_ttype [%e t])]
-    ) l
+  List.fold_left (fun (meta, args) ({pld_loc = loc; _ } as x) ->
+      let props = props_of_rf x
+      and ct = core_type ~rec_ ~free x.pld_type in
+      pexp_tuple ~loc [estring ~loc x.pld_name.txt; elist ~loc props] :: meta,
+      [%expr stype_of_ttype [%e ct]] :: args
+    ) ([],[]) l
 
 let record_labels ~loc ~me ~free ~rec_ l =
-  let fields = fields_of_record_labels ~free ~rec_ l in
+  let meta, args = fields_of_record_labels ~free ~rec_ l in
   let createnode =
     let pat = pvar ~loc me.node
     and expr =
@@ -287,21 +285,27 @@ let record_labels ~loc ~me ~free ~rec_ l =
     let pat = punit ~loc
     and expr =
       [%expr
+        let meta = [%e elist ~loc meta ] in
+        let args = [%e elist ~loc args ] in
         set_node_record [%e evar ~loc me.node]
-          ([%e elist ~loc fields], Record_regular)]
+          ( rev_map2 (fun (n,p) a -> (n,p,a)) meta args
+          , record_representation args ) ]
     in
     pexp_let ~loc Nonrecursive [ value_binding ~loc ~pat ~expr]
   in
   createnode, ttype, setnode
 
 let record_labels_inline ~loc ~free ~rec_ ~name i l =
-  let fields = fields_of_record_labels ~free ~rec_ l in
+  let meta, args = fields_of_record_labels ~free ~rec_ l in
   [%expr
-    let [%p pvar ~loc "inline_node"] : Dynt_core.node =
+    let [%p pvar ~loc "inline_node"] : node =
       create_node [%e estring ~loc name] [%e stypes_of_free ~loc free]
     in
-    set_node_record [%e evar ~loc "inline_node"]
-      ([%e elist ~loc fields], Record_inline [%e eint ~loc i]);
+    let meta = [%e elist ~loc meta ] in
+    let args = [%e elist ~loc args ] in
+    set_node_record inline_node
+      ( rev_map2 (fun (n,p) a -> (n,p,a)) meta args
+      , Record_inline [%e eint ~loc i]);
     DT_node [%e evar ~loc "inline_node"]]
 
 let variant_constructors ~loc ~me ~free ~rec_ l =
@@ -372,9 +376,10 @@ let str_type_decl ~loc ~path (recflag, tds) =
   in
   let parse (pats, cn, lr, sn, fl, subs) ({ ptype_loc = loc ; _} as td) =
     let me = names_of_type_decl td in
-    let basetyp = ttype_of_type_decl ~loc td in
+    let typ = type_of_type_decl ~loc td in
+    let ttyp = ttype_of_type_decl ~loc td in
     let free = free_vars_of_type_decl td in
-    let pats = (ppat_constraint ~loc (pvar ~loc me.ttyp) basetyp) :: pats in
+    let pats = (ppat_constraint ~loc (pvar ~loc me.ttyp) ttyp) :: pats in
     let cn, ttype, sn =
       match abstract_of_td td with
       | Name {txt=name;loc} ->
@@ -406,10 +411,10 @@ let str_type_decl ~loc ~path (recflag, tds) =
           raise_errorf ~loc "type kind not yet supported"
     in
     let ttype = wrap_props ~loc (props_of_td td) ttype in
-    let lr = lazy_value_binding ~loc me.ttyp basetyp ttype :: lr in
+    let lr = lazy_value_binding ~loc me.ttyp typ ttype :: lr in
     let fl = force_lazy ~loc (evar ~loc me.ttyp) :: fl in
     let subs = if free = [] then subs else
-        (substitution_of_free_vars ~loc ~me basetyp free) :: subs in
+        (substitution_of_free_vars ~loc ~me ttyp free) :: subs in
     pats, cn, lr, sn, fl, subs
   in
   let patterns, createnode, lazyrec, setnode, forcelazy, substitutions =
