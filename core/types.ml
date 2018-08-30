@@ -40,6 +40,8 @@ type stype_properties = (string * string) list
 type record_repr = Record_regular | Record_float | Record_unboxed
                  | Record_inline of int
 
+type variant_repr = Variant_regular | Variant_unboxed
+
 type 'node gtype =
   | DT_node of 'node
   | DT_int
@@ -111,6 +113,7 @@ and node_descr =
 
 and variant_descr = {
   variant_constrs: (string * stype_properties * stype variant_args) list;
+  variant_repr: variant_repr;
 }
 and 'stype variant_args =
   | C_tuple of 'stype list
@@ -130,7 +133,7 @@ type list_sep =
 
 let is_enumeration = function
   (* | DT_node{rec_name = "Mlfi_isdatypes.variant"; _} -> true *)
-  | DT_node{rec_descr = DT_variant {variant_constrs}; _} ->
+  | DT_node{rec_descr = DT_variant {variant_constrs;_}; _} ->
     List.for_all (fun (_, _, args) -> args = C_tuple []) variant_constrs
   | _ -> false
 
@@ -283,7 +286,8 @@ let print_stype ppf =
 
 module Internal = struct
 
-  let dummy_descr = DT_variant {variant_constrs=[]}
+  let dummy_descr = DT_variant {variant_constrs=[];
+                                variant_repr = Variant_regular}
   let uid = ref 0
 
   let create_node name args =
@@ -291,10 +295,10 @@ module Internal = struct
     {rec_descr=dummy_descr; rec_uid = !uid; rec_name=name; rec_args=args;
      rec_has_var=None; rec_hash=0; rec_memoized=[||]; }
 
-  let set_node_variant n constrs =
-    n.rec_descr <- DT_variant {variant_constrs=constrs}
-  let set_node_record n (fields, repr) =
-    n.rec_descr <- DT_record {record_fields=fields; record_repr=repr}
+  let set_node_variant n (variant_constrs, variant_repr) =
+    n.rec_descr <- DT_variant {variant_constrs; variant_repr}
+  let set_node_record n (record_fields, record_repr) =
+    n.rec_descr <- DT_record {record_fields; record_repr}
 
   let map_node ~ignore_props aux memo n =
     let prop = if ignore_props then fun _p -> [] else fun p -> p in
@@ -311,7 +315,7 @@ module Internal = struct
               in
               (s, prop p, args)
           ) v.variant_constrs in
-        DT_variant { variant_constrs }
+        DT_variant { v with variant_constrs }
       | DT_record r ->
         let record_fields = List.map (fun (s, p, t) ->
             (s, prop p, aux t)) r.record_fields
@@ -550,7 +554,7 @@ module Textual = struct
 
   type node =
     | Variant of
-        string * t list * (string * stype_properties * t variant_args) list
+        string * t list * (string * stype_properties * t variant_args) list * variant_repr
     | Record of
         string * t list * (string * stype_properties * t) list * record_repr
 
@@ -595,7 +599,7 @@ module Textual = struct
                   )
                 ) v.variant_constrs
             in
-            Variant (name, args, constrs)
+            Variant (name, args, constrs, v.variant_repr)
           | DT_record r ->
             let fields =
               List.map (fun (s, p, t) ->
@@ -633,7 +637,7 @@ module Textual = struct
     let nodes = Array.make (Array.length d.nodes) None in
     let really_node aux i =
       match d.nodes.(i) with
-      | Variant (name, args, constrs) ->
+      | Variant (name, args, constrs, repr) ->
         unnode (Internal.create_variant_type name (List.map aux args)
                   (fun node ->
                      nodes.(i) <- Some (unnode node);
@@ -643,7 +647,7 @@ module Textual = struct
                           | C_tuple tl -> C_tuple (List.map aux tl)
                           | C_inline t -> C_inline (aux t)
                          )
-                       ) constrs
+                       ) constrs, repr
                   ))
       | Record (name, args, fields, repr) ->
         unnode (Internal.create_record_type name (List.map aux args)

@@ -532,14 +532,18 @@ and dt_constructor const_type =
       list_copy (List.length names) (list (stype ())) >>= fun types ->
       return
         (Internal.create_variant_type name []
-           (fun _ -> List.map2 (fun name types -> name, [], C_tuple types) names types)
+           (fun _ ->
+              List.map2 (fun name types -> name, [], C_tuple types)
+                names types,
+              Variant_regular
+           )
         )
   | `C_inline ->
       uident >>= fun c_name ->
       dt_record () >>= fun inline_type ->
       return
         (Internal.create_variant_type name []
-           (fun _ -> [c_name, [], C_inline inline_type])
+           (fun _ -> [c_name, [], C_inline inline_type], Variant_regular )
         )
 
 and dt_record () =

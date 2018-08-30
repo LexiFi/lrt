@@ -70,6 +70,7 @@ module Constructor = struct
       project: 's -> 't;
       inject: 't -> 's;
       path: ('s, 't) Path.constructor;
+      unboxed: bool;
 
       mutable xtype: Obj.t;
     }
@@ -346,12 +347,14 @@ let dup_tag x tag =
   Obj.set_tag r tag;
   r
 
-let build_sum ttype variant_constrs : _ Sum.t =
+let build_sum ttype variant_repr variant_constrs : _ Sum.t =
   let cst_ids = ref [] in
   let noncst_ids = ref [] in
   let constructors =
     let nb_cst = ref 0 in
     let nb_noncst = ref 0 in
+    let unboxed = match variant_repr with
+        Variant_unboxed -> true | _ -> false in
     List.mapi
       (fun (type t_) i (name, props, tl) ->
          let mk nb_args inline stype project inject =
@@ -366,6 +369,7 @@ let build_sum ttype variant_constrs : _ Sum.t =
                inject = Obj.magic inject;
                path = path_of_steps [Path.Internal.Constructor (name, nb_args)];
                xtype = dummy_xtype;
+               unboxed;
              }
          in
          let mk_noncst nb_args inline stype project inject =
@@ -419,10 +423,11 @@ let build_sum ttype variant_constrs : _ Sum.t =
 
 let is_sum (type s_) (s_ttype: s_ ttype) : s_ Sum.t option =
   match stype_of_ttype s_ttype with
+  (* TODO: The first case is not needed since unit is represented as abstract *)
   | DT_node{rec_name="unit"; _} ->
       None
-  | DT_node{rec_descr=DT_variant{variant_constrs}; _} ->
-      Some (build_sum s_ttype variant_constrs)
+  | DT_node{rec_descr=DT_variant{variant_constrs; variant_repr}; _} ->
+      Some (build_sum s_ttype variant_repr variant_constrs)
   | _ ->
       None
 
@@ -544,9 +549,9 @@ let rec xtype_of_ttype (type s_) (s: s_ ttype) : s_ xtype =
       | r -> Obj.magic r
       end
 
-  | DT_node({rec_descr=DT_variant{variant_constrs}; _} as node) ->
+  | DT_node({rec_descr=DT_variant{variant_repr;variant_constrs}; _} as node) ->
       begin match find_memoized_xtype node with
-      | Unit -> add_memoized_xtype node (Sum (build_sum s variant_constrs))
+      | Unit -> add_memoized_xtype node (Sum (build_sum s variant_repr variant_constrs))
       | r -> Obj.magic r
       end
 
@@ -713,9 +718,11 @@ let node_iter2 (f: stype -> stype -> unit)
   if uid1 <> uid2 || name1 <> name2 then raise Not_unifiable;
   unifier_list_iter2 f args1 args2;
   match descr1, descr2 with
-  | DT_variant {variant_constrs = v1}, DT_variant {variant_constrs = v2} ->
-      unifier_list_iter2 (variant_constrs_iter2 f) v1 v2
-  | DT_record {record_fields = l1; record_repr = r1} , DT_record {record_fields = l2; record_repr = r2} when r1 = r2 ->
+  | DT_variant {variant_constrs = c1; variant_repr = r1},
+    DT_variant {variant_constrs = c2; variant_repr = r2} when r1 = r2 ->
+      unifier_list_iter2 (variant_constrs_iter2 f) c1 c2
+  | DT_record {record_fields = l1; record_repr = r1},
+    DT_record {record_fields = l2; record_repr = r2} when r1 = r2 ->
       unifier_list_iter2 (
         fun (name1, props1, s1) (name2, props2, s2) ->
           if name1 <> name2 then raise Not_unifiable;

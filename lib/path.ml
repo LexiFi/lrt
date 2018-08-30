@@ -115,7 +115,7 @@ let is_empty: ('a, 'b, 'c) t -> ('a, 'b) TypEq.t option = fun path ->
 
 let non_constant_constructor_info ~t name =
   match remove_first_props (stype_of_ttype t) with
-  | DT_node{rec_descr = DT_variant{variant_constrs}; _} ->
+  | DT_node{rec_descr = DT_variant{variant_repr = _; variant_constrs}; _} ->
       let rec aux id = function
         | [] -> assert false
         | (_, _, C_tuple []) :: constructors -> aux id constructors
@@ -135,7 +135,7 @@ let extract_non_constant_constructor_type ~t name n =
 
 let constant_constructor_info ~t name =
   match remove_first_props (stype_of_ttype t) with
-  | DT_node{rec_descr = DT_variant{variant_constrs}; _} ->
+  | DT_node{rec_descr = DT_variant{variant_repr = _; variant_constrs}; _} ->
       let rec aux id = function
         | [] -> assert false
         | (constructor_name, props, C_tuple []) :: _ when constructor_name = name -> id, props

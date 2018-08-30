@@ -25,6 +25,8 @@ type stype_properties = (string * string) list
 type record_repr = Record_regular | Record_float | Record_unboxed
                  | Record_inline of int
 
+type variant_repr = Variant_regular | Variant_unboxed
+
 type 'node gtype =
   | DT_node of 'node
   | DT_int
@@ -61,6 +63,7 @@ and node_descr =
   | DT_record of record_descr
 and variant_descr = {
   variant_constrs: (string * stype_properties * stype variant_args) list;
+  variant_repr: variant_repr;
 }
 and 'stype variant_args =
   | C_tuple of 'stype list
@@ -80,7 +83,7 @@ module Textual: sig
 
   type node =
     | Variant of
-        string * t list * (string * stype_properties * t variant_args) list
+        string * t list * (string * stype_properties * t variant_args) list * variant_repr
     | Record of
         string * t list * (string * stype_properties * t) list * record_repr
 
@@ -142,7 +145,7 @@ type dynamic = Dyn: 'a ttype * 'a -> dynamic
 
 module Internal: sig
   val create_variant_type: string -> stype list
-    -> (stype -> (string * stype_properties * stype variant_args) list)
+    -> (stype -> (string * stype_properties * stype variant_args) list * variant_repr)
     -> stype
 
   val create_record_type: string -> stype list
@@ -152,7 +155,7 @@ module Internal: sig
   val create_node: string -> stype list -> node
 
   val set_node_variant: node
-    -> ((string * stype_properties * stype variant_args) list)
+    -> ((string * stype_properties * stype variant_args) list * variant_repr)
     -> unit
 
   val set_node_record: node

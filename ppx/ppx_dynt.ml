@@ -358,7 +358,8 @@ let variant_constructors ~loc ~me ~free ~rec_ l =
     let pat = punit ~loc
     and expr =
       [%expr
-        set_node_variant [%e evar ~loc me.node] [%e elist ~loc constructors] ]
+        set_node_variant [%e evar ~loc me.node]
+          ([%e elist ~loc constructors], Variant_regular) ]
     in
     pexp_let ~loc Nonrecursive [ value_binding ~loc ~pat ~expr]
   in
