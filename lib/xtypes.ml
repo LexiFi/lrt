@@ -80,6 +80,7 @@ module Constructor = struct
   let name r = r.name
   let props r = r.props
   let inline r = r.inline
+  (* TODO: This should respect Variant_unboxed tags *)
   let project_exn r x = r.project x
   let project r x = try Some (r.project x) with Not_found -> None
   let inject r x = r.inject x
@@ -356,6 +357,7 @@ let build_sum ttype variant_repr variant_constrs : _ Sum.t =
     let unboxed = match variant_repr with
         Variant_unboxed -> true | _ -> false in
     List.mapi
+      (* TODO: This should respect Variant_unboxed tags *)
       (fun (type t_) i (name, props, tl) ->
          let mk nb_args inline stype project inject =
            Constructor

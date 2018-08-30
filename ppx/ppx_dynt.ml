@@ -322,7 +322,7 @@ let record_labels_inline ~loc ~free ~rec_ ~name i l =
       , Record_inline [%e eint ~loc i]);
     DT_node [%e evar ~loc "inline_node"]]
 
-let variant_constructors ~loc ~me ~free ~rec_ l =
+let variant_constructors ~loc ~me ~free ~rec_ ~unboxed l =
   let nconst_tag = ref 0 in
   let constructors =
     List.map (fun ({pcd_loc = loc; _ } as x) ->
@@ -357,9 +357,11 @@ let variant_constructors ~loc ~me ~free ~rec_ l =
   and setnode =
     let pat = punit ~loc
     and expr =
+      let repr = if unboxed then [%expr Variant_unboxed]
+        else [%expr Variant_regular] in
       [%expr
         set_node_variant [%e evar ~loc me.node]
-          ([%e elist ~loc constructors], Variant_regular) ]
+          ([%e elist ~loc constructors], [%e repr]) ]
     in
     pexp_let ~loc Nonrecursive [ value_binding ~loc ~pat ~expr]
   in
@@ -421,7 +423,8 @@ let str_type_decl ~loc ~path (recflag, tds) =
           let c, t, s = record_labels ~me ~unboxed ~free ~loc ~rec_ l in
           extend_let c cn, t, extend_let s sn
         | Ptype_variant l ->
-          let c, t, s = variant_constructors ~me ~free ~loc ~rec_ l in
+          let unboxed = unboxed_of_td td in
+          let c, t, s = variant_constructors ~me ~unboxed ~free ~loc ~rec_ l in
           extend_let c cn, t, extend_let s sn
         | Ptype_open ->
           raise_errorf ~loc "type kind not yet supported"

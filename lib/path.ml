@@ -146,6 +146,7 @@ let constant_constructor_info ~t name =
   | DT_option _ -> assert(name = "None"); 0, []
   | _ -> assert false
 
+(* TODO: This should respect Variant_unboxed tags *)
 let apply_constructor ~t = function
   | [ Constructor (name, 0) ] ->
       let tag, _ = constant_constructor_info ~t name in

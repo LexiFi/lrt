@@ -653,13 +653,14 @@ module Unboxed = struct
     | Throw _ -> Format.eprintf "throw\n%!"; false
 
 
-  let%test _ = test r1_t float_t (fun t -> t.f1) (=)
+  (* TODO: Why are tests sporadically failing when we use (=) for floats? *)
+  let%test _ = test r1_t float_t (fun t -> t.f1) Float.equal
   let%test _ = test r2_t float_t (fun t -> t.f2) Float.equal
   let%test _ = test r3_t int_t (fun t -> t.f3) (=)
   let%test _ = test r4_t int_t (fun t -> t.f4) (=)
   let%test _ = test (r5_t int_t) int_t (fun t -> t.f5) (=)
   let%test _ = test (r5_t float_t) float_t (fun t -> t.f5) Float.equal
-  let%test _ = test s1_t float_t (function A x -> x) (=)
+  let%test _ = test s1_t float_t (function A x -> x) Float.equal
   let%test _ = test s2_t float_t (function A x -> x) Float.equal
   let%test _ = test s3_t int_t (function A x -> x) (=)
   let%test _ = test s4_t int_t (function A x -> x) (=)
