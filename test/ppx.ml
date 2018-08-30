@@ -630,6 +630,12 @@ module Unboxed = struct
   type r4 = { f4 : int } [@@deriving t] [@@unboxed]
   type 'a r5 = { f5 : 'a } [@@deriving t] [@@ocaml.unboxed]
 
+  type s1 = A of float [@@deriving t]
+  type s2 = A of float [@@deriving t] [@@ocaml.unboxed]
+  type s3 = A of int [@@deriving t]
+  type s4 = A of int [@@deriving t] [@@unboxed]
+  type 'a s5 = A of 'a [@@deriving t] [@@unboxed]
+
   let test root target gf eq =
     let _ = Random.self_init () in
     let fpaths = Xtypes.all_paths ~root ~target in
@@ -653,8 +659,13 @@ module Unboxed = struct
   let%test _ = test r4_t int_t (fun t -> t.f4) (=)
   let%test _ = test (r5_t int_t) int_t (fun t -> t.f5) (=)
   let%test _ = test (r5_t float_t) float_t (fun t -> t.f5) Float.equal
+  let%test _ = test s1_t float_t (function A x -> x) (=)
+  let%test _ = test s2_t float_t (function A x -> x) Float.equal
+  let%test _ = test s3_t int_t (function A x -> x) (=)
+  let%test _ = test s4_t int_t (function A x -> x) (=)
+  let%test _ = test (s5_t int_t) int_t (function A x -> x) (=)
+  let%test _ = test (s5_t float_t) float_t (function A x -> x) Float.equal
 
-  type t = A of int [@@unboxed]
 end
 
 
