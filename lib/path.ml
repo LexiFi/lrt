@@ -66,33 +66,44 @@ let constructor_name = function
   | [Constructor(n, _)] -> n
   | _ -> assert false
 
+type boxed = Boxed | Unboxed
+
 let extract_field_info ~t p find =
   match remove_first_props (stype_of_ttype t) with
-  | DT_node{rec_descr = DT_record{record_fields; _}; _} ->
-      begin
-        let field = field_name p in
-        match find (fun (s, _, _) -> s = field) record_fields with
-        | x -> x
-        | exception Not_found -> assert false
-      end
+  | DT_node{rec_descr = DT_record{record_fields; record_repr}; _} ->
+    let unboxed = match record_repr with
+      | Record_unboxed -> Unboxed | _ -> Boxed
+    in
+    begin
+      let field = field_name p in
+      match find (fun (s, _, _) -> s = field) record_fields with
+      | x -> x , unboxed
+      | exception Not_found -> assert false
+    end
   | s -> Format.eprintf "%a@." print_stype s; assert false
 
 let extract_field ~(t: 'a ttype) (p: ('a, 'b) field): 'a -> 'b =
-  let nth = extract_field_info ~t p Ext.List.findi in
-  fun x -> Obj.obj (Obj.field (Obj.repr x) nth)
+  match extract_field_info ~t p Ext.List.findi with
+  | nth, Boxed ->
+    fun x -> Obj.obj (Obj.field (Obj.repr x) nth)
+  | _, Unboxed ->
+    fun x -> Obj.magic x
 
 let set_field ~(t: 'a ttype) (p: ('a, 'b) field): 'a -> 'b -> 'a =
-  let nth = extract_field_info ~t p Ext.List.findi in
-  fun x v ->
-    let x = Obj.dup (Obj.repr x) in
-    Obj.set_field x nth (Obj.repr v);
-    Obj.obj x
+  match extract_field_info ~t p Ext.List.findi with
+  | nth, Boxed ->
+    fun x v ->
+      let x = Obj.dup (Obj.repr x) in
+      Obj.set_field x nth (Obj.repr v);
+      Obj.obj x
+  | _, Unboxed ->
+    fun x -> Obj.magic x
 
 let unsafe_ttype (t: stype): _ ttype =
   Obj.magic t
 
 let extract_field_type ~t p: _ ttype =
-  let _ , _, (t: stype) =
+  let (_ , _, (t: stype)) , _ =
     extract_field_info ~t p List.find
   in
   unsafe_ttype t
@@ -184,13 +195,16 @@ let dup_with_tag ~tag ~length x =
 let rec patch (type t) ~(t : t ttype) path x f =
   match path with
   | [] -> f x
-  | (Field _ as p) :: rest ->
-      let nth = extract_field_info ~t [p] Ext.List.findi in
+  | (Field _ as p) :: rest -> begin
       let t = extract_field_type ~t [p] in
-      let v = patch ~t rest (Obj.field x nth) f in
-      let x = Obj.dup (Obj.repr x) in
-      Obj.set_field x nth (Obj.repr v);
-      x
+      match extract_field_info ~t [p] Ext.List.findi with
+      | nth, Boxed ->
+        let v = patch ~t rest (Obj.field x nth) f in
+        let x = Obj.dup (Obj.repr x) in
+        Obj.set_field x nth (Obj.repr v);
+        x
+      | _, Unboxed -> patch ~t rest (Obj.magic x) f
+    end
   | Tuple_nth n :: rest ->
       let t = extract_tuple_type ~t n in
       let v = patch ~t rest (Obj.field x n) f in

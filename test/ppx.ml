@@ -592,6 +592,7 @@ module FloatRecord = struct
   [@@deriving t]
 
   let test ttype gx gy =
+    let _ = Random.self_init () in
     let fpaths = Xtypes.all_paths ~root:ttype ~target:float_t in
     let geti i t = Path.extract ~t:ttype (List.nth fpaths i) t |> snd in
     let generator = Check.of_type_gen ~size:101 ~t:ttype [] in
@@ -610,7 +611,6 @@ module FloatRecord = struct
     | Fail _ -> Format.eprintf "fail\n%!"; false
     | Throw _ -> Format.eprintf "throw\n%!"; false
 
-  let () = Random.self_init ()
 
   let%test _ = test regular_t (fun t -> t.rgx) (fun t -> t.rgy)
   let%test _ = test float1_t  (fun t -> t.f1x) (fun t -> t.f1y)
@@ -625,23 +625,27 @@ module Unboxed = struct
    * ocaml getters with xtype getters *)
 
   type r1 = { f1 : float } [@@deriving t]
-  type r2 = { f2 : float } [@@unboxed] [@@deriving t]
+  type r2 = { f2 : float } [@@deriving t] [@@unboxed]
   type r3 = { f3 : int } [@@deriving t]
   type r4 = { f4 : int } [@@deriving t] [@@unboxed]
   type 'a r5 = { f5 : 'a } [@@deriving t] [@@ocaml.unboxed]
 
   let test root target gf eq =
+    let _ = Random.self_init () in
     let fpaths = Xtypes.all_paths ~root ~target in
     let geti i t = Path.extract ~t:root (List.nth fpaths i) t |> snd in
     let generator = Check.of_type_gen ~size:101 ~t:root [] in
-    let check a b t = eq (a t) (b t) in
+    let check a b t =
+        let x_a = a t in
+        let x_b = b t in
+        eq x_a x_b in
     let property t = check gf (geti 0) t in
-    match Check.test 42 ~seed:(Random.bits ()) ~generator property with
+    let seed = Random.bits () in
+    match Check.test 42 ~seed ~generator property with
     | Succeed _ -> true
     | Fail _ -> Format.eprintf "fail\n%!"; false
     | Throw _ -> Format.eprintf "throw\n%!"; false
 
-  let () = Random.self_init ()
 
   let%test _ = test r1_t float_t (fun t -> t.f1) (=)
   let%test _ = test r2_t float_t (fun t -> t.f2) Float.equal
@@ -649,6 +653,8 @@ module Unboxed = struct
   let%test _ = test r4_t int_t (fun t -> t.f4) (=)
   let%test _ = test (r5_t int_t) int_t (fun t -> t.f5) (=)
   let%test _ = test (r5_t float_t) float_t (fun t -> t.f5) Float.equal
+
+  type t = A of int [@@unboxed]
 end
 
 

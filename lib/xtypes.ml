@@ -17,6 +17,7 @@ module RecordField = struct
       t: 't ttype;
       name: string;
       props: (string * string) list;
+      unboxed: bool;
 
       mutable xtype: Obj.t;
     }
@@ -24,8 +25,11 @@ module RecordField = struct
   let ttype r = r.t
   let name r = r.name
   let props r = r.props
-  let get r x = Obj.magic (Obj.field (Obj.repr x) r.rank)
-  let set r b x = Array.unsafe_set b r.rank (Some (Obj.repr x))
+  let get r x =
+    if r.unboxed then begin  Obj.magic x end
+    else Obj.magic (Obj.field (Obj.repr x) r.rank)
+  let set r b x =
+    Array.unsafe_set b r.rank (Some (Obj.repr x))
   let path r =
     let s = r.name in
     if s = "" then path_of_steps [Path.Internal.Tuple_nth r.rank]
@@ -193,6 +197,7 @@ exception Missing_field_in_record_builder
 let build_record (type s_) ttype record_repr record_fields : s_ Record.t =
   let len = List.length record_fields in
   let fields =
+    let unboxed = match record_repr with Record_unboxed -> true | _ -> false in
     List.mapi
       (fun (type t_) i (name, props, t_stype) ->
         let t = (cast_ttype t_stype: t_ ttype) in
@@ -203,6 +208,7 @@ let build_record (type s_) ttype record_repr record_fields : s_ Record.t =
             name;
             props;
             xtype = dummy_xtype;
+            unboxed;
           }
       )
       record_fields
@@ -239,14 +245,16 @@ let build_record (type s_) ttype record_repr record_fields : s_ Record.t =
             b
         in
         Obj.magic b (* b is already a float array *)
-    | Record_unboxed ->
-      assert (len = 1);
-      match b.(0) with
-      | Some x -> Obj.magic x
-      | None ->
-        match default with
-        | Some default -> Obj.magic default
-        | None -> raise Missing_field_in_record_builder
+    | Record_unboxed -> assert (len = 1);
+      let r =
+        match Array.unsafe_get b 0 with
+        | Some x -> x
+        | None ->
+          match default with
+          | Some default -> Obj.repr default
+          | None -> raise Missing_field_in_record_builder
+      in
+      Obj.magic r
   in
   let fields_arr = Array.of_list fields in
   let build f =
@@ -266,8 +274,7 @@ let build_record (type s_) ttype record_repr record_fields : s_ Record.t =
           Array.unsafe_set r i (Obj.magic (f.mk field) : float)
         done;
         Obj.magic r
-    | Record_unboxed ->
-      assert (len = 1);
+    | Record_unboxed -> assert (len = 1);
       let (Field field) = Array.unsafe_get fields_arr 0 in
       Obj.magic (f.mk field)
   in
@@ -302,7 +309,7 @@ let build_tuple (type s_) ttype record_fields : s_ Record.t =
       (fun (type t_) i t_stype ->
         let t = (cast_ttype t_stype: t_ ttype) in
         Field {RecordField.rank = i; t; name = ""; props = [];
-               xtype = dummy_xtype
+               xtype = dummy_xtype; unboxed=false
               }
       )
       record_fields
