@@ -60,6 +60,11 @@ let wrap_props ~loc props t =
   | l -> [%expr
     ttype_of_stype (DT_prop ([%e elist ~loc l] , stype_of_ttype [%e t]))]
 
+(* check whether ttype is of a certain type and make it an stype *)
+let stype_of_ttype ({ ptyp_loc = loc ; _ } as ct) expr =
+  [%expr stype_of_ttype
+      ([%e expr] : [%t ptyp_constr ~loc {loc; txt = Lident "ttype"} [ct]])]
+
 (*
  * mangle names
  *
@@ -206,18 +211,29 @@ let find_index_opt (l : 'a list) (el : 'a) : int option =
 
 (* We use this to store information about recursive types. Which identifiers
  * are used recursively? Is the recursion regular?
- * alist mapping recursive identifiers to their type args *)
+ * Rec: alist mapping recursive identifiers to their type args
+ * Nonrec: list of identifiers
+ * Inline defined types do not have an identifier *)
 type rec_ =
-  | Nonrec
+  | Inline
+  | Nonrec of label list
   | Rec of (label * label list) list
 
 let rec core_type ~rec_ ~free ({ ptyp_loc = loc ; _ } as ct) : expression =
   let rc = core_type ~rec_ ~free in
-  let rcs ct = [%expr stype_of_ttype [%e rc ct]] in
+  let rcs ({ ptyp_loc = loc ; _ } as ct) =
+    (* TODO: When we do a full PPX extension, we could fix this hole by
+     * moving the type check before the type declaration that redefines the
+     * type *)
+    match rec_, ct.ptyp_desc with
+    | Nonrec l, Ptyp_constr ({txt = Lident name;_},_) when List.mem name l ->
+      stype_of_ttype (ptyp_any ~loc) (rc ct)
+    | _ -> stype_of_ttype ct (rc ct)
+  in
   let constr =
     (* type constructors are handled depending on nonrec flag *)
     match rec_ with
-    | Nonrec -> fun id args ->
+    | Nonrec _ | Inline -> fun id args ->
         let id' = mangle_lid_loc id in
         pexp_apply ~loc (pexp_ident ~loc id')
           (List.map (fun x -> Nolabel, rc x) args)
@@ -278,7 +294,7 @@ let fields_of_record_labels ~rec_ ~free l =
       let props = props_of_rf x
       and ct = core_type ~rec_ ~free x.pld_type in
       pexp_tuple ~loc [estring ~loc x.pld_name.txt; elist ~loc props] :: meta,
-      [%expr stype_of_ttype [%e ct]] :: args
+      stype_of_ttype x.pld_type ct :: args
     ) ([],[]) l
 
 let record_labels ~loc ~me ~free ~rec_ ~unboxed l =
@@ -333,7 +349,7 @@ let variant_constructors ~loc ~me ~free ~rec_ ~unboxed l =
           if ctl <> [] then incr nconst_tag;
           let l = List.map (fun ct ->
               core_type ~rec_ ~free ct
-              |> fun e -> [%expr stype_of_ttype [%e e]]
+              |> fun e -> stype_of_ttype ct e
             ) ctl in
           [%expr ([%e estring ~loc x.pcd_name.txt], [%e elist ~loc props],
                   C_tuple [%e elist ~loc l])]
@@ -388,7 +404,7 @@ let str_type_decl ~loc ~path (recflag, tds) =
   let extend_let new_ was expr = new_ (was expr) in
   let rec_ =
     match recflag with
-    | Nonrecursive -> Nonrec
+    | Nonrecursive -> Nonrec (List.map (fun td -> td.ptype_name.txt) tds)
     | Recursive -> Rec (List.map (fun td ->
         td.ptype_name.txt, free_vars_of_type_decl td) tds)
   in
@@ -448,7 +464,7 @@ let str_type_decl ~loc ~path (recflag, tds) =
       | _ -> ppat_tuple ~loc patterns, pexp_tuple ~loc forcelazy
     in
     let expr =
-      let recflag = match rec_ with Nonrec -> Nonrecursive | _ -> Recursive in
+      let recflag = match rec_ with Nonrec _ -> Nonrecursive | _ -> Recursive in
       wrap_runtime ~loc (
         createnode @@
         pexp_let ~loc recflag lazyrec @@
@@ -484,7 +500,7 @@ let sig_type_decl ~loc ~path (_recflag, tds) =
 (* inline types *)
 let extension ~loc ~path ct =
   let _ = path in
-  let t = core_type ~rec_:Nonrec ~free:[] ct in
+  let t = core_type ~rec_:Inline ~free:[] ct in
   (* prepend ignore statement to produce nicer error message *)
   wrap_runtime ~loc [%expr let _ = fun (_ : [%t ct])  -> () in [%e t]]
 
