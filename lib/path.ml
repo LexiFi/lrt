@@ -264,7 +264,8 @@ let extract_step (type t) ~(t: t ttype) step x =
               parameters;
             DT_tuple parameters, b, props
       end
-      | (_,C_tuple [t],props), Unboxed -> t, Obj.magic x, props
+      | (_,C_tuple [t],props), Unboxed
+      | (_,C_inline t,props), Unboxed -> t, Obj.magic x, props
       | _ -> assert false
     end
   | Tuple_nth n ->

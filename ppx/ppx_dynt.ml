@@ -309,8 +309,10 @@ let record_labels ~loc ~me ~free ~rec_ ~unboxed l =
   in
   createnode, ttype, setnode
 
-let record_labels_inline ~loc ~free ~rec_ ~name i l =
+let record_labels_inline ~loc ~free ~rec_ ~name ~unboxed i l =
   let meta, args = fields_of_record_labels ~free ~rec_ l in
+  let repr = if unboxed then [%expr Record_unboxed]
+    else [%expr Record_inline [%e eint ~loc i]] in
   [%expr
     let [%p pvar ~loc "inline_node"] : node =
       create_node [%e estring ~loc name] [%e stypes_of_free ~loc free]
@@ -318,8 +320,7 @@ let record_labels_inline ~loc ~free ~rec_ ~name i l =
     let meta = [%e elist ~loc meta ] in
     let args = [%e elist ~loc args ] in
     set_node_record inline_node
-      ( rev_map2 (fun (n,p) a -> (n,p,a)) meta args
-      , Record_inline [%e eint ~loc i]);
+      ( rev_map2 (fun (n,p) a -> (n,p,a)) meta args, [%e repr ]);
     DT_node [%e evar ~loc "inline_node"]]
 
 let variant_constructors ~loc ~me ~free ~rec_ ~unboxed l =
@@ -338,7 +339,7 @@ let variant_constructors ~loc ~me ~free ~rec_ ~unboxed l =
                   C_tuple [%e elist ~loc l])]
         | Pcstr_record lbl ->
           let name = Format.sprintf "%s.%s" me.typ x.pcd_name.txt in
-          let r = record_labels_inline ~rec_ ~free ~loc
+          let r = record_labels_inline ~rec_ ~free ~loc ~unboxed
               ~name !nconst_tag lbl
           in
           incr nconst_tag;

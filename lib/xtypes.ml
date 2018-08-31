@@ -80,7 +80,6 @@ module Constructor = struct
   let name r = r.name
   let props r = r.props
   let inline r = r.inline
-  (* TODO: This should respect Variant_unboxed tags *)
   let project_exn r x = r.project x
   let project r x = try Some (r.project x) with Not_found -> None
   let inject r x = r.inject x
@@ -384,6 +383,7 @@ let build_sum ttype variant_repr variant_constrs : _ Sum.t =
          in
          match tl with
          | C_tuple [] ->
+             assert (not unboxed);
              let tag = Obj.magic !nb_cst in
              cst_ids := i :: !cst_ids;
              incr nb_cst;
@@ -393,15 +393,22 @@ let build_sum ttype variant_repr variant_constrs : _ Sum.t =
                   else raise Not_found)
                (fun () -> tag)
          | C_tuple [t] ->
-             mk_noncst 1 false t
+           if unboxed then mk_noncst 1 false t
+               (fun x -> Obj.magic x)
+               (fun _ x -> Obj.magic x)
+           else mk_noncst 1 false t
                (fun x -> Obj.field x 0 (* if x is a constant constructor, Obj.tag x = 1000 *))
                (fun tag x -> let r = Obj.new_block tag 1 in Obj.set_field r 0 x; r)
          | C_tuple tl ->
+             assert (not unboxed);
              mk_noncst (List.length tl) false (DT_tuple tl)
                (fun x -> dup_tag x 0)
                (fun tag x -> dup_tag x tag)
          | C_inline t ->
-             mk_noncst 1 true t
+           if unboxed then mk_noncst 1 true t
+               (fun x -> Obj.magic x)
+               (fun _ x -> Obj.magic x)
+           else mk_noncst 1 true t
                (fun x -> dup_tag x 0)
                (fun tag x -> dup_tag x tag)
       )

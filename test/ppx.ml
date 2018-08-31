@@ -636,6 +636,9 @@ module Unboxed = struct
   type s4 = A of int [@@deriving t] [@@unboxed]
   type 'a s5 = A of 'a [@@deriving t] [@@unboxed]
 
+  type 'a x1 = X of { x1 : 'a } [@@deriving t]
+  type 'a x2 = X of { x2 : 'a } [@@unboxed] [@@deriving t]
+
   let test root target gf eq =
     let _ = Random.self_init () in
     let fpaths = Xtypes.all_paths ~root ~target in
@@ -644,13 +647,18 @@ module Unboxed = struct
     let check a b t =
         let x_a = a t in
         let x_b = b t in
-        eq x_a x_b in
+        if eq x_a x_b then true
+        else begin
+          let p f = Inspect.Sexpr.dump_with_formatter f in
+          Format.eprintf "obj: %a\nocaml: %a\npath: %a\n\n%!" p t p x_a p x_b;
+          false
+        end in
     let property t = check gf (geti 0) t in
     let seed = Random.bits () in
     match Check.test 42 ~seed ~generator property with
     | Succeed _ -> true
     | Fail _ -> Format.eprintf "fail\n%!"; false
-    | Throw _ -> Format.eprintf "throw\n%!"; false
+    | Throw {backtrace;_} -> Format.eprintf "throw:\n%s%!" backtrace; false
 
   (* TODO: Why are tests sporadically failing when we use (=) for floats? *)
   let%test _ = test r1_t float_t (fun t -> t.f1) Float.equal
@@ -665,6 +673,10 @@ module Unboxed = struct
   let%test _ = test s4_t int_t (function A x -> x) (=)
   let%test _ = test (s5_t int_t) int_t (function A x -> x) (=)
   let%test _ = test (s5_t float_t) float_t (function A x -> x) Float.equal
+  let%test _ = test (x1_t int_t) int_t (function X x -> x.x1) (=)
+  let%test _ = test (x1_t float_t) float_t (function X x -> x.x1) Float.equal
+  let%test _ = test (x2_t int_t) int_t (function X x -> x.x2) (=)
+  let%test _ = test (x2_t float_t) float_t (function X x -> x.x2) Float.equal
 
   (* TODO: Xtypes and Path implementation of accessing fields are different.
    * We only use Path here. Add tests for the Xtypes way. *)
