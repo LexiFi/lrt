@@ -645,8 +645,7 @@ module Unboxed = struct
     let geti i t = Path.extract ~t:root (List.nth fpaths i) t |> snd in
     let generator = Check.of_type_gen ~size:101 ~t:root [] in
     let check a b t =
-        let x_a = a t in
-        let x_b = b t in
+        let x_a, x_b = a t, b t in
         if eq x_a x_b then true
         else begin
           let p f = Inspect.Sexpr.dump_with_formatter f in
@@ -655,28 +654,31 @@ module Unboxed = struct
         end in
     let property t = check gf (geti 0) t in
     let seed = Random.bits () in
-    match Check.test 42 ~seed ~generator property with
+    match Check.test 666 ~seed ~generator property with
     | Succeed _ -> true
     | Fail _ -> Format.eprintf "fail\n%!"; false
     | Throw {backtrace;_} -> Format.eprintf "throw:\n%s%!" backtrace; false
 
-  (* TODO: Why are tests sporadically failing when we use (=) for floats? *)
-  let%test _ = test r1_t float_t (fun t -> t.f1) Float.equal
-  let%test _ = test r2_t float_t (fun t -> t.f2) Float.equal
-  let%test _ = test r3_t int_t (fun t -> t.f3) (=)
-  let%test _ = test r4_t int_t (fun t -> t.f4) (=)
-  let%test _ = test (r5_t int_t) int_t (fun t -> t.f5) (=)
-  let%test _ = test (r5_t float_t) float_t (fun t -> t.f5) Float.equal
-  let%test _ = test s1_t float_t (function A x -> x) Float.equal
-  let%test _ = test s2_t float_t (function A x -> x) Float.equal
-  let%test _ = test s3_t int_t (function A x -> x) (=)
-  let%test _ = test s4_t int_t (function A x -> x) (=)
-  let%test _ = test (s5_t int_t) int_t (function A x -> x) (=)
-  let%test _ = test (s5_t float_t) float_t (function A x -> x) Float.equal
-  let%test _ = test (x1_t int_t) int_t (function X x -> x.x1) (=)
-  let%test _ = test (x1_t float_t) float_t (function X x -> x.x1) Float.equal
-  let%test _ = test (x2_t int_t) int_t (function X x -> x.x2) (=)
-  let%test _ = test (x2_t float_t) float_t (function X x -> x.x2) Float.equal
+  (* nan = nan -> false *)
+  let tfloat t get = test t float_t get Float.equal
+  let tint t get = test t int_t get (=)
+
+  let%test _ = tfloat r1_t (fun t -> t.f1)
+  let%test _ = tfloat r2_t (fun t -> t.f2)
+  let%test _ = tint r3_t (fun t -> t.f3)
+  let%test _ = tint r4_t (fun t -> t.f4)
+  let%test _ = tint (r5_t int_t) (fun t -> t.f5)
+  let%test _ = tfloat (r5_t float_t) (fun t -> t.f5)
+  let%test _ = tfloat s1_t (function A x -> x)
+  let%test _ = tfloat s2_t (function A x -> x)
+  let%test _ = tint s3_t (function A x -> x)
+  let%test _ = tint s4_t (function A x -> x)
+  let%test _ = tint (s5_t int_t) (function A x -> x)
+  let%test _ = tfloat (s5_t float_t) (function A x -> x)
+  let%test _ = tint (x1_t int_t) (function X x -> x.x1)
+  let%test _ = tfloat (x1_t float_t) (function X x -> x.x1)
+  let%test _ = tint (x2_t int_t) (function X x -> x.x2)
+  let%test _ = tfloat (x2_t float_t) (function X x -> x.x2)
 
   (* TODO: Xtypes and Path implementation of accessing fields are different.
    * We only use Path here. Add tests for the Xtypes way. *)
