@@ -1,3 +1,7 @@
+(* TODO: pk: It feels like the unboxed/boxed flage should be stored at the level
+ * of variants and records. Now it is put into the (single) field / constructor.
+ * This lead to indirections, when accessing the flag. *)
+
 module TypEq : sig
 
   type (_, _) t = Eq: ('a, 'a) t

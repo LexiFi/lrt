@@ -115,19 +115,20 @@ let is_empty: ('a, 'b, 'c) t -> ('a, 'b) TypEq.t option = fun path ->
 
 let non_constant_constructor_info ~t name =
   match remove_first_props (stype_of_ttype t) with
-  | DT_node{rec_descr = DT_variant{variant_repr = _; variant_constrs}; _} ->
+  | DT_node{rec_descr = DT_variant{variant_repr; variant_constrs}; _} ->
       let rec aux id = function
         | [] -> assert false
         | (_, _, C_tuple []) :: constructors -> aux id constructors
         | (constructor_name, props, parameters) :: _ when constructor_name = name -> id, parameters, props
         | _ :: constructors -> aux (id + 1) constructors
       in
-      aux 0 variant_constrs
-  | DT_option t -> assert(name = "Some"); 0, C_tuple [t], []
+      aux 0 variant_constrs,
+      (match variant_repr with Variant_unboxed -> Unboxed | _ -> Boxed)
+  | DT_option t -> assert(name = "Some"); (0, C_tuple [t], []), Boxed
   | _ -> assert false
 
 let extract_non_constant_constructor_type ~t name n =
-  let _, types, _ = non_constant_constructor_info ~t name in
+  let (_, types, _), _ = non_constant_constructor_info ~t name in
   match types, n with
   | C_tuple types, n -> `Regular (unsafe_ttype (List.nth types n))
   | C_inline typ, 1 -> `Inline (unsafe_ttype typ)
@@ -146,29 +147,32 @@ let constant_constructor_info ~t name =
   | DT_option _ -> assert(name = "None"); 0, []
   | _ -> assert false
 
-(* TODO: This should respect Variant_unboxed tags *)
 let apply_constructor ~t = function
   | [ Constructor (name, 0) ] ->
       let tag, _ = constant_constructor_info ~t name in
       let x = Obj.magic tag in
       (fun _ -> x)
-  | [ Constructor (name, 1) ] ->
-      let tag, _, _ = non_constant_constructor_info ~t name in
-      (fun x ->
-        let o = Obj.new_block tag 1 in
-        Obj.set_field o 0 (Obj.repr x);
-        Obj.magic o
-      )
-  | [ Constructor (name, n) ] ->
-      let tag, _, _ = non_constant_constructor_info ~t name in
-      (fun x ->
-        let x = Obj.repr x in
-        let o = Obj.new_block tag n in
-        for i = 0 to n - 1 do
-          Obj.set_field o i (Obj.field x i);
-        done;
-        Obj.magic o
-      )
+  | [ Constructor (name, 1) ] -> begin
+      match non_constant_constructor_info ~t name with
+      | (tag,_,_), Boxed -> (fun x ->
+          let o = Obj.new_block tag 1 in
+          Obj.set_field o 0 (Obj.repr x);
+          Obj.magic o
+        )
+      | _, Unboxed -> (fun x ->  Obj.magic x)
+    end
+  | [ Constructor (name, n) ] -> begin
+      match non_constant_constructor_info ~t name with
+      | (tag,_,_), Boxed -> (fun x ->
+          let x = Obj.repr x in
+          let o = Obj.new_block tag n in
+          for i = 0 to n - 1 do
+            Obj.set_field o i (Obj.field x i);
+          done;
+          Obj.magic o
+        )
+      | _, Unboxed -> assert false
+    end
   | _ -> assert false
 
 let tuple_info ~t n =
@@ -213,19 +217,22 @@ let rec patch (type t) ~(t : t ttype) path x f =
       Obj.set_field x n (Obj.repr v);
       x
   | Constructor (name, 1) :: rest ->
-      let t = extract_non_constant_constructor_type ~t name 0 in
-      begin match t with
-      | `Regular t ->
+      let t' = extract_non_constant_constructor_type ~t name 0 in
+      let _, box = non_constant_constructor_info ~t name in
+      begin match t', box with
+      | `Regular t, Boxed ->
         let v = patch ~t rest (Obj.field x 0) f in
         let x = Obj.dup (Obj.repr x) in
         Obj.set_field x 0 (Obj.repr v);
         x
-      | `Inline t ->
+      | `Inline t, Boxed ->
         let v = patch ~t rest (Obj.obj x) f in
         Obj.dup (Obj.repr v)
+      | _ -> assert false
       end
   | Constructor (name, n) :: rest when n <> 0 ->
-      let _, types, _ = non_constant_constructor_info ~t name in
+      let (_,types,_), box = non_constant_constructor_info ~t name in
+      let _ = assert (box = Boxed) in
       let t = unsafe_ttype (DT_tuple (uninline types)) in (* safe uninline since n <> 0 *)
       let tag = Obj.tag x in
       let tuple = dup_with_tag ~tag: 0 ~length: n x in
@@ -240,8 +247,9 @@ let extract_step (type t) ~(t: t ttype) step x =
   match step with
   | Field _ -> stype_of_ttype (extract_field_type ~t [step]), extract_field ~t [step] (Obj.obj x), []
   | Constructor(_, 0) -> stype_of_ttype unit_t, Obj.repr (), []
-  | Constructor(name, _) ->
-      let id, parameters, props = non_constant_constructor_info ~t name in
+  | Constructor(name, _) -> begin
+      match non_constant_constructor_info ~t name with
+      | (id, parameters, props), Boxed ->
       if id <> Obj.tag x then failwith (Printf.sprintf "Extract step: bad constructor (not %S %i %i)" name id (Obj.tag x));
       begin
         match parameters with
@@ -256,6 +264,9 @@ let extract_step (type t) ~(t: t ttype) step x =
               parameters;
             DT_tuple parameters, b, props
       end
+      | (_,C_tuple [t],props), Unboxed -> t, Obj.magic x, props
+      | _ -> assert false
+    end
   | Tuple_nth n ->
       let t = tuple_info ~t n in
       t, Obj.field x n, []
@@ -293,7 +304,7 @@ let extract_type_step (type t) ~(t: t ttype) = function
       let _, props = constant_constructor_info ~t name in
       stype_of_ttype unit_t, props
   | Constructor(name, _) ->
-      let _, parameters, props = non_constant_constructor_info ~t name in
+      let (_, parameters, props),_ = non_constant_constructor_info ~t name in
       begin match uninline parameters with
       | [t] -> t, props
       | l -> DT_tuple l, props

@@ -652,7 +652,6 @@ module Unboxed = struct
     | Fail _ -> Format.eprintf "fail\n%!"; false
     | Throw _ -> Format.eprintf "throw\n%!"; false
 
-
   (* TODO: Why are tests sporadically failing when we use (=) for floats? *)
   let%test _ = test r1_t float_t (fun t -> t.f1) Float.equal
   let%test _ = test r2_t float_t (fun t -> t.f2) Float.equal
@@ -666,6 +665,9 @@ module Unboxed = struct
   let%test _ = test s4_t int_t (function A x -> x) (=)
   let%test _ = test (s5_t int_t) int_t (function A x -> x) (=)
   let%test _ = test (s5_t float_t) float_t (function A x -> x) Float.equal
+
+  (* TODO: Xtypes and Path implementation of accessing fields are different.
+   * We only use Path here. Add tests for the Xtypes way. *)
 
 end
 
