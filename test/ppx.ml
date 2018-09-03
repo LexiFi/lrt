@@ -507,6 +507,60 @@ module Abstract = struct
       ppx_test#test/ppx.ml.Abstract.C.t |}]
 
 
+  (* use non abstract ttype internally *)
+
+  module D : sig
+    type a
+    and b = int * a * c
+    and c = string
+    [@@deriving t]
+
+    type d
+    and e = int * d * f
+    and f = string
+    [@@deriving t]
+  end = struct
+
+    (* Idea 1:
+     * -> stype of a will leak via b
+     *)
+    type a' = int * int
+    and b = int * a' * c
+    and c = string
+    [@@deriving t]
+
+    type a = a' [@@abstract "D.a" ][@@deriving t]
+
+    let%expect_test _ =
+      print a'_t;
+      print a_t;
+      [%expect {|
+        (int * int)
+        D.a |}]
+
+    (* Idea 2:
+     * -> stype of d does not leak
+     *)
+    type d' = int * int
+    and d = d' [@@abstract "D.d"]
+    and e = int * d * f
+    and f = string
+    [@@deriving t]
+
+    let%expect_test _ =
+      print d'_t;
+      print d_t;
+      [%expect {|
+        (int * int)
+        D.d |}]
+  end
+
+  let%expect_test _ =
+    print D.b_t;
+    print D.e_t;
+    [%expect {|
+      (int * (int * int) * string)
+      (int * D.d * string) |}]
 end
 
 module Alias = struct
