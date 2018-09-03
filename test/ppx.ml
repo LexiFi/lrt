@@ -622,7 +622,7 @@ module Patch = struct
     } [@@deriving t]
 
   (* Nice error messages included
-  type 'a arr = 'a arr
+  type 'a arr = 'a array
   type 'a lst = { arr : ('a arr [@patch list_t])} [@@deriving t]
   *)
 
