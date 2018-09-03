@@ -399,6 +399,10 @@ let substitution_of_free_vars ~loc ~me ttype free =
   and pat = ppat_constraint ~loc (pvar ~loc me.ttyp) typ
   in value_binding ~loc ~expr ~pat
 
+let open_abstract ~loc ~free name =
+  let f = stypes_of_free ~loc free in
+  [%expr ttype_of_stype(DT_abstract ([%e estring ~loc name],[%e f]))]
+
 let str_type_decl ~loc ~path (recflag, tds) =
   let _ = path in
   let extend_let new_ was expr = new_ (was expr) in
@@ -408,25 +412,26 @@ let str_type_decl ~loc ~path (recflag, tds) =
     | Recursive -> Rec (List.map (fun td ->
         td.ptype_name.txt, free_vars_of_type_decl td) tds)
   in
-  let parse (pats, cn, lr, sn, fl, subs) ({ ptype_loc = loc ; _} as td) =
+  (* We create one value binding from tpl, cn, ls, sn and fl:
+   * let tpl[0], tpl[1] =
+   *   let () = createnodes (cn) in
+   *   let rec = lazy .. and lazy .. (lr) in
+   *   let () = setnodes (sn) in
+   *   force .. , force .. (fl)
+   * the other value bindings (bnd) are appended *)
+  let parse (tpl, cn, lr, sn, fl, bnd) ({ ptype_loc = loc ; _} as td) =
     let me = names_of_type_decl td in
     let typ = type_of_type_decl ~loc td in
     let ttyp = ttype_of_type_decl ~loc td in
     let free = free_vars_of_type_decl td in
-    let pats = (ppat_constraint ~loc (pvar ~loc me.ttyp) ttyp) :: pats in
+    let tpl = (ppat_constraint ~loc (pvar ~loc me.ttyp) ttyp) :: tpl in
     let cn, ttype, sn =
       match abstract_of_td td with
       | Name {txt=name;loc} ->
-        let f = stypes_of_free ~loc free in
-        let t = [%expr
-          ttype_of_stype(DT_abstract ([%e estring ~loc name],[%e f]))] in
-        cn, t, sn
+        cn, open_abstract ~free ~loc name, sn
       | Auto ->
-        let f = stypes_of_free ~loc free in
         let name = abstract_name ~path me.typ in
-        let t = [%expr
-          ttype_of_stype(DT_abstract ([%e estring ~loc name],[%e f]))] in
-        cn, t, sn
+        cn, open_abstract ~free ~loc name, sn
       | No ->
         match td.ptype_kind with
         | Ptype_abstract -> begin match td.ptype_manifest with
@@ -449,19 +454,19 @@ let str_type_decl ~loc ~path (recflag, tds) =
     let ttype = wrap_props ~loc (props_of_td td) ttype in
     let lr = lazy_value_binding ~loc me.ttyp typ ttype :: lr in
     let fl = force_lazy ~loc (evar ~loc me.ttyp) :: fl in
-    let subs = if free = [] then subs else
-        (substitution_of_free_vars ~loc ~me ttyp free) :: subs in
-    pats, cn, lr, sn, fl, subs
+    let bnd = if free = [] then bnd else
+        (substitution_of_free_vars ~loc ~me ttyp free) :: bnd in
+    tpl, cn, lr, sn, fl, bnd
   in
-  let patterns, createnode, lazyrec, setnode, forcelazy, substitutions =
+  let tpl, createnode, lazyrec, setnode, forcelazy, bindings =
     let id = fun x -> x in
     List.fold_left parse ([], id ,[], id,[],[]) tds in
   let prepare =
     let pat, force =
-      match patterns with
+      match tpl with
       | [] -> raise_errorf ~loc "internal error (type_decl_str)"
       | hd :: [] -> hd, List.hd forcelazy
-      | _ -> ppat_tuple ~loc patterns, pexp_tuple ~loc forcelazy
+      | _ -> ppat_tuple ~loc tpl, pexp_tuple ~loc forcelazy
     in
     let expr =
       let recflag = match rec_ with Nonrec _ -> Nonrecursive | _ -> Recursive in
@@ -474,7 +479,7 @@ let str_type_decl ~loc ~path (recflag, tds) =
     value_binding ~loc ~pat ~expr
   in
   List.map (fun x -> pstr_value ~loc Nonrecursive [x])
-    (prepare :: substitutions)
+    (prepare :: bindings)
 
 (* Type declarations in signature. Generates
  * val <type>_t : <type> ttype
@@ -509,5 +514,4 @@ let () =
   let open Deriving in
   let str_type_decl = Generator.make_noarg str_type_decl in
   let sig_type_decl = Generator.make_noarg sig_type_decl in
-  Deriving.add ~str_type_decl ~sig_type_decl ~extension
-    ppx.id |> Deriving.ignore
+  add ~str_type_decl ~sig_type_decl ~extension ppx.id |> ignore
