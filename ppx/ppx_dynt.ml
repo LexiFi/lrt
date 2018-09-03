@@ -27,97 +27,6 @@ let abstract_name ~path name =
     | Some lib -> Format.sprintf "%s#%s.%s" lib path name
 
 (*
- * generate regularly used AST fragments
- *
- *)
-
-let ignore ~loc expr : expression -> expression =
-  let pat = ppat_any ~loc in
-  pexp_let ~loc Nonrecursive [value_binding ~loc ~expr ~pat]
-
-let lazy_value_binding ~loc txt typ expr =
-  let (module M) = Ast_builder.make loc in
-  let open M in
-  let pat = ppat_constraint (ppat_var {loc;txt})
-      [%type: [%t typ] ttype lazy_t] in
-  let expr = ignore ~loc (evar txt) [%expr lazy [%e expr]] in
-  value_binding ~pat ~expr
-
-let force_lazy ~loc var = [%expr force [%e var]]
-
-let stypes_of_free ~loc free =
-  let (module M) = Ast_builder.make loc in
-  let open M in
-  List.mapi (fun i _v -> [%expr DT_var [%e eint i]]) free |> elist
-
-let wrap_runtime ~loc =
-  let txt = (Longident.parse "Ppx_dynt_runtime") in
-  pexp_open ~loc Override {txt;loc}
-
-let wrap_props ~loc props t =
-  match props with
-  | [] -> t
-  | l -> [%expr
-    ttype_of_stype (DT_prop ([%e elist ~loc l] , stype_of_ttype [%e t]))]
-
-(* check whether ttype is of a certain type and make it an stype *)
-let stype_of_ttype ({ ptyp_loc = loc ; _ } as ct) expr =
-  [%expr stype_of_ttype
-      ([%e expr] : [%t ptyp_constr ~loc {loc; txt = Lident "ttype"} [ct]])]
-
-(*
- * mangle names
- *
- *)
-
-let mangle_label = function
-  | "t" -> ppx.id
-  | s -> Format.sprintf "%s_%s" s ppx.id
-
-let mangle_lid = function
-  | Lident s -> Lident (mangle_label s)
-  | Ldot (t, s) -> Ldot (t, mangle_label s)
-  | Lapply _-> raise_errorf ~loc:Location.none "Internal error in mangle_lid"
-
-let mangle_label_loc t = { t with txt = mangle_label t.txt }
-let mangle_lid_loc t = { t with txt = mangle_lid t.txt }
-
-(*
- * Read information from AST fragments
- *
- *)
-
-type names = { typ : string; ttyp : string; node : string }
-
-let free_vars_of_type_decl td =
-  List.map (fun (ct, _variance) ->
-      match ct.ptyp_desc with
-      | Ptyp_var s -> s
-      | _ -> raise_errorf ~loc:ct.ptyp_loc "This should be a type variable")
-    td.ptype_params
-
-let names_of_type_decl td =
-  let typ = td.ptype_name.txt in
-  { typ ; ttyp = mangle_label typ ; node = typ ^ "_node"}
-
-let type_of_type_decl ~loc td : core_type =
-  let (module M) = Ast_builder.make loc in
-  let open M in
-  ptyp_constr {txt=Lident td.ptype_name.txt; loc}
-    (List.map (fun (ct, _variance) -> ct) td.ptype_params)
-
-let ttype_of_type_decl ~loc td : core_type =
-  let (module M) = Ast_builder.make loc in
-  let open M in
-  let ct  = type_of_type_decl ~loc td in
-  ptyp_constr {txt=Longident.parse "Dynt_core.ttype"; loc} [ct]
-
-let close_ttype ~loc ~free ttype =
-    List.fold_left (fun acc name ->
-        [%type: [%t ptyp_var ~loc name] Dynt_core.ttype -> [%t acc]])
-      ttype (List.rev free)
-
-(*
  * Declare attributes on type declarations, core types,
  * record field labels and variant constructors
  *
@@ -183,6 +92,17 @@ let abstract_of_td td =
   | Some x -> x
   | None -> No
 
+let attr_ct_patch =
+  Attribute.declare (ppx.id ^ ".patch")
+    Attribute.Context.core_type
+    Ast_pattern.(single_expr_payload __')
+    (fun x -> x)
+
+let patch_of_ct ct =
+  match Attribute.consume attr_ct_patch ct with
+  | None -> ct, None
+  | Some (ct, patch) -> ct, Some patch
+
 let attr_td_unboxed =
   Attribute.declare (ppx.id ^ ".ocaml.unboxed")
     Attribute.Context.type_declaration
@@ -193,6 +113,103 @@ let unboxed_of_td td =
   match Attribute.get attr_td_unboxed td with
   | Some () -> true
   | None -> false
+
+
+(*
+ * generate regularly used AST fragments
+ *
+ *)
+
+let ignore ~loc expr : expression -> expression =
+  let pat = ppat_any ~loc in
+  pexp_let ~loc Nonrecursive [value_binding ~loc ~expr ~pat]
+
+let lazy_value_binding ~loc txt typ expr =
+  let (module M) = Ast_builder.make loc in
+  let open M in
+  let pat = ppat_constraint (ppat_var {loc;txt})
+      [%type: [%t typ] ttype lazy_t] in
+  let expr = ignore ~loc (evar txt) [%expr lazy [%e expr]] in
+  value_binding ~pat ~expr
+
+let force_lazy ~loc var = [%expr force [%e var]]
+
+let stypes_of_free ~loc free =
+  let (module M) = Ast_builder.make loc in
+  let open M in
+  List.mapi (fun i _v -> [%expr DT_var [%e eint i]]) free |> elist
+
+let wrap_runtime ~loc =
+  let txt = (Longident.parse "Ppx_dynt_runtime") in
+  pexp_open ~loc Override {txt;loc}
+
+let wrap_props ~loc props t =
+  match props with
+  | [] -> t
+  | l -> [%expr
+    ttype_of_stype (DT_prop ([%e elist ~loc l] , stype_of_ttype [%e t]))]
+
+(* check whether ttype is of a certain type and make it an stype *)
+let stype_of_ttype ({ ptyp_loc = loc ; _ } as ct) expr =
+  (* strip patch attribute *)
+  let ct, _ = patch_of_ct ct in
+  [%expr stype_of_ttype
+      ([%e expr] : [%t ptyp_constr ~loc {loc; txt = Lident "ttype"} [ct]])]
+
+(*
+ * mangle names
+ *
+ *)
+
+let mangle_label = function
+  | "t" -> ppx.id
+  | s -> Format.sprintf "%s_%s" s ppx.id
+
+let mangle_lid = function
+  | Lident s -> Lident (mangle_label s)
+  | Ldot (t, s) -> Ldot (t, mangle_label s)
+  | Lapply _-> raise_errorf ~loc:Location.none "Internal error in mangle_lid"
+
+let mangle_label_loc t = { t with txt = mangle_label t.txt }
+let mangle_lid_loc t = { t with txt = mangle_lid t.txt }
+
+(*
+ * Read information from AST fragments
+ *
+ *)
+
+type names = { typ : string; ttyp : string; node : string }
+
+let free_vars_of_type_decl td =
+  List.map (fun (ct, _variance) ->
+      match ct.ptyp_desc with
+      | Ptyp_var s -> s
+      | _ -> raise_errorf ~loc:ct.ptyp_loc "This should be a type variable")
+    td.ptype_params
+
+let names_of_type_decl td =
+  let typ = td.ptype_name.txt in
+  { typ ; ttyp = mangle_label typ ; node = typ ^ "_node"}
+
+let ttype_ct_of_ct ~loc ct =
+  ptyp_constr ~loc {txt = Lident "ttype"; loc} [ct]
+
+let type_of_type_decl ~loc td : core_type =
+  let (module M) = Ast_builder.make loc in
+  let open M in
+  ptyp_constr {txt=Lident td.ptype_name.txt; loc}
+    (List.map (fun (ct, _variance) -> ct) td.ptype_params)
+
+let ttype_of_type_decl ~loc td : core_type =
+  let (module M) = Ast_builder.make loc in
+  let open M in
+  let ct  = type_of_type_decl ~loc td in
+  ptyp_constr {txt=Longident.parse "Dynt_core.ttype"; loc} [ct]
+
+let close_ttype ~loc ~free ttype =
+    List.fold_left (fun acc name ->
+        [%type: [%t ptyp_var ~loc name] Dynt_core.ttype -> [%t acc]])
+      ttype (List.rev free)
 
 (*
  * general helpers
@@ -223,6 +240,7 @@ type rec_ =
   | Rec of (label * label list) list
 
 let rec core_type ~rec_ ~free ({ ptyp_loc = loc ; _ } as ct) : expression =
+  let ct, patch = patch_of_ct ct in
   let rc = core_type ~rec_ ~free in
   let rcs ({ ptyp_loc = loc ; _ } as ct) =
     (* TODO: When we do a full PPX extension, we could fix this hole by
@@ -234,18 +252,24 @@ let rec core_type ~rec_ ~free ({ ptyp_loc = loc ; _ } as ct) : expression =
     | _ -> stype_of_ttype ct (rc ct)
   in
   let constr =
-    (* type constructors are handled depending on nonrec flag *)
-    match rec_ with
-    | Nonrec _ | Inline -> fun id args ->
-        let id' = mangle_lid_loc id in
-        pexp_apply ~loc (pexp_ident ~loc id')
-          (List.map (fun x -> Nolabel, rc x) args)
-    | Rec l -> fun id args -> begin
+    match patch, rec_ with
+    (* patched ct? nonrec td? *)
+    | Some {txt;loc}, _ -> fun _ args ->
+      let typ = List.fold_right
+          (fun e acc -> ptyp_arrow Nolabel ~loc (ttype_ct_of_ct ~loc e) acc)
+          args (ttype_ct_of_ct ~loc ct) in
+      let exp = pexp_constraint ~loc txt typ in
+      pexp_apply ~loc exp (List.map (fun x -> Nolabel, rc x) args)
+    | None, Nonrec _ | None, Inline -> fun id args ->
+      let id' = mangle_lid_loc id in
+      pexp_apply ~loc (pexp_ident ~loc id')
+        (List.map (fun x -> Nolabel, rc x) args)
+    | None, Rec l -> fun id args -> begin
         let id' = mangle_lid_loc id in
         (* recursive identifier? *)
         match List.assoc_opt (Longident.name id.txt) l with
         | Some l ->
-          (* regular recursion *)
+          (* regular recursion? *)
           let is = List.rev_map (fun x -> x.ptyp_desc) args
           and should = List.rev_map (fun a -> Ptyp_var a) l in
           if is = should then

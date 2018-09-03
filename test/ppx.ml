@@ -609,10 +609,33 @@ module Overwrite = struct
 
 end
 
-module ExtVar = struct
+module Patch = struct
 
-  (* type t = .. [@@deriving t] *)
-  (* type t += A | B [@@deriving t] *)
+  type a = int [@@deriving t]
+  type b = int
+  type c = b [@patch a_t] [@@deriving t]
+
+  type meta = string list [@@deriving t] [@@abstract "Patch.meta"]
+  type ('a,'b) ht =
+    { table : (('a,'b) Hashtbl.t [@patch hashtbl_t])
+    ; meta : meta
+    } [@@deriving t]
+
+  (* Nice error messages included
+  type 'a arr = 'a arr
+  type 'a lst = { arr : ('a arr [@patch list_t])} [@@deriving t]
+  *)
+
+  let%expect_test _ =
+    print [%t: c];
+    print [%t: (string, float) ht];
+    [%expect {|
+      int
+      ((string, float) ht =
+         {
+           table: (string, float) Hashtbl.t;
+           meta: Patch.meta;
+         }) |}]
 
 end
 
