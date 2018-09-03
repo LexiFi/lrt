@@ -130,13 +130,16 @@ let attr_prop ctx =
   Attribute.declare (ppx.id ^ ".prop")
     ctx
     Ast_pattern.(
+      (pair (lident __' |> loc) (estring __')
+       |> map2 ~f:prop
+       |> many
+       |> fun l -> pexp_record l none) |||
       (pexp_apply (estring __') ( no_label (estring __') ^:: nil )
        |> map2 ~f:prop
        |> elist) |||
       (pexp_apply (estring __') ( no_label (estring __') ^:: nil )
        |> map2 ~f:prop
-       |> map1 ~f:(fun x -> [x])
-      )
+       |> map1 ~f:(fun x -> [x]))
       |> single_expr_payload
     )
     (fun l -> l)
