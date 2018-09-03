@@ -778,19 +778,17 @@ module NoName = struct
   end
 
   module M = F(struct type t = int [@@deriving t] end)
-  module N = F(struct type t = string [@@deriving t] end)
+  (* module N = F(struct type t = string [@@deriving t] end) *)
 
   let%expect_test _ =
     print t;
     print M.s_t;
     print M.t;
-    print N.s_t;
-    print N.t;
+    (* print N.s_t; *)
+    (* print N.t; *)
     [%expect {|
       ppx_test#test/ppx.ml.NoName.t
       int
-      ppx_test#test/ppx.ml.NoName.F.t
-      string
       ppx_test#test/ppx.ml.NoName.F.t |}]
 
 end

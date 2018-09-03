@@ -428,7 +428,9 @@ let substitution_of_free_vars ~loc ~me ttype free =
 
 let open_abstract ~loc ~free name =
   let f = stypes_of_free ~loc free in
-  [%expr ttype_of_stype(DT_abstract ([%e estring ~loc name],[%e f]))]
+  let name = estring ~loc name in
+  [%expr let () = register_abstract_name [%e name] in
+    ttype_of_stype(DT_abstract ([%e name],[%e f]))]
 
 let str_type_decl ~loc ~path (recflag, tds) =
   let _ = path in

@@ -19,3 +19,12 @@ let force = Lazy.force
 let record_representation (l: stype list) : record_repr =
   let p = types_equality_modulo_props (stype_of_ttype float_t) in
   if List.for_all p l then Record_float else Record_regular
+
+module Set = Set.Make(String)
+let abstract_names = ref Set.empty
+
+exception Non_unique_abstract_name of string
+
+let register_abstract_name s =
+  if Set.mem s !abstract_names then raise (Non_unique_abstract_name s);
+  abstract_names := Set.add s !abstract_names
