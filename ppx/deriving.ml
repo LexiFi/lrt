@@ -140,7 +140,7 @@ let stypes_of_free ~loc free =
   List.mapi (fun i _v -> [%expr DT_var [%e eint i]]) free |> elist
 
 let wrap_runtime ~loc =
-  let txt = (Longident.parse "Ppx_dynt_runtime") in
+  let txt = (Longident.parse "Dynt_ppx_runtime") in
   pexp_open ~loc Override {txt;loc}
 
 let wrap_props ~loc props t =
@@ -204,11 +204,11 @@ let ttype_of_type_decl ~loc td : core_type =
   let (module M) = Ast_builder.make loc in
   let open M in
   let ct  = type_of_type_decl ~loc td in
-  ptyp_constr {txt=Longident.parse "Dynt_core.ttype"; loc} [ct]
+  ptyp_constr {txt=Longident.parse "Dynt_ppx_runtime.ttype"; loc} [ct]
 
 let close_ttype ~loc ~free ttype =
     List.fold_left (fun acc name ->
-        [%type: [%t ptyp_var ~loc name] Dynt_core.ttype -> [%t acc]])
+        [%type: [%t ptyp_var ~loc name] Dynt_ppx_runtime.ttype -> [%t acc]])
       ttype (List.rev free)
 
 (*

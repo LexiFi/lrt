@@ -1,4 +1,4 @@
-open Dynt_core
+open Dynt_internal
 
 (***************************************************************************)
 (*  Copyright (C) 2000-2018 LexiFi SAS. All rights reserved.               *)

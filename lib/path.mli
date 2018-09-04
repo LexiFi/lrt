@@ -1,4 +1,4 @@
-open Dynt_core
+open Dynt_internal
 
 (** Abstract paths inside types or values.
 

@@ -1,4 +1,4 @@
-open Dynt_core
+open Dynt_internal
 
 (** Operations on ttypes. *)
 

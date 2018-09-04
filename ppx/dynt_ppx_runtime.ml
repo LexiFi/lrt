@@ -1,5 +1,5 @@
-open Dynt_core
-open Dynt_core.Internal
+open Dynt_internal
+open Dynt_internal.Internal
 
 type 'a lazy_t = 'a Lazy.t
 type nonrec 'a ttype = 'a ttype

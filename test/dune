@@ -2,4 +2,4 @@
  (name ppx_test)
  (libraries dynt inspect)
  (inline_tests)
- (preprocess (pps ppx_expect ppx_inline_test ppx_dynt)))
+ (preprocess (pps ppx_expect ppx_inline_test dynt.deriving)))

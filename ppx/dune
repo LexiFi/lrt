@@ -1,21 +1,21 @@
 (library
- (name ppx_dynt_runtime)
- (public_name ppx_dynt.runtime)
+ (name dynt_ppx_runtime)
+ (public_name dynt.ppx_runtime)
  (synopsis "Runtime components of [@@deriving t]")
- (modules ppx_dynt_runtime)
- (libraries dynt_core))
+ (modules dynt_ppx_runtime)
+ (libraries dynt_internal))
 
 (library
- (public_name ppx_dynt)
- (name ppx_dynt)
+ (public_name dynt.deriving)
+ (name dynt_deriving)
  (synopsis "[@@deriving t]")
  (libraries ppxlib)
  (preprocess (pps ppxlib.metaquot))
- (modules ppx_dynt)
- (ppx_runtime_libraries ppx_dynt_runtime)
+ (modules deriving)
+ (ppx_runtime_libraries dynt_ppx_runtime)
  (kind ppx_deriver))
 
 (executable
  (name standalone)
- (libraries ppx_dynt ppxlib)
+ (libraries dynt_deriving ppxlib)
  (modules standalone))
