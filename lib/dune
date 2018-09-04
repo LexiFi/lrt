@@ -1,5 +1,6 @@
 (library
   (public_name dynt)
-  (libraries dynt_internal)
+  (synopsis "Dynamic Types")
+  (libraries dynt_core)
   (inline_tests)
   (preprocess (pps ppx_expect ppx_inline_test dynt.deriving)))

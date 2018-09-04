@@ -67,3 +67,6 @@ let ttypes_equality t1 t2 =
 let ttypes_equality_modulo_props t1 t2 =
   if Stype.types_equality_modulo_props t1 t2 then Some TypEq.unsafe
   else None
+
+type is_ttype = Ttype: 'a ttype -> is_ttype
+let ttype_of_stype s = Ttype (Obj.magic s)

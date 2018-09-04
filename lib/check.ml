@@ -5,9 +5,9 @@
 (*  form or for any purpose without the express permission of LexiFi SAS.  *)
 (***************************************************************************)
 
-open Dynt_internal.Ttype
-open Dynt_internal.Stype
-open Dynt_internal.Std
+open Dynt_core.Ttype
+open Dynt_core.Stype
+open Dynt_core.Std
 
 (* Utils. *)
 
@@ -576,8 +576,7 @@ let stype = stype ()
 
 let dynamic ?size l =
   stype >>= fun s ->
-    let open Xtypes in
-    let Ttype t = sttype_of_stype s in
+    let Ttype t = ttype_of_stype s in
     let valgen = of_type_gen ?size l ~t in
     map (fun v -> Dyn (t, v)) valgen
 

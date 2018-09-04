@@ -1,5 +1,3 @@
-open Dynt_internal.Ttype
-
 (** Abstract paths inside types or values.
 
   This module introduces paths within types and values.
@@ -29,6 +27,8 @@ open Dynt_internal.Ttype
       - [(.)]
 
  *)
+
+open Dynt_core.Ttype
 
 (** {2 Typed type paths} *)
 
@@ -102,7 +102,7 @@ val apply_constructor: t:'a ttype -> ('a, 'b) constructor -> 'b -> 'a
     (** Build a value of a sum type by applying one of its constructors
         to the expected argument of this constructor. *)
 
-val constructor_info: t:'a ttype -> ('a, 'b) constructor -> string * Dynt_internal.Stype.stype_properties * 'b ttype
+val constructor_info: t:'a ttype -> ('a, 'b) constructor -> string * Dynt_core.Stype.stype_properties * 'b ttype
     (** For a given constructor in a sum type, returns its name, the associated type properties, and the type of its argument(s). *)
 
 (** {2 Record fields} *)

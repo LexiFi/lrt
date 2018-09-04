@@ -1,6 +1,6 @@
-open Dynt_internal.Ttype
-open Dynt_internal.Stype
-open Dynt_internal.Std
+open Dynt_core.Ttype
+open Dynt_core.Stype
+open Dynt_core.Std
 
 let cast_ttype: stype -> 'a ttype = Obj.magic
 
@@ -462,11 +462,6 @@ let is_abstract (type s_) (s_ttype: s_ ttype) =
   | DT_abstract (name, args) -> Some (name, s_ttype, args)
   | _ -> None
 
-let make_abstract t =
-  match remove_first_props (stype_of_ttype t) with
-  | DT_node {rec_name=name; rec_args=l; _} -> Obj.magic (DT_abstract(name, l))
-  | _ -> assert false
-
 type 'a xtype
   = Unit: unit xtype
   | Bool: bool xtype
@@ -613,10 +608,6 @@ let get_first_props_xtype xt =
 let rec remove_first_props_xtype : type t. t xtype -> t xtype = function
   | Prop (_, _, lazy xt) -> remove_first_props_xtype xt
   | xt -> xt
-
-type sttype = Ttype: 'a ttype -> sttype
-
-let sttype_of_stype s = Ttype (Obj.magic s)
 
 let rec all_paths: type root target. root:root ttype -> target:target ttype -> (root, target, _) Path.t list = fun ~root ~target ->
   match ttypes_equality root target with

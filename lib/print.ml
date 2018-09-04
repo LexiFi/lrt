@@ -1,6 +1,6 @@
-open Dynt_internal.Stype
-open Dynt_internal.Ttype
-open Dynt_internal.Std
+open Dynt_core.Stype
+open Dynt_core.Ttype
+open Dynt_core.Std
 
 type 'a printer = 'a -> unit
 

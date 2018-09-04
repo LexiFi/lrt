@@ -1,4 +1,6 @@
-open Dynt_internal.Ttype
+(** Dynamic printing. *)
+
+open Dynt_core.Ttype
 
 val print: t:'a ttype -> Format.formatter -> 'a -> unit
 val show: t:'a ttype -> 'a -> unit

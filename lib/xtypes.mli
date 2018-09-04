@@ -1,9 +1,9 @@
-open Dynt_internal.Ttype
-open Dynt_internal.Stype
+open Dynt_core.Ttype
+open Dynt_core.Stype
 
-(** Operations on ttypes. *)
+(** Safe inspection of ttypes. *)
 
-(** {2 Safe inspection of ttypes} *)
+(** {2 Records} *)
 
 type 'a record_builder
 
@@ -62,6 +62,8 @@ module Record: sig
   (** Extract the constructor corresponding to the given value of the
       sum type. *)
 end
+
+(** {2 Variants} *)
 
 module Constructor : sig
   type ('s, 't) t
@@ -124,6 +126,8 @@ module Sum: sig
       builds an optimized lookup table).  *)
 end
 
+(** {2 Objects} *)
+
 module Method: sig
   type ('s, 't) t
   (** Runtime representation of methods of type ['t] in objects of
@@ -138,7 +142,6 @@ end
 
 type 's has_method = Method: ('s, 't) Method.t -> 's has_method
 
-
 module Object: sig
   type 's t
   (** Runtime representation of objects of type ['t]. *)
@@ -151,30 +154,7 @@ module Object: sig
   (* TODO: add a lookup function (by method name). *)
 end
 
-type _ is_function = Function: (string * 'b ttype * 'c ttype) -> ('b -> 'c) is_function
-type _ is_list = List: 't ttype -> ('t list) is_list
-type _ is_array = Array: 't ttype -> ('t array) is_array
-type _ is_option = Option: 't ttype -> ('t option) is_option
-type _ is_tuple2 = Tuple2: ('a ttype * 'b ttype) -> ('a * 'b) is_tuple2
-type _ is_tuple3 = Tuple3: ('a ttype * 'b ttype * 'c ttype) -> ('a * 'b * 'c) is_tuple3
-(* type _ is_wlazy = Wlazy: 'b ttype * ('a, 'b Wlazy.t) TypEq.t -> 'a is_wlazy *)
-
-val is_list: 'a ttype -> 'a is_list option
-val is_array: 'a ttype -> 'a is_array option
-val is_option: 'a ttype -> 'a is_option option
-val is_function: 'a ttype -> 'a is_function option
-val is_tuple2: 'a ttype -> 'a is_tuple2 option
-val is_tuple3: 'a ttype -> 'a is_tuple3 option
-(* val is_wlazy: 'a ttype -> 'a is_wlazy option *)
-
-val is_record: 'a ttype -> 'a Record.t option
-val is_tuple: 'a ttype -> 'a Record.t option
-val is_sum: 'a ttype -> 'a Sum.t option
-val is_object: 'a ttype -> 'a Object.t option
-val is_prop: 'a ttype -> ((string * string) list * 'a ttype) option
-val is_abstract: 'a ttype -> (string * 'a ttype * stype list) option
-
-val make_abstract: 'a ttype -> 'a ttype
+(** {2 Xtype } *)
 
 type 'a xtype
   = Unit: unit xtype
@@ -206,13 +186,34 @@ val xtype_of_constructor: (_, 'a) Constructor.t -> 'a xtype
 val xtype_of_field: (_, 'a) RecordField.t -> 'a xtype
 val xtype_of_method: (_, 'a) Method.t -> 'a xtype
 
-val get_first_props_xtype: 'a xtype -> (string * string) list
+val get_first_props_xtype: 'a xtype -> stype_properties
 
 val remove_first_props_xtype: 'a xtype -> 'a xtype
 
-type sttype = Ttype: 'a ttype -> sttype
+(** {2 Destruction of ttypes} *)
 
-val sttype_of_stype: stype -> sttype
+type _ is_function = Function: (string * 'b ttype * 'c ttype) -> ('b -> 'c) is_function
+type _ is_list = List: 't ttype -> ('t list) is_list
+type _ is_array = Array: 't ttype -> ('t array) is_array
+type _ is_option = Option: 't ttype -> ('t option) is_option
+type _ is_tuple2 = Tuple2: ('a ttype * 'b ttype) -> ('a * 'b) is_tuple2
+type _ is_tuple3 = Tuple3: ('a ttype * 'b ttype * 'c ttype) -> ('a * 'b * 'c) is_tuple3
+
+val is_list: 'a ttype -> 'a is_list option
+val is_array: 'a ttype -> 'a is_array option
+val is_option: 'a ttype -> 'a is_option option
+val is_function: 'a ttype -> 'a is_function option
+val is_tuple2: 'a ttype -> 'a is_tuple2 option
+val is_tuple3: 'a ttype -> 'a is_tuple3 option
+
+val is_record: 'a ttype -> 'a Record.t option
+val is_tuple: 'a ttype -> 'a Record.t option
+val is_sum: 'a ttype -> 'a Sum.t option
+val is_object: 'a ttype -> 'a Object.t option
+val is_prop: 'a ttype -> (stype_properties * 'a ttype) option
+val is_abstract: 'a ttype -> (string * 'a ttype * stype list) option
+
+(** {2 Paths from ttype} *)
 
 val all_paths: root:'root ttype -> target:'target ttype -> ('root, 'target, Path.kind) Path.t list
 (** Returns all the paths leading to a value of type ['target] inside
@@ -220,10 +221,8 @@ val all_paths: root:'root ttype -> target:'target ttype -> ('root, 'target, Path
     Will loop on recursive types.
  *)
 
-(*
- * Type Matchers
- *
- *)
+(** {2 Type Matchers}
+    Compare nontrivial ttypes with each other. *)
 
 module type TYPE_0 = sig
   type t

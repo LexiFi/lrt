@@ -1,7 +1,10 @@
+(** Typed representation of types. *)
 
-(** {2 Type equalities} *)
+open Stype
 
 module TypEq : sig
+  (** Type equalities *)
+
   type (_, _) t = Eq: ('a, 'a) t
   (** A value of type [('a, 'b) t] is a witness that the two types ['a] and
    * ['b] are equal. *)
@@ -17,10 +20,10 @@ module TypEq : sig
   end
 end
 
-(** {2 Typed type description} *)
-
 type 'a ttype
-external stype_of_ttype: _ ttype -> Stype.stype = "%identity"
+
+(** Packed ttype and value. *)
+type dynamic = Dyn: 'a ttype * 'a -> dynamic
 
 val ttypes_equality: 'a ttype -> 'b ttype -> ('a, 'b) TypEq.t option
 val ttypes_equality_modulo_props: 'a ttype -> 'b ttype
@@ -33,10 +36,16 @@ val ttype_fst: ('a * 'b) ttype -> 'a ttype
 val ttype_snd: ('a * 'b) ttype -> 'b ttype
 
 val remove_first_props_ttype: 'a ttype -> 'a ttype
-val add_props: (string * string) list -> 'a ttype -> 'a ttype
+val add_props: Stype.stype_properties -> 'a ttype -> 'a ttype
 
 val abstract_ttype: 'a ttype -> 'a ttype
 
-(** {2 Packed ttype and value} **)
 
-type dynamic = Dyn: 'a ttype * 'a -> dynamic
+(** {2 Upgrade stype to ttype} *)
+
+type is_ttype = Ttype: 'a ttype -> is_ttype
+val ttype_of_stype: stype -> is_ttype
+
+(** {2 Downgrade ttype to stype} *)
+
+val stype_of_ttype: _ ttype -> stype

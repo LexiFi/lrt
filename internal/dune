@@ -1,3 +1,0 @@
-(library
- (name dynt_internal)
- (public_name dynt.internal))

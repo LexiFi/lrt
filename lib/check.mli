@@ -5,10 +5,10 @@
 (*  form or for any purpose without the express permission of LexiFi SAS.  *)
 (***************************************************************************)
 
-open Dynt_internal.Stype
-open Dynt_internal.Ttype
+open Dynt_core.Stype
+open Dynt_core.Ttype
 
-(** A quickcheck-like library for LexiFi compiler. *)
+(** A quickcheck-like library for OCaml. *)
 
 (** {2 Generators} *)
 
