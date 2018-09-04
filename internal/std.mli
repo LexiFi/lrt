@@ -1,4 +1,4 @@
-open Types
+open Ttype
 
 val unit_t: unit ttype
 val bool_t: bool ttype

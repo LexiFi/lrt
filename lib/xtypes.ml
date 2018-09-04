@@ -1,4 +1,6 @@
-open Dynt_internal
+open Dynt_internal.Ttype
+open Dynt_internal.Stype
+open Dynt_internal.Std
 
 let cast_ttype: stype -> 'a ttype = Obj.magic
 

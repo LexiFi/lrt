@@ -1,8 +1,8 @@
 open Dynt
 
 let print x =
-  stype_of_ttype x
-  |> Format.(fprintf std_formatter "%a\n%!" print_stype)
+  Ttype.stype_of_ttype x
+  |> Format.(fprintf std_formatter "%a\n%!" Stype.print_stype)
 
 module Basic = struct
 

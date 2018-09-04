@@ -1,4 +1,5 @@
-open Dynt_internal
+open Dynt_internal.Ttype
+open Dynt_internal.Stype
 
 (** Operations on ttypes. *)
 

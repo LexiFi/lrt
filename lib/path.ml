@@ -1,4 +1,6 @@
-open Dynt_internal
+open Dynt_internal.Ttype
+open Dynt_internal.Stype
+open Dynt_internal.Std
 
 (***************************************************************************)
 (*  Copyright (C) 2000-2018 LexiFi SAS. All rights reserved.               *)

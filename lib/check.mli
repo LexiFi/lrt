@@ -5,7 +5,8 @@
 (*  form or for any purpose without the express permission of LexiFi SAS.  *)
 (***************************************************************************)
 
-open Dynt_internal
+open Dynt_internal.Stype
+open Dynt_internal.Ttype
 
 (** A quickcheck-like library for LexiFi compiler. *)
 

@@ -1,5 +1,6 @@
-open Dynt_internal
-open Dynt_internal.Internal
+open Dynt_internal.Stype
+open Dynt_internal.Ttype
+open Dynt_internal.Stype.Internal
 
 type 'a lazy_t = 'a Lazy.t
 type nonrec 'a ttype = 'a ttype
@@ -17,7 +18,8 @@ let rev_map2 = List.rev_map2
 let force = Lazy.force
 
 let record_representation (l: stype list) : record_repr =
-  let p = types_equality_modulo_props (stype_of_ttype float_t) in
+  let p = types_equality_modulo_props (
+      stype_of_ttype Dynt_internal.Std.float_t) in
   if List.for_all p l then Record_float else Record_regular
 
 module Set = Set.Make(String)

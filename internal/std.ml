@@ -1,4 +1,5 @@
-open Types
+open Ttype
+open Stype
 
 (* TODO: representation of pervasives
  * what is your actual representation of the following types?
