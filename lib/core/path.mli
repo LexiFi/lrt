@@ -28,13 +28,13 @@
 
  *)
 
-open Dynt_core.Ttype
+open Ttype
 
 (** {2 Typed type paths} *)
 
-type kind = [`Root|`Constructor|`Field|`List|`Array|`Tuple] [@@deriving t]
+type kind = [`Root|`Constructor|`Field|`List|`Array|`Tuple]
 
-type ('a, 'b, +'c) t [@@deriving t]
+type ('a, 'b, +'c) t
       (** Type paths. A value of type [('a,'b,'c) t] represents a path
           within the tree structure of the type ['a], reaching a
           sub-type ['b].  The third type argument ['c] is used to
@@ -102,7 +102,7 @@ val apply_constructor: t:'a ttype -> ('a, 'b) constructor -> 'b -> 'a
     (** Build a value of a sum type by applying one of its constructors
         to the expected argument of this constructor. *)
 
-val constructor_info: t:'a ttype -> ('a, 'b) constructor -> string * Dynt_core.Stype.stype_properties * 'b ttype
+val constructor_info: t:'a ttype -> ('a, 'b) constructor -> string * Stype.stype_properties * 'b ttype
     (** For a given constructor in a sum type, returns its name, the associated type properties, and the type of its argument(s). *)
 
 (** {2 Record fields} *)
@@ -176,6 +176,6 @@ module Internal:
 
 val steps_of_path: ('a, 'b, _) t -> Internal.step list
 
-
-
 val composed: ('a, 'b, _) t -> ('a, 'b) composed
+
+val print: Format.formatter -> ('a, 'b, _) t -> unit

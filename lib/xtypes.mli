@@ -1,3 +1,4 @@
+open Dynt_core
 open Dynt_core.Ttype
 open Dynt_core.Stype
 

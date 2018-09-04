@@ -1,6 +1,6 @@
-open Dynt_core.Ttype
-open Dynt_core.Stype
-open Dynt_core.Std
+open Ttype
+open Stype
+open Std
 
 (***************************************************************************)
 (*  Copyright (C) 2000-2018 LexiFi SAS. All rights reserved.               *)
@@ -26,17 +26,16 @@ module Internal =
       | List_nth n -> Format.fprintf ppf ".[%i]" n
       | Array_nth n -> Format.fprintf ppf ".[|%i|]" n
 
-    let print_steps ppf l =
-      List.iter (print_step ppf) l
+    let print_steps ppf = function
+      | [] -> Format.fprintf ppf "(.)"
+      | l -> List.iter (print_step ppf) l
   end
 
 open Internal
 
 type kind = [`Root|`Constructor|`Field|`List|`Array|`Tuple]
-[@@abstract]
-[@@deriving t]
 
-type ('a, 'b, +'c) t = step list [@@deriving t][@@abstract]
+type ('a, 'b, +'c) t = step list
 type ('a, 'b) field = ('a, 'b, [`Field]) t
 type ('a, 'b) constructor = ('a, 'b, [`Constructor]) t
 type ('a, 'b) tuple = ('a, 'b, [`Tuple]) t
@@ -84,15 +83,23 @@ let extract_field_info ~t p find =
     end
   | s -> Format.eprintf "%a@." print_stype s; assert false
 
+
+let findi prop lst =
+  let i = ref 0 in
+  let rec f = function
+    | [] -> raise Not_found
+    | hd :: tl -> if prop hd then !i else (incr i; f tl)
+  in f lst
+
 let extract_field ~(t: 'a ttype) (p: ('a, 'b) field): 'a -> 'b =
-  match extract_field_info ~t p Ext.List.findi with
+  match extract_field_info ~t p findi with
   | nth, Boxed ->
     fun x -> Obj.obj (Obj.field (Obj.repr x) nth)
   | _, Unboxed ->
     fun x -> Obj.magic x
 
 let set_field ~(t: 'a ttype) (p: ('a, 'b) field): 'a -> 'b -> 'a =
-  match extract_field_info ~t p Ext.List.findi with
+  match extract_field_info ~t p findi with
   | nth, Boxed ->
     fun x v ->
       let x = Obj.dup (Obj.repr x) in
@@ -204,7 +211,7 @@ let rec patch (type t) ~(t : t ttype) path x f =
   | [] -> f x
   | (Field _ as p) :: rest -> begin
       let t = extract_field_type ~t [p] in
-      match extract_field_info ~t [p] Ext.List.findi with
+      match extract_field_info ~t [p] findi with
       | nth, Boxed ->
         let v = patch ~t rest (Obj.field x nth) f in
         let x = Obj.dup (Obj.repr x) in
@@ -357,3 +364,6 @@ let prefix_rooted_path prefix (TypePath path) =
 let rooted_root  = TypePath []
 
 let composed x = x
+
+let print fmt t =
+  steps_of_path t |> Internal.print_steps fmt

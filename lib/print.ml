@@ -317,13 +317,6 @@ let () =
     let t = unit_t
     let printer ppf _t =  Format.fprintf ppf "()"
   end) ;
-  add_abstract_type_dynamic_print_2 (module struct
-    type ('a,'b) t = ('a,'b, Path.kind) Path.t
-    let t (type a) (type b) (a_t:a ttype) (b_t:b ttype) =
-      [%t: (a,b,Path.kind) Path.t]
-    let printer ppf _a _b t =
-      Path.steps_of_path t |> Path.Internal.print_steps ppf
-  end) ;
   add_abstract_type_dynamic_print_1 (module struct
     type 'a t = 'a ttype
     let t (type a) (a: a ttype) = ttype_t a
@@ -382,34 +375,16 @@ module Test = struct
   let%expect_test _ =
     print_endline "ttype:";
     show [%t: tt ttype] tt_t;
-    print_endline "int paths:";
-    List.iter (show [%t: (tt,int,Path.kind) Path.t])
-      (Xtypes.all_paths ~root:tt_t ~target:int_t);
-    print_endline "bool paths:";
-    List.iter (show [%t: (tt,bool,Path.kind) Path.t])
-      (Xtypes.all_paths ~root:tt_t ~target:bool_t);
-    print_endline "string paths:";
-    List.iter (show [%t: (tt,string,Path.kind) Path.t])
-      (Xtypes.all_paths ~root:tt_t ~target:string_t);
     [%expect {|
-    ttype:
-    (tt =
-       | Inl of
-        (tt.Inl =
-           {
-             x: int;
-             y: bool;
-             z: string;
-           })
-       | Empty
-       | Tupl of (int * bool * string))
-    int paths:
-    .Inl.x
-    .Tupl.(0)
-    bool paths:
-    .Inl.y
-    .Tupl.(1)
-    string paths:
-    .Inl.z
-    .Tupl.(2) |}]
+      ttype:
+      (tt =
+         | Inl of
+          (tt.Inl =
+             {
+               x: int;
+               y: bool;
+               z: string;
+             })
+         | Empty
+         | Tupl of (int * bool * string)) |}]
 end
