@@ -11,7 +11,7 @@
  (synopsis "[@@deriving t]")
  (libraries ppxlib)
  (preprocess (pps ppxlib.metaquot))
- (modules dynt_deriving)
+ (modules dynt_deriving dynt_path)
  (ppx_runtime_libraries dynt_runtime)
  (kind ppx_deriver))
 

@@ -234,4 +234,6 @@ let%expect_test _ =
     false
     .e.[|2|] |}]
 
+(* let _ = [%path A ; f ; B ] *)
+
 
