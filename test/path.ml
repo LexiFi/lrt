@@ -234,6 +234,22 @@ let%expect_test _ =
     false
     .e.[|2|] |}]
 
-(* let _ = [%path A ; f ; B ] *)
+module P =  struct
+  type ('a,'b) step =
+    | Constructor of string
+    | Field of string
+    | Tuple of int
+    | List of int
+    | Array of int
+
+  type (_,_) path =
+    | (::) : ('a,'b) step * ('b,'c) path -> ('a,'c) path
+    | [] : ('a, 'a) path
+end
+
+type y = Int of int | Bool of bool
+type z = Y of y
+
+let p = [%path Y; Int]
 
 
