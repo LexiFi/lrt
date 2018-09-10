@@ -238,14 +238,27 @@ module P =  struct
 
   type ('a,'b) lens =
     { get : 'a -> 'b option
-    ; set : 'a -> 'b -> 'a option
     }
 
-  type ('a,'b) step = Path.Internal.step
+  type ('a,'b) step = Path.Internal.step * ('a,'b) lens
 
   type (_,_) path =
     | (::) : ('a,'b) step * ('b,'c) path -> ('a,'c) path
     | [] : ('a, 'a) path
+
+  let lens_of_path (t : ('a,'b) path) : ('a,'b) lens =
+    let obind f = function
+      | None -> None
+      | Some x -> f x
+    in
+    let rec fold : type a b c.
+      (a -> b option) -> (b,c) path -> (a -> c option) =
+      fun acc -> function
+        | [] -> acc
+        | (_, hd) :: tl ->
+          let get x = obind hd.get (acc x) in
+          fold get tl
+    in { get = fold (fun x -> Some x) t }
 
   let mlfi_of_path (t : ('a,'b) path) : ('a,'b, Path.kind) Path.t =
     Obj.magic t
@@ -261,3 +274,10 @@ type f = s array
 type e = { e : f }
 
 let p = [%path? [e; [|50|]; [1]; ([],_); x1; Y ([], _, _); Pair (_, [])]]
+
+let value = [| ["hey"; "hi"] |]
+let p2 = [%path? [[|0|]; [1]]]
+let l2 = P.lens_of_path p2
+
+let%expect_test _ =
+  print_endline (l2.get value |> function Some x -> x | None -> "fail" )

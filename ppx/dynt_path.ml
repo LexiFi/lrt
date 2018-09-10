@@ -83,62 +83,55 @@ let tuple_pat ~loc nth arity =
     let () = Array.set arr nth (ppat_var ~loc {txt="x";loc}) in
     ppat_tuple ~loc (Array.to_list arr)
 
-let rec expand_step ~loc v x =
+let rec expand_step ~loc x =
   match Ast_pattern.parse Pat.step loc x (fun x -> x) with
   | Constructor (label, nth, arity) ->
     let p = Some (tuple_pat ~loc nth arity) in
     let c = ppat_construct ~loc (lid_loc_of_label_loc label) p in
-    let f, t = v#pair loc in
     [%expr
-      let _ : [%t f] -> [%t t] = begin [@ocaml.warning "-11"]
-        function [%p  c] -> x | _ -> assert false
+      let get = begin [@ocaml.warning "-11"]
+        function [%p  c] -> Some x | _ -> None
       end in
       (Constructor ([%e estring ~loc label.txt], [%e eint ~loc nth])
-       : ([%t f], [%t t]) step)
+      , { get })
     ]
   | Field label ->
     let get = pexp_field ~loc (evar ~loc "x") (lid_loc_of_label_loc label) in
-    let f, t = v#pair loc in
     [%expr
-      let _ : [%t f] -> [%t t] = fun x -> [%e get] in
-      (Field [%e estring ~loc label.txt]
-       : ([%t f], [%t t]) step)]
+      let get x = Some [%e get] in
+      (Field [%e estring ~loc label.txt], { get })]
   | Tuple (nth, arity) ->
-    let f, t = v#pair loc in
     let p = tuple_pat ~loc nth arity in
     [%expr
-      let _ : [%t f] -> [%t t] = function [%p p] -> x in
-      (Tuple_nth [%e eint ~loc nth]
-       : ([%t f], [%t t]) step)]
+      let get [%p p] = Some x in
+      (Tuple_nth [%e eint ~loc nth],{ get })]
   (* List *)
   | List nth ->
     let () = if nth < 0 then
         raise_errorf ~loc "Invalid list index" in
-    let f, t = v#pair loc in
     [%expr
-      let _ : [%t f] -> [%t t] = fun l -> List.nth l [%e eint ~loc nth] in
-      (List_nth [%e eint ~loc nth]
-       : ([%t f], [%t t]) step)]
+      let get l = List.nth_opt l [%e eint ~loc nth] in
+      (List_nth [%e eint ~loc nth], {get})]
   (* array *)
   | Array nth ->
     let () = if nth < 0 then
         raise_errorf ~loc "Invalid array index" in
-    let f, t = v#pair loc in
     [%expr
-      let _ : [%t f] -> [%t t] = fun a -> Array.get a [%e eint ~loc nth] in
-      (Array_nth [%e eint ~loc nth]
-       : ([%t f], [%t t]) step)]
+      let get a =
+        if [%e eint ~loc nth] < Array.length a
+        then Some (Array.get a [%e eint ~loc nth])
+        else None in
+      (Array_nth [%e eint ~loc nth], {get})]
   | exception Pat.Invalid_tuple {txt; loc} -> raise_errorf ~loc "%s" txt
 
-and expand v acc ({ppat_loc = loc;_} as x) =
+and expand acc ({ppat_loc = loc;_} as x) =
   match Ast_pattern.parse Pat.lst loc x (fun x -> x) with
-  | Cons (hd, tl) -> expand v (expand_step ~loc v hd :: acc) tl
+  | Cons (hd, tl) -> expand (expand_step ~loc hd :: acc) tl
   | Nil -> acc
 
 let expand ~loc ~path x =
   ignore path;
-  let v = new tyvar in
-  [%expr let open P in [%e elist ~loc (expand v [] x |> List.rev)]]
+  [%expr let open P in [%e elist ~loc (expand [] x |> List.rev)]]
 
 (* Register the expander *)
 let () =
