@@ -17,76 +17,123 @@ class tyvar = object
     , Printf.sprintf "t%d" i |> ptyp_var ~loc)
 end
 
-let rec expand_single v ({pexp_loc = loc; _} as x) =
-  match x.pexp_desc with
-  (* Constructor *)
-  | Pexp_construct (lid, None) ->
-    let p = Some (ppat_var ~loc {txt="x";loc}) in
-    let c = ppat_construct ~loc lid p in
+type step =
+  | Constructor of label loc * int * int
+  | Field of label loc
+  | Tuple of int * int
+  | List of int
+  | Array of int
+
+type lst =
+  | Cons of pattern * pattern
+  | Nil
+
+module Pat = struct
+  open Ast_pattern
+
+  exception Invalid_tuple of string loc
+
+  let nth_and_arity ~loc lst =
+    match List.fold_left (fun (i, nth) e -> match e, nth with
+        | true, None -> (i+1, Some i)
+        | true, _ -> raise (Invalid_tuple {txt="Too much []";loc})
+        | false, x -> (i+1, x)) (0, None) lst with
+    | arity, Some nth -> nth, arity
+    | _ -> raise (Invalid_tuple {txt="No []";loc})
+
+  let tuple =
+    ppat_tuple (many (
+        (ppat_any |> map0 ~f:false) |||
+        (ppat_construct (lident (string "[]")) none |> map0 ~f:true)))
+    |> map1' ~f:(fun loc -> nth_and_arity ~loc)
+
+  let step =
+    (ppat_var __' |> map1 ~f:(fun x -> Field x))
+    |||
+    (ppat_array (pint __ ^:: nil) |> map1 ~f:(fun x -> Array x))
+    |||
+    (ppat_construct (lident (string "::"))
+       (some (ppat_tuple (pint __ ^::
+                          ppat_construct (lident (string "[]")) none
+                          ^:: nil)))
+     |> map1 ~f:(fun x -> List x))
+    |||
+    (ppat_construct (lident __')
+       (some tuple) |> map2 ~f:(fun s (nth,arity) ->
+        Constructor (s, nth, arity)))
+    |||
+    (ppat_construct (lident __')
+       none |> map1 ~f:(fun s -> Constructor (s, 0, 1)))
+    |||
+    (tuple |> map1 ~f:(fun (nth,arity) -> Tuple (nth,arity)))
+
+  let lst =
+    (ppat_construct (lident (string "::"))
+       (some (ppat_tuple (__ ^:: __ ^:: nil)))
+     |> map2 ~f:(fun a b -> Cons (a,b)))
+    |||
+    (ppat_construct (lident (string "[]")) none |> map0 ~f:Nil)
+
+end
+
+let lid_loc_of_label_loc = Loc.map ~f:(fun x -> Lident x)
+
+let tuple_pat ~loc nth arity =
+    let arr = Array.make arity (ppat_any ~loc) in
+    let () = Array.set arr nth (ppat_var ~loc {txt="x";loc}) in
+    ppat_tuple ~loc (Array.to_list arr)
+
+let rec expand_step ~loc v x =
+  match Ast_pattern.parse Pat.step loc x (fun x -> x) with
+  | Constructor (label, nth, arity) ->
+    let p = Some (tuple_pat ~loc nth arity) in
+    let c = ppat_construct ~loc (lid_loc_of_label_loc label) p in
     let f, t = v#pair loc in
     [%expr
       let _ : [%t f] -> [%t t] = begin [@ocaml.warning "-11"]
         function [%p  c] -> x | _ -> assert false
       end in
-      (Constructor [%e estring ~loc (Longident.name lid.txt)]
+      (Constructor ([%e estring ~loc label.txt], [%e eint ~loc nth])
        : ([%t f], [%t t]) step)
     ]
-  (* Field *)
-  | Pexp_ident lid ->
-    let get = pexp_field ~loc (evar ~loc "x") lid in
+  | Field label ->
+    let get = pexp_field ~loc (evar ~loc "x") (lid_loc_of_label_loc label) in
     let f, t = v#pair loc in
     [%expr
       let _ : [%t f] -> [%t t] = fun x -> [%e get] in
-      (Field [%e estring ~loc (Longident.name lid.txt)]
+      (Field [%e estring ~loc label.txt]
        : ([%t f], [%t t]) step)]
-  (* Tuple *)
-  | Pexp_apply ({pexp_desc = Pexp_ident {txt=Lident "t";_}
-                ; pexp_loc = loc; _}, args) ->
-    let pat = Ast_pattern.( __ ** eint __ ^:: __ ** eint __ ^:: nil) in
-    let nth, arity = Ast_pattern.parse pat loc args (fun _ a _ b -> (a,b)) in
-    let () = if not (nth < arity) || nth < 0 || arity < 2 then
-        raise_errorf ~loc "Specify tuple step with t <nth> <arity>" in
-    let arr = Array.make arity (ppat_any ~loc) in
-    let () = Array.set arr nth (ppat_var ~loc {txt="x";loc}) in
-    let p = ppat_tuple ~loc (Array.to_list arr) in
+  | Tuple (nth, arity) ->
     let f, t = v#pair loc in
+    let p = tuple_pat ~loc nth arity in
     [%expr
       let _ : [%t f] -> [%t t] = function [%p p] -> x in
-      (Tuple [%e eint ~loc nth]
+      (Tuple_nth [%e eint ~loc nth]
        : ([%t f], [%t t]) step)]
   (* List *)
-  | Pexp_apply ({pexp_desc = Pexp_ident {txt=Lident "l";_}
-                ; pexp_loc = loc; _}, args) ->
-    let pat = Ast_pattern.( __ ** eint __ ^:: nil) in
-    let nth = Ast_pattern.parse pat loc args (fun _ a -> a) in
+  | List nth ->
     let () = if nth < 0 then
-        raise_errorf ~loc "Specify list step with l <nth>" in
+        raise_errorf ~loc "Invalid list index" in
     let f, t = v#pair loc in
     [%expr
       let _ : [%t f] -> [%t t] = fun l -> List.nth l [%e eint ~loc nth] in
-      (List [%e eint ~loc nth]
+      (List_nth [%e eint ~loc nth]
        : ([%t f], [%t t]) step)]
   (* array *)
-  | Pexp_apply ({pexp_desc = Pexp_ident {txt=Lident "a";_}
-                ; pexp_loc = loc; _}, args) ->
-    let pat = Ast_pattern.( __ ** eint __ ^:: nil) in
-    let nth = Ast_pattern.parse pat loc args (fun _ a -> a) in
+  | Array nth ->
     let () = if nth < 0 then
-        raise_errorf ~loc "Specify list step with l <nth>" in
+        raise_errorf ~loc "Invalid array index" in
     let f, t = v#pair loc in
     [%expr
       let _ : [%t f] -> [%t t] = fun a -> Array.get a [%e eint ~loc nth] in
-      (Array [%e eint ~loc nth]
+      (Array_nth [%e eint ~loc nth]
        : ([%t f], [%t t]) step)]
-  | _ ->
-    raise_errorf "Cannot make sense of this step" ~loc
+  | exception Pat.Invalid_tuple {txt; loc} -> raise_errorf ~loc "%s" txt
 
-and expand v acc x =
-  match x.pexp_desc with
-  (* Concatenation *)
-  | Pexp_sequence (hd, tl) -> expand v (expand_single v hd :: acc) tl
-  (* Single step *)
-  | _ -> expand_single v x :: acc
+and expand v acc ({ppat_loc = loc;_} as x) =
+  match Ast_pattern.parse Pat.lst loc x (fun x -> x) with
+  | Cons (hd, tl) -> expand v (expand_step ~loc v hd :: acc) tl
+  | Nil -> acc
 
 let expand ~loc ~path x =
   ignore path;
@@ -96,6 +143,5 @@ let expand ~loc ~path x =
 (* Register the expander *)
 let () =
   let extensions =
-    [ Extension.(declare "path" Context.expression
-                   Ast_pattern.(single_expr_payload __)) expand ] in
+    [ Extension.(declare "path" Context.expression Ast_pattern.(ppat __ none) expand) ] in
   Driver.register_transformation "dynt_path" ~extensions

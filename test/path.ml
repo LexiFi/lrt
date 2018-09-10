@@ -236,36 +236,28 @@ let%expect_test _ =
 
 module P =  struct
 
-  type sstep =
-    | Constructor of string * int
-    | Field of string
-    | Tuple of int
-    | List of int
-    | Array of int
-
-  type ('a,'b) step =
-    { desc : sstep
-    ; get : 'a -> 'b option
+  type ('a,'b) lens =
+    { get : 'a -> 'b option
     ; set : 'a -> 'b -> 'a option
     }
+
+  type ('a,'b) step = Path.Internal.step
 
   type (_,_) path =
     | (::) : ('a,'b) step * ('b,'c) path -> ('a,'c) path
     | [] : ('a, 'a) path
 
-  let to_path (t : ('a,'b) path) : ('a,'b) Path.t =
-    Obj.magic (List.map (fun x -> x.steps)) t
+  let mlfi_of_path (t : ('a,'b) path) : ('a,'b, Path.kind) Path.t =
+    Obj.magic t
+
 end
 
 type y = Int of int | Bool of bool | Pair of int * string
-type z = Y of y
+type z = Y of y * y * y
 type x = { x1 : z; x2 : z}
 type r = x * y
 type s = r list
 type f = s array
 type e = { e : f }
 
-let p = [%path e; [| 50 |] ; [1] ; (_,[],_) ; x1 ; Y (_, _, []); Pair (_, [])]
-
-    [%get p] : 'a -> 'b option
-    [%set p] : 'a -> 'b -> 'a option
+let p = [%path? [e; [|50|]; [1]; ([],_); x1; Y ([], _, _); Pair (_, [])]]
