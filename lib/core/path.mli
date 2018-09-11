@@ -1,4 +1,26 @@
-(** Access deeply nested values *)
+(** Access deeply nested values.
+
+    This module introduces paths within types and values.
+
+    Paths are constructed using the syntax extension [\[%path? P\]].
+    The payload P is a list of steps, each following this syntax:
+
+      - [ ([],_,_) ] to access the first element of a triple.
+      - [ f ] to access the record field [f].
+      - [ C (_,[]) ] to access the second argument to variant constructor [C].
+      - [ C f ] to access inline field [f] of variant constructor [C].
+      - [ [7] ] to access the seventh element of a list.
+      - [ [|5|] ] to access the fifth element of an array.
+
+    The empty path (root) can be written [\[%path? []\]] or
+    [Path.\[\]].
+
+    Examples:
+
+      - [\[%path? \[f; (\[\],_)\]\]] corresponds to [fun x -> fst x.f]
+      - [\[%path? \[C f; \[|1|\]\]\]] corresponds to
+        [function C x -> Array.get x.f 1]
+*)
 
 type (_, _) t =
   | (::) : ('a, 'b) step * ('b, 'c) t -> ('a, 'c) t
@@ -23,15 +45,15 @@ and constructor_argument =
   | Inline of { field : string }
 
 val meta_list : ('a, 'b) t -> meta list
-(** Read the abstract representation from a path *)
+(** Read the abstract representation from a path. *)
 
 val print : Format.formatter -> ('a, 'b) t -> unit
-(** Print a path in the syntax expected by the syntax extension *)
+(** Print a path in the syntax expected by the syntax extension. *)
 
 val lens : ('a, 'b) t -> ('a, 'b) lens
-(** Condense a path to a single lens *)
+(** Condense a path to a single lens. *)
 
-(** / **)
+(**/**)
 
 module Unsafe : sig
   (** Constructors for the private type [meta]. This should not be used directly
