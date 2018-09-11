@@ -79,39 +79,63 @@ end
 let lid_loc_of_label_loc = Loc.map ~f:(fun x -> Lident x)
 
 let tuple_pat ~loc nth arity =
-    let arr = Array.make arity (ppat_any ~loc) in
-    let () = Array.set arr nth (ppat_var ~loc {txt="x";loc}) in
-    ppat_tuple ~loc (Array.to_list arr)
+  let arr = Array.init arity (fun i -> pvar ~loc ("_v" ^ (string_of_int i))) in
+  let () = Array.set arr nth (pvar ~loc "x") in
+  ppat_tuple ~loc (Array.to_list arr)
+
+let tuple_patch ~loc nth arity =
+  let arr = Array.init arity (fun i -> evar ~loc ("_v" ^ (string_of_int i))) in
+  let () = Array.set arr nth (evar ~loc "y") in
+  pexp_tuple ~loc (Array.to_list arr)
 
 let rec expand_step ~loc x =
   match Ast_pattern.parse Pat.step loc x (fun x -> x) with
   | Constructor (label, nth, arity) ->
     let p = Some (tuple_pat ~loc nth arity) in
-    let c = ppat_construct ~loc (lid_loc_of_label_loc label) p in
+    let lloc = lid_loc_of_label_loc label in
+    let c = ppat_construct ~loc lloc p in
+    let patched = pexp_construct ~loc lloc (Some (tuple_patch ~loc nth arity))
+    in
     [%expr
-      let get = begin [@ocaml.warning "-11"]
-        function [%p  c] -> Some x | _ -> None
+      let get x = begin [@ocaml.warning "-11"]
+          match x with [%p  c] -> Some x | _ -> None
+      end in
+      let set x y = begin [@ocaml.warning "-11"]
+          match x with [%p  c] -> Some [%e patched] | _ -> None
       end in
       (Constructor ([%e estring ~loc label.txt], [%e eint ~loc nth])
-      , { get })
+      , { get ; set })
     ]
   | Field label ->
-    let get = pexp_field ~loc (evar ~loc "x") (lid_loc_of_label_loc label) in
+    let liloc = lid_loc_of_label_loc label in
+    let get = pexp_field ~loc (evar ~loc "x") liloc in
+    let set = pexp_record ~loc
+        [liloc,(evar ~loc "y")]
+        (Some (evar ~loc "x"))
+    in
     [%expr
       let get x = Some [%e get] in
-      (Field [%e estring ~loc label.txt], { get })]
+      let set x y = begin [@ocaml.warning "-23"] Some [%e set] end in
+      (Field [%e estring ~loc label.txt], { get ; set })]
   | Tuple (nth, arity) ->
     let p = tuple_pat ~loc nth arity in
+    let patched = tuple_patch ~loc nth arity in
     [%expr
       let get [%p p] = Some x in
-      (Tuple_nth [%e eint ~loc nth],{ get })]
+      let set [%p p] y = Some [%e patched] in
+      (Tuple_nth [%e eint ~loc nth],{ get; set })]
   (* List *)
   | List nth ->
     let () = if nth < 0 then
         raise_errorf ~loc "Invalid list index" in
     [%expr
       let get l = List.nth_opt l [%e eint ~loc nth] in
-      (List_nth [%e eint ~loc nth], {get})]
+      let set l y = if [%e eint ~loc nth] < List.length l
+      (* TODO: implement list set nth a bit more efficiently *)
+        then Some (List.mapi (fun i x ->
+            if i = [%e eint ~loc nth] then y else x) l)
+        else None in
+      (List_nth [%e eint ~loc nth], {get ; set})]
   (* array *)
   | Array nth ->
     let () = if nth < 0 then
@@ -121,7 +145,12 @@ let rec expand_step ~loc x =
         if [%e eint ~loc nth] < Array.length a
         then Some (Array.get a [%e eint ~loc nth])
         else None in
-      (Array_nth [%e eint ~loc nth], {get})]
+      let set a y =
+        if [%e eint ~loc nth] < Array.length a
+        (* TODO: This is a bit ugly, what can we do? *)
+        then Some (Array.set a [%e eint ~loc nth] y; a)
+        else None in
+      (Array_nth [%e eint ~loc nth], {get; set})]
   | exception Pat.Invalid_tuple {txt; loc} -> raise_errorf ~loc "%s" txt
 
 and expand acc ({ppat_loc = loc;_} as x) =

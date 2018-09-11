@@ -238,6 +238,7 @@ module P =  struct
 
   type ('a,'b) lens =
     { get : 'a -> 'b option
+    ; set : 'a -> 'b -> 'a option
     }
 
   type ('a,'b) step = Path.Internal.step * ('a,'b) lens
@@ -247,18 +248,31 @@ module P =  struct
     | [] : ('a, 'a) path
 
   let lens_of_path (t : ('a,'b) path) : ('a,'b) lens =
-    let obind f = function
-      | None -> None
-      | Some x -> f x
+    let root : ('a,'a) lens =
+      let set _a b = Some b
+      and get a = Some a
+      in { set; get }
     in
     let rec fold : type a b c.
-      (a -> b option) -> (b,c) path -> (a -> c option) =
+      (a,b) lens -> (b,c) path -> (a,c) lens =
       fun acc -> function
         | [] -> acc
         | (_, hd) :: tl ->
-          let get x = obind hd.get (acc x) in
-          fold get tl
-    in { get = fold (fun x -> Some x) t }
+          let get a =
+            match acc.get a with
+            | None -> None
+            | Some x -> hd.get x
+          in
+          let set a c =
+            match acc.get a with
+            | None -> None
+            | Some b ->
+              match hd.set b c with
+              | None -> None
+              | Some b -> acc.set a b
+          in
+          fold {get; set} tl
+    in fold root t
 
   let mlfi_of_path (t : ('a,'b) path) : ('a,'b, Path.kind) Path.t =
     Obj.magic t
@@ -279,5 +293,13 @@ let value = [| ["hey"; "hi"] |]
 let p2 = [%path? [[|0|]; [1]]]
 let l2 = P.lens_of_path p2
 
+let assert_some = function
+  | Some x -> x
+  | None -> assert false
+
 let%expect_test _ =
-  print_endline (l2.get value |> function Some x -> x | None -> "fail" )
+  print_endline (l2.get value |> assert_some);
+  print_endline (l2.set value "salut" |> assert_some |> l2.get |> assert_some);
+  [%expect {|
+    hi
+    salut |}]
