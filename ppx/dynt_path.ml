@@ -19,6 +19,7 @@ end
 
 type step =
   | Constructor of label loc * int * int
+  | ConstructorInline of label loc * label loc
   | Field of label loc
   | Tuple of int * int
   | List of int
@@ -63,6 +64,10 @@ module Pat = struct
         Constructor (s, nth, arity)))
     |||
     (ppat_construct (lident __')
+       (some (ppat_var __') ) |> map2 ~f:(fun name field ->
+        ConstructorInline (name, field)))
+    |||
+    (ppat_construct (lident __')
        none |> map1 ~f:(fun s -> Constructor (s, 0, 1)))
     |||
     (tuple |> map1 ~f:(fun (nth,arity) -> Tuple (nth,arity)))
@@ -98,39 +103,60 @@ let rec expand_step ~loc x =
     in
     [%expr
       let get x = begin [@ocaml.warning "-11"]
-          match x with [%p  c] -> Some x | _ -> None
-      end in
-      let set x y = begin [@ocaml.warning "-11"]
-          match x with [%p  c] -> Some [%e patched] | _ -> None
-      end in
-      (Constructor ([%e estring ~loc label.txt], [%e eint ~loc nth])
-      , { get ; set })
-    ]
+          match x with [%p  c] -> Some x | _ -> None end
+      and set x y = begin [@ocaml.warning "-11"]
+          match x with [%p  c] -> Some [%e patched] | _ -> None end
+      and name = [%e estring ~loc:label.loc label.txt]
+      and arg =
+        Regular {nth = [%e eint ~loc nth]; arity = [%e eint ~loc arity]}
+      in
+      ({ get ; set }, Constructor { name ; arg })]
+  | ConstructorInline (name, field) ->
+    let nlloc = lid_loc_of_label_loc name in
+    let flloc = lid_loc_of_label_loc field in
+    let c = ppat_construct ~loc nlloc (Some (pvar ~loc "x")) in
+    let get = pexp_field ~loc (evar ~loc "x") flloc
+    and set = pexp_construct ~loc nlloc
+        (Some (pexp_record ~loc
+                 [flloc,(evar ~loc "y")]
+                 (Some (evar ~loc "x"))))
+    in
+    [%expr
+      let get x = begin [@ocaml.warning "-11"]
+          match x with [%p  c] -> Some [%e get] | _ -> None end
+      and set x y = begin [@ocaml.warning "-11"]
+          match x with [%p  c] -> Some [%e set] | _ -> None end
+      and name = [%e estring ~loc:name.loc name.txt]
+      and arg =
+        Inline {field = [%e estring ~loc:field.loc field.txt]}
+      in
+      ({ get ; set }, Constructor { name ; arg })]
   | Field label ->
     let liloc = lid_loc_of_label_loc label in
-    let get = pexp_field ~loc (evar ~loc "x") liloc in
-    let set = pexp_record ~loc
+    let get = pexp_field ~loc (evar ~loc "x") liloc
+    and set = pexp_record ~loc
         [liloc,(evar ~loc "y")]
         (Some (evar ~loc "x"))
     in
     [%expr
       let get x = Some [%e get] in
       let set x y = begin [@ocaml.warning "-23"] Some [%e set] end in
-      (Field [%e estring ~loc label.txt], { get ; set })]
+      ({ get ; set }, Field {name=[%e estring ~loc:label.loc label.txt]})]
   | Tuple (nth, arity) ->
     let p = tuple_pat ~loc nth arity in
     let patched = tuple_patch ~loc nth arity in
     [%expr
       let get [%p p] = Some x in
       let set [%p p] y = Some [%e patched] in
-      (Tuple_nth [%e eint ~loc nth],{ get; set })]
+      ( { get; set }
+      , Tuple {nth=[%e eint ~loc nth]; arity=[%e eint ~loc arity]})]
   | List nth ->
     let () = if nth < 0 then
         raise_errorf ~loc "Invalid list index" in
     [%expr
       let get l = List.nth_opt l [%e eint ~loc nth] in
       let set l y = set_nth_opt l [%e eint ~loc nth] y in
-      (List_nth [%e eint ~loc nth], {get ; set})]
+      ({get ; set}, List {nth=[%e eint ~loc nth]})]
   | Array nth ->
     let () = if nth < 0 then
         raise_errorf ~loc "Invalid array index" in
@@ -145,7 +171,7 @@ let rec expand_step ~loc x =
           let a' = Array.copy a in
           Array.set a' [%e eint ~loc nth] y; Some a'
         else None
-      in (Array_nth [%e eint ~loc nth], {get; set})]
+      in ({get ; set}, Array {nth=[%e eint ~loc nth]})]
   | exception Pat.Invalid_tuple {txt; loc} -> raise_errorf ~loc "%s" txt
 
 and expand acc ({ppat_loc = loc;_} as x) =
