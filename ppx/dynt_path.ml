@@ -124,19 +124,13 @@ let rec expand_step ~loc x =
       let get [%p p] = Some x in
       let set [%p p] y = Some [%e patched] in
       (Tuple_nth [%e eint ~loc nth],{ get; set })]
-  (* List *)
   | List nth ->
     let () = if nth < 0 then
         raise_errorf ~loc "Invalid list index" in
     [%expr
       let get l = List.nth_opt l [%e eint ~loc nth] in
-      let set l y = if [%e eint ~loc nth] < List.length l
-      (* TODO: implement list set nth a bit more efficiently *)
-        then Some (List.mapi (fun i x ->
-            if i = [%e eint ~loc nth] then y else x) l)
-        else None in
+      let set l y = set_nth_opt l [%e eint ~loc nth] y in
       (List_nth [%e eint ~loc nth], {get ; set})]
-  (* array *)
   | Array nth ->
     let () = if nth < 0 then
         raise_errorf ~loc "Invalid array index" in
@@ -147,10 +141,11 @@ let rec expand_step ~loc x =
         else None in
       let set a y =
         if [%e eint ~loc nth] < Array.length a
-        (* TODO: This is a bit ugly, what can we do? *)
-        then Some (Array.set a [%e eint ~loc nth] y; a)
-        else None in
-      (Array_nth [%e eint ~loc nth], {get; set})]
+        then
+          let a' = Array.copy a in
+          Array.set a' [%e eint ~loc nth] y; Some a'
+        else None
+      in (Array_nth [%e eint ~loc nth], {get; set})]
   | exception Pat.Invalid_tuple {txt; loc} -> raise_errorf ~loc "%s" txt
 
 and expand acc ({ppat_loc = loc;_} as x) =
@@ -160,7 +155,7 @@ and expand acc ({ppat_loc = loc;_} as x) =
 
 let expand ~loc ~path x =
   ignore path;
-  [%expr let open P in [%e elist ~loc (expand [] x |> List.rev)]]
+  [%expr let open P in let open Dynt_runtime.Path in [%e elist ~loc (expand [] x |> List.rev)]]
 
 (* Register the expander *)
 let () =
