@@ -1,6 +1,8 @@
-open Dynt_core
 open Dynt_core.Ttype
 open Dynt_core.Stype
+
+(* TODO: Get rid of this *)
+module Path = Dynpath
 
 (** Safe inspection of ttypes. *)
 

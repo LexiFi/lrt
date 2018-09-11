@@ -671,7 +671,7 @@ module FloatRecord = struct
   let test ttype gx gy =
     let _ = Random.self_init () in
     let fpaths = Xtypes.all_paths ~root:ttype ~target:float_t in
-    let geti i t = Path.extract ~t:ttype (List.nth fpaths i) t |> snd in
+    let geti i t = Dynpath.extract ~t:ttype (List.nth fpaths i) t |> snd in
     let generator = Check.of_type_gen ~size:101 ~t:ttype [] in
     let check a b t =
       if Float.equal (a t) (b t) then true else begin
@@ -719,7 +719,7 @@ module Unboxed = struct
   let test root target gf eq =
     let _ = Random.self_init () in
     let fpaths = Xtypes.all_paths ~root ~target in
-    let geti i t = Path.extract ~t:root (List.nth fpaths i) t |> snd in
+    let geti i t = Dynpath.extract ~t:root (List.nth fpaths i) t |> snd in
     let generator = Check.of_type_gen ~size:101 ~t:root [] in
     let check a b t =
         let x_a, x_b = a t, b t in

@@ -1,7 +1,7 @@
-open Dynt_core
 open Dynt_core.Ttype
 open Dynt_core.Stype
 open Dynt_core.Std
+module Path = Dynpath (* TODO: get rid *)
 
 let cast_ttype: stype -> 'a ttype = Obj.magic
 

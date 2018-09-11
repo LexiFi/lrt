@@ -1,4 +1,5 @@
 open Dynt
+module Path = Dynpath
 
 let pprint p =
   Format.(printf "%a\n%!" Path.print p)
@@ -234,101 +235,6 @@ let%expect_test _ =
     false
     .e.[|2|] |}]
 
-module P =  struct
-
-  let print_list ppf ~opn ~cls ~sep print_el l =
-    let rec f = function
-      | [] -> ()
-      | hd :: [] -> Format.fprintf ppf "%a" print_el hd
-      | hd :: tl ->
-        Format.fprintf ppf "%a" print_el hd ;
-        Format.fprintf ppf "%s" sep;
-        f tl
-    in
-    Format.fprintf ppf "%s" opn;
-    f l;
-    Format.fprintf ppf "%s" cls
-
-  type ('a,'b) step = ('a,'b) lens * meta
-
-  and ('a,'b) lens =
-    { get : 'a -> 'b option
-    ; set : 'a -> 'b -> 'a option
-    }
-
-  and meta = (* private *)
-    | Field of {name: string}
-    | Constructor of {name: string; arg: constructor_argument}
-    | Tuple of {nth: int; arity: int}
-    | List of {nth: int}
-    | Array of {nth: int}
-
-  and constructor_argument =
-    | Regular of {nth: int; arity: int}
-    | Inline of {field: string}
-
-  type (_,_) t =
-    | (::) : ('a,'b) step * ('b,'c) t -> ('a,'c) t
-    | [] : ('a, 'a) t
-
-  let rec print_step ppf = function
-    | Field {name} -> Format.fprintf ppf "%s" name
-    | Constructor {name; arg = Regular {nth;arity}} ->
-      Format.fprintf ppf "%s %a" name print_step (Tuple {nth;arity})
-    | Constructor {name; arg = Inline {field}} ->
-      Format.fprintf ppf "%s %a" name print_step (Field {name=field})
-    | Tuple {nth; arity}->
-      let a = Array.make arity "_" in
-      Array.set a nth "[]";
-      if arity > 1 then Format.fprintf ppf "(" ;
-      print_list ppf ~opn:"" ~cls:"" ~sep:","
-        (fun ppf s -> Format.fprintf ppf "%s" s) (Array.to_list a);
-      if arity > 1 then Format.fprintf ppf ")";
-    | List {nth} -> Format.fprintf ppf "[%i]" nth
-    | Array {nth} -> Format.fprintf ppf "[|%i|]" nth
-
-  let meta_list t =
-    let rec fold : type a b.
-      meta list -> (a,b) t -> meta list =
-      fun acc -> function
-        | [] -> List.rev acc
-        | (_, hd) :: tl -> fold (hd :: acc) tl
-    in
-    fold [] t
-
-  let print ppf t =
-    print_list ppf ~opn:"[%path? [" ~cls:"]]" ~sep:"; "
-      print_step (meta_list t)
-
-  let lens (t : ('a,'b) t) : ('a,'b) lens =
-    let root : ('a,'a) lens =
-      let set _a b = Some b
-      and get a = Some a
-      in { set; get }
-    in
-    let rec fold : type a b c.
-      (a,b) lens -> (b,c) t -> (a,c) lens =
-      fun acc -> function
-        | [] -> acc
-        | (hd, _) :: tl ->
-          let get a =
-            match acc.get a with
-            | None -> None
-            | Some x -> hd.get x
-          in
-          let set a c =
-            match acc.get a with
-            | None -> None
-            | Some b ->
-              match hd.set b c with
-              | None -> None
-              | Some b -> acc.set a b
-          in
-          fold {get; set} tl
-    in fold root t
-
-end
-
 type y = Int of int | Bool of bool | Pair of int * string
 type z = Y of {y1: y; y2: y; y3: y}
 type x = { x1 : z; x2 : z}
@@ -340,12 +246,12 @@ type e = { e : f }
 let p = [%path? [e; [|50|]; [1]; ([],_); x1; Y y2; Pair (_,[])]]
 
 let%expect_test _ =
-  Format.printf "%a\n%!" P.print p;
-  [%expect {| [%path? [e; [|50|]; [1]; ([],_); x1; Y ([],_,_); Pair (_,[])]] |}]
+  Format.printf "%a\n%!" Dynt.Path.print p;
+  [%expect {| [%path? [e; [|50|]; [1]; ([],_); x1; Y y2; Pair (_,[])]] |}]
 
 let value = [| ["hey"; "hi"] |]
 let p2 = [%path? [[|0|]; [1]]]
-let l2 = P.lens p2
+let l2 = Dynt.Path.lens p2
 
 let assert_some = function
   | Some x -> x

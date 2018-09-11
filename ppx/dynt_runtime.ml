@@ -38,7 +38,6 @@ module Types = struct
     abstract_names := Set.add s !abstract_names
 end
 
-
 module Path = struct
   (** Runtime for building paths *)
 
@@ -64,4 +63,8 @@ module Path = struct
     match set_nth l nth x with
     | x -> Some x
     | exception _ -> None
+
+  include Dynt_core.Path
+  include Unsafe [@@ocaml.warning "-3"]
+
 end

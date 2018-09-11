@@ -106,11 +106,11 @@ let rec expand_step ~loc x =
           match x with [%p  c] -> Some x | _ -> None end
       and set x y = begin [@ocaml.warning "-11"]
           match x with [%p  c] -> Some [%e patched] | _ -> None end
-      and name = [%e estring ~loc:label.loc label.txt]
-      and arg =
-        Regular {nth = [%e eint ~loc nth]; arity = [%e eint ~loc arity]}
       in
-      ({ get ; set }, Constructor { name ; arg })]
+      ({ get ; set }, constructor_regular
+         ~name:[%e estring ~loc:label.loc label.txt]
+         ~nth:[%e eint ~loc nth]
+         ~arity:[%e eint ~loc arity] )]
   | ConstructorInline (name, field) ->
     let nlloc = lid_loc_of_label_loc name in
     let flloc = lid_loc_of_label_loc field in
@@ -126,11 +126,10 @@ let rec expand_step ~loc x =
           match x with [%p  c] -> Some [%e get] | _ -> None end
       and set x y = begin [@ocaml.warning "-11"]
           match x with [%p  c] -> Some [%e set] | _ -> None end
-      and name = [%e estring ~loc:name.loc name.txt]
-      and arg =
-        Inline {field = [%e estring ~loc:field.loc field.txt]}
       in
-      ({ get ; set }, Constructor { name ; arg })]
+      ({ get ; set }, constructor_inline
+         ~name:[%e estring ~loc:name.loc name.txt]
+         ~field:[%e estring ~loc:field.loc field.txt] )]
   | Field label ->
     let liloc = lid_loc_of_label_loc label in
     let get = pexp_field ~loc (evar ~loc "x") liloc
@@ -139,24 +138,25 @@ let rec expand_step ~loc x =
         (Some (evar ~loc "x"))
     in
     [%expr
-      let get x = Some [%e get] in
-      let set x y = begin [@ocaml.warning "-23"] Some [%e set] end in
-      ({ get ; set }, Field {name=[%e estring ~loc:label.loc label.txt]})]
+      let get x = Some [%e get]
+      and set x y = begin [@ocaml.warning "-23"] Some [%e set] end
+      in ({ get ; set }, field ~name:[%e estring ~loc:label.loc label.txt] )]
   | Tuple (nth, arity) ->
     let p = tuple_pat ~loc nth arity in
     let patched = tuple_patch ~loc nth arity in
     [%expr
-      let get [%p p] = Some x in
-      let set [%p p] y = Some [%e patched] in
-      ( { get; set }
-      , Tuple {nth=[%e eint ~loc nth]; arity=[%e eint ~loc arity]})]
+      let get [%p p] = Some x
+      and set [%p p] y = Some [%e patched]
+      in ( { get; set }, tuple
+             ~nth:[%e eint ~loc nth]
+             ~arity:[%e eint ~loc arity] )]
   | List nth ->
     let () = if nth < 0 then
         raise_errorf ~loc "Invalid list index" in
     [%expr
-      let get l = List.nth_opt l [%e eint ~loc nth] in
-      let set l y = set_nth_opt l [%e eint ~loc nth] y in
-      ({get ; set}, List {nth=[%e eint ~loc nth]})]
+      let get l = List.nth_opt l [%e eint ~loc nth]
+      and set l y = set_nth_opt l [%e eint ~loc nth] y
+      in ({get ; set}, list ~nth:[%e eint ~loc nth] )]
   | Array nth ->
     let () = if nth < 0 then
         raise_errorf ~loc "Invalid array index" in
@@ -164,14 +164,14 @@ let rec expand_step ~loc x =
       let get a =
         if [%e eint ~loc nth] < Array.length a
         then Some (Array.get a [%e eint ~loc nth])
-        else None in
-      let set a y =
+        else None
+      and set a y =
         if [%e eint ~loc nth] < Array.length a
         then
           let a' = Array.copy a in
           Array.set a' [%e eint ~loc nth] y; Some a'
         else None
-      in ({get ; set}, Array {nth=[%e eint ~loc nth]})]
+      in ({get ; set}, array ~nth:[%e eint ~loc nth] )]
   | exception Pat.Invalid_tuple {txt; loc} -> raise_errorf ~loc "%s" txt
 
 and expand acc ({ppat_loc = loc;_} as x) =
@@ -181,10 +181,12 @@ and expand acc ({ppat_loc = loc;_} as x) =
 
 let expand ~loc ~path x =
   ignore path;
-  [%expr let open P in let open Dynt_runtime.Path in [%e elist ~loc (expand [] x |> List.rev)]]
+  [%expr let open! Dynt_runtime.Path in
+    [%e elist ~loc (expand [] x |> List.rev)]]
 
 (* Register the expander *)
 let () =
   let extensions =
-    [ Extension.(declare "path" Context.expression Ast_pattern.(ppat __ none) expand) ] in
+    [ Extension.(declare "path" Context.expression
+                   Ast_pattern.(ppat __ none) expand) ] in
   Driver.register_transformation "dynt_path" ~extensions
