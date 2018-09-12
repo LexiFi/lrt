@@ -24,7 +24,6 @@
 type (_, _) t =
   | (::) : ('a, 'b) step * ('b, 'c) t -> ('a, 'c) t
   | [] : ('a, 'a) t
-  | Composed : ('a,'b) t * ('b,'c) t -> ('a, 'c) t
 
 and ('a, 'b) step = ('a, 'b) lens * meta
 
@@ -45,7 +44,7 @@ and constructor_argument =
   | Inline of { field : string }
 
 val ( @ ): ('a, 'b) t -> ('b, 'c) t -> ('a, 'c) t
-(** [a @ b] is equivalent to [Composed (a, b)]. *)
+(** [a @ b] composes the paths a and b. *)
 
 val meta_list : ('a, 'b) t -> meta list
 (** Read the abstract representation from a path. *)

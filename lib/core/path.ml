@@ -15,7 +15,6 @@ let print_list ppf ~opn ~cls ~sep print_el l =
 type (_,_) t =
   | (::) : ('a,'b) step * ('b,'c) t -> ('a,'c) t
   | [] : ('a, 'a) t
-  | Composed : ('a,'b) t * ('b,'c) t -> ('a, 'c) t
 
 and ('a,'b) step = ('a,'b) lens * meta
 
@@ -57,9 +56,6 @@ let meta_list t =
     fun acc -> function
       | [] -> List.rev acc
       | (_, hd) :: tl -> fold (hd :: acc) tl
-      | Composed ([], tl) -> fold acc tl
-      | Composed ((_, hd) :: tl, r) -> fold (hd :: acc) (Composed (tl, r))
-      | Composed (Composed(a,b), c) -> fold acc (Composed (a, Composed(b,c)))
   in
   fold [] t
 
@@ -88,12 +84,12 @@ let lens (t : ('a,'b) t) : ('a,'b) lens =
     fun acc -> function
       | [] -> acc
       | (hd, _) :: tl -> fold (focus acc hd) tl
-      | Composed ([],tl) -> fold acc tl
-      | Composed ((hd, _) :: tl, r) -> fold (focus acc hd) (Composed (tl,r))
-      | Composed (Composed (a,b), c) -> fold acc (Composed (a, Composed(b,c)))
   in fold root_lens t
 
-let (@) p1 p2 = Composed (p1,p2)
+let rec (@) : type a b c. (a, b) t -> (b, c) t -> (a, c) t =
+  fun p1 p2 -> match p1 with
+    | hd :: tl -> hd :: (tl @ p2)
+    | [] -> p2
 
 module Unsafe = struct
   let is_prefix : type a b c. (a,b) t -> (a,c) t -> (b,c) t option =

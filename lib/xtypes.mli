@@ -176,7 +176,7 @@ type 'a xtype
   | Tuple: 'a Record.t -> 'a xtype
   | Record: 'a Record.t -> 'a xtype
   | Lazy: ('b ttype * 'b xtype Lazy.t) -> 'b Lazy.t xtype
-  | Prop: ((string * string) list * 'a ttype * 'a xtype Lazy.t) -> 'a xtype
+  | Prop: (stype_properties * 'a ttype * 'a xtype Lazy.t) -> 'a xtype
   | Object: 'a Object.t -> 'a xtype
   | Abstract: (string * 'a ttype * stype list) -> 'a xtype
 
