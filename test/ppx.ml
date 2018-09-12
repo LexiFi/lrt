@@ -670,8 +670,13 @@ module FloatRecord = struct
 
   let test ttype gx gy =
     let _ = Random.self_init () in
-    let fpaths = Xtypes.all_paths ~root:ttype ~target:float_t in
-    let geti i t = Dynpath.extract ~t:ttype (List.nth fpaths i) t |> snd in
+    let fpaths = Xtypes.all_paths ttype float_t in
+    let geti i t =
+      let lens = Path.lens (List.nth fpaths i) in
+      match lens.get t with
+      | None -> assert false
+      | Some x -> x
+    in
     let generator = Check.of_type_gen ~size:101 ~t:ttype [] in
     let check a b t =
       if Float.equal (a t) (b t) then true else begin
@@ -701,25 +706,15 @@ module Unboxed = struct
    * affected. Thus we build values using xtypes and compare
    * ocaml getters with xtype getters *)
 
-  type r1 = { f1 : float } [@@deriving t]
-  type r2 = { f2 : float } [@@deriving t] [@@unboxed]
-  type r3 = { f3 : int } [@@deriving t]
-  type r4 = { f4 : int } [@@deriving t] [@@unboxed]
-  type 'a r5 = { f5 : 'a } [@@deriving t] [@@ocaml.unboxed]
-
-  type s1 = A of float [@@deriving t]
-  type s2 = A of float [@@deriving t] [@@ocaml.unboxed]
-  type s3 = A of int [@@deriving t]
-  type s4 = A of int [@@deriving t] [@@unboxed]
-  type 'a s5 = A of 'a [@@deriving t] [@@unboxed]
-
-  type 'a x1 = X of { x1 : 'a } [@@deriving t]
-  type 'a x2 = X of { x2 : 'a } [@@unboxed] [@@deriving t]
-
   let test root target gf eq =
     let _ = Random.self_init () in
-    let fpaths = Xtypes.all_paths ~root ~target in
-    let geti i t = Dynpath.extract ~t:root (List.nth fpaths i) t |> snd in
+    let fpaths = Xtypes.all_paths root target in
+    let geti i t =
+      let lens = Path.lens (List.nth fpaths i) in
+      match lens.get t with
+      | None -> assert false
+      | Some x -> x
+    in
     let generator = Check.of_type_gen ~size:101 ~t:root [] in
     let check a b t =
         let x_a, x_b = a t, b t in
@@ -740,25 +735,45 @@ module Unboxed = struct
   let tfloat t get = test t float_t get Float.equal
   let tint t get = test t int_t get (=)
 
+  type r1 = { f1 : float } [@@deriving t]
   let%test _ = tfloat r1_t (fun t -> t.f1)
+
+  type r2 = { f2 : float } [@@deriving t] [@@unboxed]
   let%test _ = tfloat r2_t (fun t -> t.f2)
+
+  type r3 = { f3 : int } [@@deriving t]
   let%test _ = tint r3_t (fun t -> t.f3)
+
+  type r4 = { f4 : int } [@@deriving t] [@@unboxed]
   let%test _ = tint r4_t (fun t -> t.f4)
+
+  type 'a r5 = { f5 : 'a } [@@deriving t] [@@ocaml.unboxed]
   let%test _ = tint (r5_t int_t) (fun t -> t.f5)
   let%test _ = tfloat (r5_t float_t) (fun t -> t.f5)
+
+  type s1 = A of float [@@deriving t]
   let%test _ = tfloat s1_t (function A x -> x)
+
+  type s2 = A of float [@@deriving t] [@@ocaml.unboxed]
   let%test _ = tfloat s2_t (function A x -> x)
+
+  type s3 = A of int [@@deriving t]
   let%test _ = tint s3_t (function A x -> x)
+
+  type s4 = A of int [@@deriving t] [@@unboxed]
   let%test _ = tint s4_t (function A x -> x)
+
+  type 'a s5 = A of 'a [@@deriving t] [@@unboxed]
   let%test _ = tint (s5_t int_t) (function A x -> x)
   let%test _ = tfloat (s5_t float_t) (function A x -> x)
+
+  type 'a x1 = X of { x1 : 'a } [@@deriving t]
   let%test _ = tint (x1_t int_t) (function X x -> x.x1)
   let%test _ = tfloat (x1_t float_t) (function X x -> x.x1)
+
+  type 'a x2 = X of { x2 : 'a } [@@unboxed] [@@deriving t]
   let%test _ = tint (x2_t int_t) (function X x -> x.x2)
   let%test _ = tfloat (x2_t float_t) (function X x -> x.x2)
-
-  (* TODO: Xtypes and Path implementation of accessing fields are different.
-   * We only use Path here. Add tests for the Xtypes way. *)
 
 end
 

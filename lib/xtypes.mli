@@ -1,8 +1,6 @@
+open Dynt_core
 open Dynt_core.Ttype
 open Dynt_core.Stype
-
-(* TODO: Get rid of this *)
-module Path = Dynpath
 
 (** Safe inspection of ttypes. *)
 
@@ -29,7 +27,7 @@ module RecordField : sig
   val set: ('s, 't) t -> 's record_builder -> 't -> unit
   (** To be used in the callback passed to [Record.make]. *)
 
-  val path: ('s, 't) t -> ('s, 't) Path.field
+  val step: ('s, 't) t -> ('s, 't) Path.step
 end
 
 type 's has_record_field = Field: ('s, 't) RecordField.t -> 's has_record_field
@@ -101,7 +99,7 @@ module Constructor : sig
   (** Create a value of the sum type with the given constructor and
       its argument. *)
 
-  val path: ('s, 't) t -> ('s, 't) Path.constructor
+  val step: ('s, 't) t -> ('s, 't) Path.step
 end
 
 type 's has_constructor = Constructor: ('s, 't) Constructor.t -> 's has_constructor
@@ -165,7 +163,6 @@ type 'a xtype
   | Int: int xtype
   | Float: float xtype
   | String: string xtype
-  (* | Date: date xtype *)
   | Char: char xtype
   | Int32: int32 xtype
   | Int64: int64 xtype
@@ -173,7 +170,8 @@ type 'a xtype
   | Option: 'b ttype * 'b xtype Lazy.t -> 'b option xtype
   | List: 'b ttype * 'b xtype Lazy.t -> 'b list xtype
   | Array: 'b ttype * 'b xtype Lazy.t  -> 'b array xtype
-  | Function: (string * ('b ttype * 'b xtype Lazy.t) * ('c ttype * 'c xtype Lazy.t)) -> ('b -> 'c) xtype
+  | Function: (string * ('b ttype * 'b xtype Lazy.t)
+               * ('c ttype * 'c xtype Lazy.t)) -> ('b -> 'c) xtype
   | Sum: 'a Sum.t -> 'a xtype
   | Tuple: 'a Record.t -> 'a xtype
   | Record: 'a Record.t -> 'a xtype
@@ -216,13 +214,17 @@ val is_object: 'a ttype -> 'a Object.t option
 val is_prop: 'a ttype -> (stype_properties * 'a ttype) option
 val is_abstract: 'a ttype -> (string * 'a ttype * stype list) option
 
-(** {2 Paths from ttype} *)
+(** {2 Paths} *)
 
-val all_paths: root:'root ttype -> target:'target ttype -> ('root, 'target, Path.kind) Path.t list
+val all_paths: 'root ttype -> 'target ttype
+  -> ('root, 'target) Path.t list
 (** Returns all the paths leading to a value of type ['target] inside
     a value of type ['root]. Does not traverse list, array, lazy, objects.
     Will loop on recursive types.
  *)
+
+(* val project_path : t: 'a ttype -> ('a,'b) Path.t -> 'b ttype *)
+(** Extraction of sub-type pointed to by a path. *)
 
 (** {2 Type Matchers}
     Compare nontrivial ttypes with each other. *)

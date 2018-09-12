@@ -1,4 +1,4 @@
-(** Access deeply nested values.
+(** Access deeply nested types and values.
 
     This module introduces paths within types and values.
 

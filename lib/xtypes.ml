@@ -1,7 +1,9 @@
+open Dynt_core
 open Dynt_core.Ttype
 open Dynt_core.Stype
 open Dynt_core.Std
-module Path = Dynpath (* TODO: get rid *)
+
+module StepMeta = Path.Internal [@@ocaml.warning "-3"]
 
 let cast_ttype: stype -> 'a ttype = Obj.magic
 
@@ -9,8 +11,7 @@ let arrow ?(label = "") t1 t2 = cast_ttype (DT_arrow (label, stype_of_ttype t1, 
 
 type 'a record_builder = Obj.t option array
 
-let path_of_steps: Path.Internal.step list -> ('a, 'b, 'c) Path.t = Obj.magic
-
+(* TODO: pk: What is going on here? *)
 let dummy_xtype = Obj.repr "foo"
 
 module RecordField = struct
@@ -20,7 +21,9 @@ module RecordField = struct
       t: 't ttype;
       name: string;
       props: (string * string) list;
-      unboxed: bool;
+      step: Path.meta;
+      get: 's -> 't;
+      set: 's -> 't -> 's;
 
       mutable xtype: Obj.t;
     }
@@ -28,15 +31,16 @@ module RecordField = struct
   let ttype r = r.t
   let name r = r.name
   let props r = r.props
-  let get r x =
-    if r.unboxed then begin  Obj.magic x end
-    else Obj.magic (Obj.field (Obj.repr x) r.rank)
+  let get r = r.get
   let set r b x =
+    (* TODO: why record builder here, not r.set ? *)
+    (* TODO: This will fail almost surely on unboxed records *)
     Array.unsafe_set b r.rank (Some (Obj.repr x))
-  let path r =
-    let s = r.name in
-    if s = "" then path_of_steps [Path.Internal.Tuple_nth r.rank]
-    else path_of_steps [Path.Internal.Field s]
+
+  let step r =
+    let set x v = Some (r.set x v)
+    and get x = Some (r.get x)
+    in Path.{ get; set}, r.step
 end
 
 type 's has_record_field = Field: ('s, 't) RecordField.t -> 's has_record_field
@@ -72,8 +76,7 @@ module Constructor = struct
       inline: bool;
       project: 's -> 't;
       inject: 't -> 's;
-      path: ('s, 't) Path.constructor;
-      unboxed: bool;
+      step: Path.meta;
 
       mutable xtype: Obj.t;
     }
@@ -86,7 +89,14 @@ module Constructor = struct
   let project_exn r x = r.project x
   let project r x = try Some (r.project x) with Not_found -> None
   let inject r x = r.inject x
-  let path r = r.path
+
+  let step r =
+    let get x = project r x
+    and set x y =
+      match project r x with
+      | Some _ -> Some (inject r y)
+      | None -> None
+    in Path.{get; set}, r.step
 end
 
 type 's has_constructor = Constructor: ('s, 't) Constructor.t -> 's has_constructor
@@ -205,6 +215,17 @@ let build_record (type s_) ttype record_repr record_fields : s_ Record.t =
     List.mapi
       (fun (type t_) i (name, props, t_stype) ->
         let t = (cast_ttype t_stype: t_ ttype) in
+        let step = StepMeta.field ~name
+        and get x =
+          if unboxed then (Obj.magic x)
+          else Obj.magic (Obj.field (Obj.repr x) i)
+        and set x v =
+          if unboxed then (Obj.magic v)
+          else
+            let obj = Obj.repr x |> Obj.dup in
+            Obj.set_field obj i (Obj.repr v);
+            Obj.magic obj
+        in
         Field
           {
             rank = i;
@@ -212,7 +233,9 @@ let build_record (type s_) ttype record_repr record_fields : s_ Record.t =
             name;
             props;
             xtype = dummy_xtype;
-            unboxed;
+            step;
+            set;
+            get;
           }
       )
       record_fields
@@ -308,17 +331,25 @@ let makes = Array.init 500 make
 
 let build_tuple (type s_) ttype record_fields : s_ Record.t =
   (* TODO: build the fields_arr directly *)
+  let arity = List.length record_fields in
   let fields =
     List.mapi
       (fun (type t_) i t_stype ->
         let t = (cast_ttype t_stype: t_ ttype) in
+        let step = StepMeta.tuple ~nth:i ~arity
+        and get x = Obj.magic (Obj.field (Obj.repr x) i)
+        and set x v =
+          let obj = Obj.repr x |> Obj.dup in
+          Obj.set_field obj i (Obj.repr v);
+          Obj.magic obj
+        in
         Field {RecordField.rank = i; t; name = ""; props = [];
-               xtype = dummy_xtype; unboxed=false
+               xtype = dummy_xtype; get; set ; step
               }
       )
       record_fields
   in
-  let make = Obj.magic (makes.(List.length record_fields)) in
+  let make = Obj.magic (makes.(arity)) in
   let fields_arr = Array.of_list fields in
   let build f =
     let len = Array.length fields_arr in
@@ -361,7 +392,7 @@ let build_sum ttype variant_repr variant_constrs : _ Sum.t =
     List.mapi
       (* TODO: This should respect Variant_unboxed tags *)
       (fun (type t_) i (name, props, tl) ->
-         let mk nb_args inline stype project inject =
+         let mk inline stype project inject step =
            Constructor
              {
                index = i;
@@ -369,20 +400,19 @@ let build_sum ttype variant_repr variant_constrs : _ Sum.t =
                name;
                props;
                inline;
+               step;
                project = Obj.magic project;
                inject = Obj.magic inject;
-               path = path_of_steps [Path.Internal.Constructor (name, nb_args)];
                xtype = dummy_xtype;
-               unboxed;
              }
          in
-         let mk_noncst nb_args inline stype project inject =
+         let mk_noncst inline stype project inject step=
            let tag = !nb_noncst in
            noncst_ids := i :: !noncst_ids;
            incr nb_noncst;
-           mk nb_args inline stype
+           mk inline stype
              (fun x -> if Obj.tag x = tag then project x else raise Not_found)
-             (inject tag)
+             (inject tag) step
          in
          match tl with
          | C_tuple [] ->
@@ -390,30 +420,42 @@ let build_sum ttype variant_repr variant_constrs : _ Sum.t =
              let tag = Obj.magic !nb_cst in
              cst_ids := i :: !cst_ids;
              incr nb_cst;
-             mk 0 false (stype_of_ttype [%t: unit])
+             mk false (stype_of_ttype [%t: unit])
                (fun x ->
                   if x == tag then () (* if x is a block, it won't be equal to the tag *)
                   else raise Not_found)
                (fun () -> tag)
+               (* TODO: This should be a different kind of step *)
+               (StepMeta.constructor_regular ~name ~nth:(-1) ~arity:(-1))
          | C_tuple [t] ->
-           if unboxed then mk_noncst 1 false t
+           if unboxed then mk_noncst false t
                (fun x -> Obj.magic x)
                (fun _ x -> Obj.magic x)
-           else mk_noncst 1 false t
+               (StepMeta.constructor_regular ~name ~nth:0 ~arity:1)
+           else mk_noncst false t
                (fun x -> Obj.field x 0 (* if x is a constant constructor, Obj.tag x = 1000 *))
                (fun tag x -> let r = Obj.new_block tag 1 in Obj.set_field r 0 x; r)
+               (* TODO: nth makes no sense *)
+               (StepMeta.constructor_regular ~name ~nth:0 ~arity:1)
          | C_tuple tl ->
              assert (not unboxed);
-             mk_noncst (List.length tl) false (DT_tuple tl)
+             let arity = List.length tl in
+             mk_noncst false (DT_tuple tl)
                (fun x -> dup_tag x 0)
                (fun tag x -> dup_tag x tag)
+               (* TODO: nth makes no sense *)
+               (StepMeta.constructor_regular ~name ~nth:0 ~arity)
          | C_inline t ->
-           if unboxed then mk_noncst 1 true t
+           if unboxed then mk_noncst true t
                (fun x -> Obj.magic x)
                (fun _ x -> Obj.magic x)
-           else mk_noncst 1 true t
+               (* TODO: field makes no sense *)
+               (StepMeta.constructor_inline ~name ~field:"")
+           else mk_noncst true t
                (fun x -> dup_tag x 0)
                (fun tag x -> dup_tag x tag)
+               (* TODO: field makes no sense *)
+               (StepMeta.constructor_inline ~name ~field:"")
       )
       variant_constrs
   in
@@ -469,7 +511,6 @@ type 'a xtype
   | Int: int xtype
   | Float: float xtype
   | String: string xtype
-  (* | Date: date xtype *)
   | Char: char xtype
   | Int32: int32 xtype
   | Int64: int64 xtype
@@ -610,41 +651,49 @@ let rec remove_first_props_xtype : type t. t xtype -> t xtype = function
   | Prop (_, _, lazy xt) -> remove_first_props_xtype xt
   | xt -> xt
 
-let rec all_paths: type root target. root:root ttype -> target:target ttype -> (root, target, _) Path.t list = fun ~root ~target ->
-  match ttypes_equality root target with
-  | Some TypEq.Eq -> [Path.root] |> Obj.magic
-  | None ->
+let option_step_some : ('a option, 'a) Path.step =
+  let get x = x
+  and set x v = match x with
+    | None -> None
+    | Some _ -> Some (Some v)
+  in Path.{ get; set} ,
+     StepMeta.constructor_regular ~name:"Some" ~nth:0 ~arity:1
+
+let rec all_paths: type a b. a ttype -> b ttype -> (a, b) Path.t list =
+  fun root target ->
+    match ttypes_equality root target with
+    | Some TypEq.Eq -> [Path.[]]
+    | None ->
       match xtype_of_ttype root with
       | Unit -> []
       | Bool -> []
       | Int -> []
       | Float -> []
       | String -> []
-      (* | Date -> [] *)
       | Char -> []
       | Int32 -> []
       | Int64 -> []
       | Nativeint -> []
       | Option (t, _) ->
-          let paths = all_paths ~root:t ~target in
-          List.map Path.(
-              (^^) (Internal.Constructor ("Some", 1) |> Obj.magic)) paths
+        let paths = all_paths t target in
+        (* TODO: Avoid this Obj.magic *)
+        List.map Path.(fun p -> (Obj.magic option_step_some) :: p) paths
       | Tuple record
       | Record record ->
-          List.map
-            (function (Field f) ->
-              let paths = all_paths ~target ~root:(RecordField.ttype f) in
-              List.map (Path.(^^) (RecordField.path f)) paths)
-            (Record.fields record)
-          |> List.concat
+        List.map
+          (function (Field f) ->
+             let paths = all_paths (RecordField.ttype f) target in
+             List.map Path.(fun p -> RecordField.step f :: p) paths)
+          (Record.fields record)
+        |> List.concat
       | Sum sum ->
-          List.concat
-            (Ext.Array.map_to_list
-               (function (Constructor c) ->
-                 let paths = all_paths ~target ~root:(Constructor.ttype c) in
-                 List.map (Path.(^^) (Constructor.path c)) paths)
-               (Sum.constructors sum))
-      | Prop (_, t, _) -> all_paths ~target ~root:t
+        Ext.Array.map_to_list
+          (function (Constructor c) ->
+             let paths = all_paths (Constructor.ttype c) target in
+             List.map Path.(fun p -> Constructor.step c :: p) paths)
+          (Sum.constructors sum)
+        |> List.concat
+      | Prop (_, t, _) -> all_paths t target
       | Object _ -> []
       | List _ -> []
       | Array _ -> []
@@ -723,15 +772,15 @@ let node_iter2 (f: stype -> stype -> unit)
   match descr1, descr2 with
   | DT_variant {variant_constrs = c1; variant_repr = r1},
     DT_variant {variant_constrs = c2; variant_repr = r2} when r1 = r2 ->
-      unifier_list_iter2 (variant_constrs_iter2 f) c1 c2
+    unifier_list_iter2 (variant_constrs_iter2 f) c1 c2
   | DT_record {record_fields = l1; record_repr = r1},
     DT_record {record_fields = l2; record_repr = r2} when r1 = r2 ->
-      unifier_list_iter2 (
-        fun (name1, props1, s1) (name2, props2, s2) ->
-          if name1 <> name2 then raise Not_unifiable;
-          if props1 <> props2 then raise Not_unifiable;
-          f s1 s2
-      ) l1 l2
+    unifier_list_iter2 (
+      fun (name1, props1, s1) (name2, props2, s2) ->
+        if name1 <> name2 then raise Not_unifiable;
+        if props1 <> props2 then raise Not_unifiable;
+        f s1 s2
+    ) l1 l2
   | DT_record _, _
   | DT_variant _, _ -> raise Not_unifiable
 
@@ -742,7 +791,7 @@ let unifier ~(modulo_props : bool) ~(subs : stype option array) (s1 : stype) (s2
     match subs.(k) with
     | None -> subs.(k) <- Some s
     | Some s' ->
-        if s <> s' then raise Not_unifiable
+      if s <> s' then raise Not_unifiable
   in
   let rec unifier s1 s2 =
     match s1, s2 with
@@ -751,25 +800,24 @@ let unifier ~(modulo_props : bool) ~(subs : stype option array) (s1 : stype) (s2
     | DT_int, DT_int
     | DT_float, DT_float
     | DT_string, DT_string -> ()
-    (* | DT_date, DT_date -> () *)
     | DT_option s1, DT_option s2
     | DT_list s1, DT_list s2
     | DT_array s1, DT_array s2 -> unifier s1 s2
     | DT_tuple l1, DT_tuple l2 ->
-        unifier_list_iter2 unifier l1 l2
+      unifier_list_iter2 unifier l1 l2
     | DT_node n1, DT_node n2 -> node_iter2 unifier n1 n2
     | DT_arrow (n1, s1, s1'), DT_arrow (n2, s2, s2') ->
-        if n1 <> n2 then raise Not_unifiable;
-        unifier s1  s2 ;
-        unifier s1' s2'
+      if n1 <> n2 then raise Not_unifiable;
+      unifier s1  s2 ;
+      unifier s1' s2'
     | DT_object l1, DT_object l2 ->
-        unifier_list_iter2 (fun (n1,s1) (n2,s2) ->
-            if n1 <> n2 then raise Not_unifiable;
-            unifier s1 s2
-          ) l1 l2
+      unifier_list_iter2 (fun (n1,s1) (n2,s2) ->
+          if n1 <> n2 then raise Not_unifiable;
+          unifier s1 s2
+        ) l1 l2
     | DT_abstract (n1, l1), DT_abstract (n2, l2) ->
-        if n1 <> n2 then raise Not_unifiable;
-        unifier_list_iter2 unifier l1 l2
+      if n1 <> n2 then raise Not_unifiable;
+      unifier_list_iter2 unifier l1 l2
     | DT_prop (p1, t1), DT_prop (p2, t2) when p1 = p2 -> unifier t1 t2
     | DT_prop (_, t1), t2 when modulo_props -> unifier t1 t2
     | t1, DT_prop (_, t2) when modulo_props -> unifier t1 t2
