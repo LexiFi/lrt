@@ -65,6 +65,6 @@ module Path = struct
     | exception _ -> None
 
   include Dynt_core.Path
-  include Unsafe [@@ocaml.warning "-3"]
+  include Internal [@@ocaml.warning "-3"]
 
 end

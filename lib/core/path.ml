@@ -15,6 +15,7 @@ let print_list ppf ~opn ~cls ~sep print_el l =
 type (_,_) t =
   | (::) : ('a,'b) step * ('b,'c) t -> ('a,'c) t
   | [] : ('a, 'a) t
+  | Composed : ('a,'b) t * ('b,'c) t -> ('a, 'c) t
 
 and ('a,'b) step = ('a,'b) lens * meta
 
@@ -56,6 +57,9 @@ let meta_list t =
     fun acc -> function
       | [] -> List.rev acc
       | (_, hd) :: tl -> fold (hd :: acc) tl
+      | Composed ([], tl) -> fold acc tl
+      | Composed ((_, hd) :: tl, r) -> fold (hd :: acc) (Composed (tl, r))
+      | Composed (Composed(a,b), c) -> fold acc (Composed (a, Composed(b,c)))
   in
   fold [] t
 
@@ -63,34 +67,56 @@ let print ppf t =
   print_list ppf ~opn:"[%path? [" ~cls:"]]" ~sep:"; "
     print_step (meta_list t)
 
+let (>>=) x f =
+  match x with
+  | None -> None
+  | Some x -> f x
+
+let root_lens : ('a,'a) lens =
+  let set _a b = Some b
+  and get a = Some a
+  in { set; get }
+
 let lens (t : ('a,'b) t) : ('a,'b) lens =
-  let root : ('a,'a) lens =
-    let set _a b = Some b
-    and get a = Some a
-    in { set; get }
+  let focus acc hd =
+    let get a = acc.get a >>= hd.get
+    and set a c = acc.get a >>= fun b -> hd.set b c >>= acc.set a
+    in { get ; set }
   in
   let rec fold : type a b c.
     (a,b) lens -> (b,c) t -> (a,c) lens =
     fun acc -> function
       | [] -> acc
-      | (hd, _) :: tl ->
-        let get a =
-          match acc.get a with
-          | None -> None
-          | Some x -> hd.get x
-        in
-        let set a c =
-          match acc.get a with
-          | None -> None
-          | Some b ->
-            match hd.set b c with
-            | None -> None
-            | Some b -> acc.set a b
-        in
-        fold {get; set} tl
-  in fold root t
+      | (hd, _) :: tl -> fold (focus acc hd) tl
+      | Composed ([],tl) -> fold acc tl
+      | Composed ((hd, _) :: tl, r) -> fold (focus acc hd) (Composed (tl,r))
+      | Composed (Composed (a,b), c) -> fold acc (Composed (a, Composed(b,c)))
+  in fold root_lens t
+
+let (@) p1 p2 = Composed (p1,p2)
 
 module Unsafe = struct
+  let is_prefix : type a b c. (a,b) t -> (a,c) t -> (b,c) t option =
+    fun prefix t ->
+      let pmeta, tmeta = meta_list prefix, meta_list t in
+      let rec check (l: meta list) (r: meta list) (p: (_,_) t) =
+        match l, r, p with
+        | [], _, p -> Some p
+        | hl :: tl, hr :: tr, _ :: tp when hl = hr -> check tl tr (Obj.magic tp)
+        | _, _ :: _, [] | _, [], _ :: _ -> assert false
+        | _ -> None
+      in
+      (* TODO: We are comparing the path based on the untyped meta information.
+         Can we do better? *)
+      Obj.magic (check pmeta tmeta (Obj.magic t))
+
+  let is_equal a b =
+    match is_prefix a b with
+    | Some [] -> true
+    | _ -> false
+end
+
+module Internal = struct
   let list ~nth = List {nth}
   let array ~nth = Array {nth}
   let field ~name = Field {name}
