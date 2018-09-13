@@ -533,7 +533,6 @@ let ttype_of_xtype : type t. t xtype -> t ttype = function
   | Int -> int_t
   | Float -> float_t
   | String -> string_t
-  (* | Date -> (ttype_of: date) *)
   | Char -> char_t
   | Int32 -> int32_t
   | Int64 -> int64_t
@@ -550,7 +549,6 @@ let ttype_of_xtype : type t. t xtype -> t ttype = function
   | Abstract (_, t, _) -> t
 
 type memoized_type_prop += Xtype of Obj.t xtype
-
 
 let rec search a n i =
   if i = n then (Obj.magic Unit)
