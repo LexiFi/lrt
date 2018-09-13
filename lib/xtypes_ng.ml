@@ -84,10 +84,156 @@ and 's object_ =
 
 and 's has_method = Method: ('s, 't) method_ -> 's has_method
 
+(* internal Helpers *)
 let cast_ttype: stype -> 'a ttype = Obj.magic
-let _arrow: ?label:string -> 'a ttype -> 'b ttype -> ('a -> 'b) ttype =
-  fun ?(label="") a b ->
-  cast_ttype (DT_arrow (label, stype_of_ttype a, stype_of_ttype b))
+let cast_xtype: type a b. a xtype -> b xtype = Obj.magic
+module StepMeta = Path.Internal [@@ocaml.warning "-3"]
+
+(* unsafe memory access *)
+
+let box_get : type a b. int -> a -> b = fun i o ->
+  Obj.magic (Obj.field (Obj.repr o) i)
+
+let box_set : type a b. int -> a -> b -> a = fun i o x ->
+  Obj.magic (Obj.set_field (Obj.repr o) i (Obj.repr x))
+
+(* correspond to set/get of Path.lens *)
+let box_get_some i x = Some (box_get i x)
+let box_set_some i x v = Some (box_set i x v)
+
+(* Memoize xtype in stype node *)
+type memoized_type_prop += Xtype of Obj.t xtype
+
+let rec search a n i =
+  if i = n then None
+  else match a.(i) with
+  | Xtype r -> Some r
+  | _ -> search a n (i + 1)
+
+let is_memoized (node : node) : Obj.t xtype option =
+  search node.rec_memoized (Array.length node.rec_memoized) 0
+
+let memoize: type a. node -> a xtype -> a xtype = fun node xt ->
+  let s = Xtype (Obj.magic xt) in
+  let old = node.rec_memoized in
+  let a = Array.make (Array.length old + 1) s in
+  Array.blit old 0 a 1 (Array.length old);
+  Internal.set_memoized node a;
+  xt
+
+let rec xtype_of_ttype : type a. a ttype -> a xtype = fun t ->
+  (* CAUTION: This must be consistent with core/std.ml *)
+  match stype_of_ttype t with
+  | DT_int -> cast_xtype Int
+  | DT_float -> cast_xtype Float
+  | DT_string -> cast_xtype String
+  | DT_abstract ("unit", []) -> cast_xtype Unit
+  | DT_abstract ("bool", []) -> cast_xtype Bool
+  | DT_abstract ("char", []) -> cast_xtype Char
+  | DT_abstract ("int32", []) -> cast_xtype Int32
+  | DT_abstract ("int64", []) -> cast_xtype Int64
+  | DT_abstract ("nativeint", []) -> cast_xtype Nativeint
+  | DT_option t -> cast_xtype (Option (bundle t))
+  | DT_list t -> cast_xtype (List (bundle t))
+  | DT_array t -> cast_xtype (Array (bundle t))
+  | DT_abstract ("lazy_t", [t]) -> cast_xtype (Lazy (bundle t))
+  | DT_arrow (l, t1, t2) ->
+    let label = match l with
+      | "" -> None
+      | s -> Some s
+    in cast_xtype (Function {label; from_t = bundle t1; to_t = bundle t2})
+  | DT_tuple fields -> cast_xtype (xtype_of_tuple fields)
+  | DT_node ({rec_descr = DT_record record; _} as node) ->
+    begin match is_memoized node with
+    | None -> memoize node (
+          cast_xtype (xtype_of_record record))
+    | Some xt -> cast_xtype xt
+    end
+  | DT_node ({rec_descr = DT_variant variant; _} as node) ->
+    begin match is_memoized node with
+    | None -> memoize node (
+          cast_xtype (xtype_of_variant variant))
+    | Some xt -> cast_xtype xt
+    end
+  | DT_object _ -> assert false (* TODO *)
+  | DT_prop (props, s) -> Prop(props, bundle s)
+  | DT_abstract (name, l) -> Abstract (name, l)
+  | DT_var _ -> assert false
+
+and bundle : type a. stype -> a t = fun s ->
+    let t = cast_ttype s
+    in (t, lazy (xtype_of_ttype t))
+
+and xtype_of_tuple fields : 'a xtype =
+  let arity = List.length fields in
+  let fields = List.mapi (fun i t ->
+      Field { t = bundle t
+            ; step = { get = box_get_some i ; set = box_set_some i },
+                     StepMeta.tuple ~nth:i ~arity }
+    ) fields
+  in Tuple (Array.of_list fields)
+
+and xtype_of_record record : 'a xtype =
+  match record.record_repr with
+  | Record_float | Record_inline _ | Record_unboxed -> assert false
+  | Record_regular ->
+    let fields = List.mapi (fun i (field_name, field_props, s) ->
+        let meta = StepMeta.field ~name:field_name in
+        NamedField { field_name; field_props;
+                     field = { t = bundle s
+                             ; step = { get = box_get_some i
+                                      ; set = box_set_some i }, meta }}
+      ) record.record_fields
+    in
+    let tbl = lazy (
+      Ext.String.Tbl.prepare
+        (List.map (fun (NamedField f) -> f.field_name) fields))
+    in
+    let fields = Array.of_list fields in
+    let find_field s =
+      let i = Ext.String.Tbl.lookup (Lazy.force tbl) s in
+      if i < 0 then None else Some fields.(i)
+    in Record { fields; find_field }
+
+and xtype_of_variant variant : 'a xtype =
+  match variant.variant_repr with
+  | Variant_unboxed -> assert false
+  | Variant_regular ->
+    let n = List.length variant.variant_constrs in
+    let constructors = Array.make n
+        { constructor_name = ""
+        ; constructor_props = []
+        ; kind = Constant }
+    in
+    let _, cst, ncst = List.fold_left (
+        fun (i,cst,ncst) (constructor_name, constructor_props, _arg) ->
+          let kind = assert false (* TODO: next *) in
+          constructors.(i) <- { kind ; constructor_props; constructor_name };
+          (i + 1, cst, ncst)
+      ) (0,[],[]) variant.variant_constrs
+    in
+    (* Lookup tables tag -> constructor index *)
+    let cst = Ext.Array.of_list_rev cst in
+    let ncst = Ext.Array.of_list_rev ncst in
+    (* Constructor by value *)
+    let constructor x : 'a constructor =
+      let i =
+        let x = Obj.repr x in
+        if Obj.is_int x then Array.get cst (Obj.magic x)
+        else Array.get ncst (Obj.tag x)
+      in constructors.(i)
+    in
+    (* Constructor by name *)
+    let tbl = lazy (
+      Ext.String.Tbl.prepare
+        (Ext.Array.map_to_list (fun c -> c.constructor_name) constructors))
+    in
+    let find_constructor s =
+      let i = Ext.String.Tbl.lookup (Lazy.force tbl) s in
+      if i < 0 then None else Some constructors.(i)
+    in Sum { constructors; find_constructor; constructor }
+
+(* property handling *)
 
 let get_first_props_xtype xt =
   let rec loop accu = function
@@ -102,10 +248,12 @@ let rec remove_first_props_xtype : type t. t xtype -> t xtype = function
   | Prop (_, (_, lazy xt)) -> remove_first_props_xtype xt
   | xt -> xt
 
-let xtype_of_ttype _t = assert false
+(* paths *)
 
 let all_paths _from _to = assert false
 let project_path ~t:_ _p = assert false
+
+(* type matching *)
 
 module type TYPE_0 = sig
   type t

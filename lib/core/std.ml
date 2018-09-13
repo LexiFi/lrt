@@ -1,10 +1,7 @@
 open Ttype
 open Stype
 
-(* TODO: representation of pervasives
- * what is your actual representation of the following types?
- * This must be consistent with xtype_of_ttype
- *)
+(* CAUTION: This must be consistent with xtype_of_ttype *)
 let unit_t = DT_abstract ("unit", []) |> Obj.magic
 let bool_t = DT_abstract ("bool", []) |> Obj.magic
 let char_t = DT_abstract ("char", []) |> Obj.magic

@@ -574,7 +574,6 @@ let rec xtype_of_ttype (type s_) (s: s_ ttype) : s_ xtype =
   | DT_int -> Obj.magic Int
   | DT_float -> Obj.magic Float
   | DT_string -> Obj.magic String
-  (* | DT_date -> Obj.magic Date *)
   | DT_list t -> Obj.magic (List (cast_ttype t, lazy (xtype_of_ttype (cast_ttype t))))
   | DT_array t -> Obj.magic (Array (cast_ttype t, lazy (xtype_of_ttype (cast_ttype t))))
   | DT_option t -> Obj.magic (Option (cast_ttype t, lazy (xtype_of_ttype (cast_ttype t))))
