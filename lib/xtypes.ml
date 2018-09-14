@@ -28,7 +28,7 @@ and 'a xtype
 
 and ('s,'t) field =
   { t: 't t
-  ; step: ('s, 't) Path.step
+  ; step: ('s, 't) Path.step (* TODO: should we make this lazy? *)
   }
 
 and 's has_field = Field: ('s, 't) field -> 's has_field
@@ -89,18 +89,6 @@ let cast_ttype: stype -> 'a ttype = Obj.magic
 let cast_xtype: type a b. a xtype -> b xtype = Obj.magic
 module StepMeta = Path.Internal [@@ocaml.warning "-3"]
 
-(* unsafe memory access *)
-
-let box_get : type a b. int -> a -> b = fun i o ->
-  Obj.magic (Obj.field (Obj.repr o) i)
-
-let box_set : type a b. int -> a -> b -> a = fun i o x ->
-  Obj.magic (Obj.set_field (Obj.repr o) i (Obj.repr x))
-
-(* correspond to set/get of Path.lens *)
-let box_get_some i x = Some (box_get i x)
-let box_set_some i x v = Some (box_set i x v)
-
 (* Memoize xtype in stype node *)
 type memoized_type_prop += Xtype of Obj.t xtype
 
@@ -120,6 +108,8 @@ let memoize: type a. node -> a xtype -> a xtype = fun node xt ->
   Array.blit old 0 a 1 (Array.length old);
   Internal.set_memoized node a;
   xt
+
+type constructor_repr = Unboxed | VTag of int
 
 let rec xtype_of_ttype : type a. a ttype -> a xtype = fun t ->
   (* CAUTION: This must be consistent with core/std.ml *)
@@ -163,84 +153,144 @@ and bundle : type a. stype -> a t = fun s ->
     let t = cast_ttype s
     in (t, lazy (xtype_of_ttype t))
 
-and tuple ?(meta=StepMeta.tuple) fields : 'a has_field array =
+and tuple ?cstr ?(meta=StepMeta.tuple) fields =
+  let check tag o = Obj.is_block o && Obj.tag o = tag in
+  let get, set = match cstr with
+    (* TODO: Can this code be reused for the record case below? *)
+    | Some Unboxed ->
+      (fun _i o -> Some o),
+      (fun _i _o v -> Some v)
+    | Some (VTag tag) ->
+      (fun i o -> if check tag o then Some (Obj.field o i) else None),
+      (fun i o v -> if check tag o then
+          let o = Obj.dup o in
+          Obj.set_field o i (Obj.repr v); Some o
+        else None)
+    | None ->
+      (fun i o -> Some (Obj.field o i)),
+      (fun i o v ->
+          let o = Obj.dup o in
+          Obj.set_field o i (Obj.repr v); Some o)
+  in
   let arity = List.length fields in
   let fields = List.mapi (fun i t ->
       Field { t = bundle t
-            ; step = { get = box_get_some i ; set = box_set_some i },
+            ; step = { get = get i ; set = set i },
                      meta ~nth:i ~arity }
     ) fields
-  in Array.of_list fields
+  in (Array.of_list fields : 'a has_field array)
 
-and record ?(meta=StepMeta.field) record : 'a record =
-  match record.record_repr with
-  | Record_float | Record_inline _ | Record_unboxed -> assert false
-  | Record_regular ->
-    let fields = List.mapi (fun i (field_name, field_props, s) ->
-        let meta = meta ~field_name in
-        NamedField { field_name; field_props;
-                     field = { t = bundle s
-                             ; step = { get = box_get_some i
-                                      ; set = box_set_some i }, meta }}
-      ) record.record_fields
-    in
-    let tbl = lazy (
-      Ext.String.Tbl.prepare
-        (List.map (fun (NamedField f) -> f.field_name) fields))
-    in
-    let fields = Array.of_list fields in
-    let find_field s =
-      let i = Ext.String.Tbl.lookup (Lazy.force tbl) s in
-      if i < 0 then None else Some fields.(i)
-    in { fields; find_field }
+and record ?cstr ?(meta=StepMeta.field) record : 'a record =
+  let check tag o = Obj.is_block o && Obj.tag o = tag in
+  let get, set =
+    match cstr, record.record_repr with
+    | None, Record_float ->
+      ( fun i r -> Some (Obj.repr (Obj.double_field r i))),
+      ( fun i r v ->
+          let r = Obj.dup r in
+          Obj.set_double_field r i (Obj.magic v); Some r)
+    | Some (VTag tag), Record_float ->
+      ( fun i r -> if check tag r then
+          Some (Obj.repr (Obj.double_field r i)) else None ),
+      ( fun i r v ->
+          let r = Obj.dup r in
+          Obj.set_double_field r i (Obj.magic v); Some r)
+    | None, Record_regular ->
+      (fun i r -> Some (Obj.field r i)),
+      (fun i r v ->
+         let r = Obj.dup r in
+         Obj.set_field r i (Obj.repr v); Some r)
+    (* TODO: We do not need the tag here. Can we drop it from the stype ? *)
+    | Some (VTag tag), Record_inline _->
+      (fun i r -> if check tag r then
+          Some (Obj.field r i) else None),
+      (fun i r v -> if check tag r then
+          let r = Obj.dup r in
+          Obj.set_field r i (Obj.repr v); Some r
+        else None)
+    | None, Record_unboxed
+    | Some Unboxed, Record_unboxed ->
+      (fun _i r -> Some (Obj.repr r)),
+      (fun _i _r v -> Some (Obj.repr v))
+    (* TODO: Parts of record representation seem superfluous with this new
+       xtype implementation. Should ditch from stype? *)
+    (* Boxed record within unboxed constructor *)
+    | Some Unboxed, _ -> assert false
+    (* Unboxed record inside boxed constructor *)
+    | Some (VTag _), Record_unboxed -> assert false
+    (* Inline record outside constructor *)
+    | None, Record_inline _ -> assert false
+    (* Regular record as variant argument *)
+    | Some (VTag _), Record_regular -> assert false
+  in
+  let fields = List.mapi (fun i (field_name, field_props, s) ->
+      let meta = meta ~field_name in
+      NamedField { field_name; field_props;
+                   field = { t = bundle s
+                           ; step = { get = get i
+                                    ; set = set i }, meta }}
+    ) record.record_fields
+  in
+  let tbl = lazy (
+    Ext.String.Tbl.prepare
+      (List.map (fun (NamedField f) -> f.field_name) fields))
+  in
+  let fields = Array.of_list fields in
+  let find_field s =
+    let i = Ext.String.Tbl.lookup (Lazy.force tbl) s in
+    if i < 0 then None else Some fields.(i)
+  in { fields; find_field }
 
 and xtype_of_variant variant : 'a xtype =
-  match variant.variant_repr with
-  | Variant_unboxed -> assert false
-  | Variant_regular ->
-    let n = List.length variant.variant_constrs in
-    let constructors = Array.make n
-        { constructor_name = ""
-        ; constructor_props = []
-        ; kind = Constant }
-    in
-    let cst, ncst = ref [], ref [] in
-    List.iteri (fun i (name, constructor_props, arg) ->
-        let kind =
-          match arg with
-          | C_tuple [] -> cst := i :: !cst ; Constant
-          | C_tuple l ->
-            ncst := i :: !ncst;
-            let meta = StepMeta.constructor_regular ~name in
-            Regular (tuple ~meta l)
-          | C_inline (DT_node {rec_descr = DT_record r; _}) ->
-            ncst := i :: !ncst;
-            let meta = StepMeta.constructor_inline ~name in
-            Inlined (record ~meta r)
-          | C_inline _ -> assert false
-        in
-        constructors.(i) <- {kind ; constructor_props; constructor_name = name}
-      ) variant.variant_constrs;
-    (* Lookup tables tag -> constructor index *)
-    let cst = Ext.Array.of_list_rev !cst in
-    let ncst = Ext.Array.of_list_rev !ncst in
-    (* Constructor by value *)
-    let constructor x : 'a constructor =
-      let i =
-        let x = Obj.repr x in
-        if Obj.is_int x then Array.get cst (Obj.magic x)
-        else Array.get ncst (Obj.tag x)
-      in constructors.(i)
-    in
-    (* Constructor by name *)
-    let tbl = lazy (
-      Ext.String.Tbl.prepare
-        (Ext.Array.map_to_list (fun c -> c.constructor_name) constructors))
-    in
-    let find_constructor s =
-      let i = Ext.String.Tbl.lookup (Lazy.force tbl) s in
-      if i < 0 then None else Some constructors.(i)
-    in Sum { constructors; find_constructor; constructor }
+  let cstr = match variant.variant_repr with
+    | Variant_unboxed -> fun _ -> Unboxed
+    | Variant_regular -> fun tag -> VTag tag
+  in
+  let n = List.length variant.variant_constrs in
+  let constructors = Array.make n
+      { constructor_name = ""
+      ; constructor_props = []
+      ; kind = Constant }
+  in
+  let cst, ncst = ref [], ref [] in
+  List.iteri (fun i (name, constructor_props, arg) ->
+      let kind =
+        match arg with
+        | C_tuple [] -> cst := i :: !cst ; Constant
+        | C_tuple l ->
+          ncst := i :: !ncst;
+          let meta = StepMeta.constructor_regular ~name in
+          let cstr = cstr i in
+          Regular (tuple ~cstr ~meta l)
+        | C_inline (DT_node {rec_descr = DT_record r; _}) ->
+          ncst := i :: !ncst;
+          let meta = StepMeta.constructor_inline ~name in
+          let cstr = cstr i in
+          Inlined (record ~cstr ~meta r)
+        | C_inline _ -> assert false
+      in
+      constructors.(i) <- {kind ; constructor_props; constructor_name = name}
+    ) variant.variant_constrs;
+  (* Lookup tables tag -> constructor index *)
+  let cst = Ext.Array.of_list_rev !cst in
+  let ncst = Ext.Array.of_list_rev !ncst in
+  (* Constructor by value *)
+  let constructor x : 'a constructor =
+    let i =
+      let x = Obj.repr x in
+      if Obj.is_int x then Array.get cst (Obj.magic x)
+      else Array.get ncst (Obj.tag x)
+    in constructors.(i)
+  in
+  (* Constructor by name *)
+  let tbl = lazy (
+    Ext.String.Tbl.prepare
+      (Ext.Array.map_to_list (fun c -> c.constructor_name) constructors))
+  in
+  let find_constructor s =
+    let i = Ext.String.Tbl.lookup (Lazy.force tbl) s in
+    if i < 0 then None else Some constructors.(i)
+  in Sum { constructors; find_constructor; constructor }
 
 (* property handling *)
 
