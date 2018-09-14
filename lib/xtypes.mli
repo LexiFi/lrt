@@ -4,6 +4,9 @@ open Dynt_core
 open Dynt_core.Ttype
 open Dynt_core.Stype
 
+type record_repr = Regular | Float | Unboxed
+type constr_repr = Tag of int | Unboxed
+
 type 'a t = 'a ttype * 'a xtype Lazy.t
 (** The construction of xtypes is expensive and should not happen recursively.
 *)
@@ -47,24 +50,23 @@ and ('s, 't) named_field =
 
 and 's has_named_field = NamedField: ('s, 't) named_field -> 's has_named_field
 
-and 's record =
+and 's named_tuple =
   { fields: 's has_named_field array
   ; find_field: string -> 's has_named_field option
-  ; unboxed : bool
   }
 
-and 's constructor_kind =
+and 's record = 's named_tuple * record_repr
+
+and 's constr_kind =
   | Constant
   | Regular of 's tuple
-  | Inlined of 's record
-
-and constructor_repr = Tag of int | Unboxed
+  | Inlined of 's named_tuple
 
 and 's constructor =
-  { constructor_name: string
-  ; constructor_props: stype_properties
-  ; constructor_repr: constructor_repr
-  ; kind: 's constructor_kind
+  { constr_name: string
+  ; constr_props: stype_properties
+  ; constr_repr: constr_repr
+  ; kind: 's constr_kind
   }
 
 and 's sum =
