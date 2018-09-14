@@ -142,11 +142,10 @@ let rec xtype_of_ttype : type a. a ttype -> a xtype = fun t ->
       | "" -> None
       | s -> Some s
     in cast_xtype (Function {label; from_t = bundle t1; to_t = bundle t2})
-  | DT_tuple fields -> cast_xtype (xtype_of_tuple fields)
-  | DT_node ({rec_descr = DT_record record; _} as node) ->
+  | DT_tuple fields -> cast_xtype (Tuple (tuple fields))
+  | DT_node ({rec_descr = DT_record r; _} as node) ->
     begin match is_memoized node with
-    | None -> memoize node (
-          cast_xtype (xtype_of_record record))
+    | None -> memoize node (cast_xtype (Record (record r)))
     | Some xt -> cast_xtype xt
     end
   | DT_node ({rec_descr = DT_variant variant; _} as node) ->
@@ -164,21 +163,21 @@ and bundle : type a. stype -> a t = fun s ->
     let t = cast_ttype s
     in (t, lazy (xtype_of_ttype t))
 
-and xtype_of_tuple fields : 'a xtype =
+and tuple ?(meta=StepMeta.tuple) fields : 'a has_field array =
   let arity = List.length fields in
   let fields = List.mapi (fun i t ->
       Field { t = bundle t
             ; step = { get = box_get_some i ; set = box_set_some i },
-                     StepMeta.tuple ~nth:i ~arity }
+                     meta ~nth:i ~arity }
     ) fields
-  in Tuple (Array.of_list fields)
+  in Array.of_list fields
 
-and xtype_of_record record : 'a xtype =
+and record ?(meta=StepMeta.field) record : 'a record =
   match record.record_repr with
   | Record_float | Record_inline _ | Record_unboxed -> assert false
   | Record_regular ->
     let fields = List.mapi (fun i (field_name, field_props, s) ->
-        let meta = StepMeta.field ~name:field_name in
+        let meta = meta ~field_name in
         NamedField { field_name; field_props;
                      field = { t = bundle s
                              ; step = { get = box_get_some i
@@ -193,7 +192,7 @@ and xtype_of_record record : 'a xtype =
     let find_field s =
       let i = Ext.String.Tbl.lookup (Lazy.force tbl) s in
       if i < 0 then None else Some fields.(i)
-    in Record { fields; find_field }
+    in { fields; find_field }
 
 and xtype_of_variant variant : 'a xtype =
   match variant.variant_repr with
@@ -205,16 +204,26 @@ and xtype_of_variant variant : 'a xtype =
         ; constructor_props = []
         ; kind = Constant }
     in
-    let _, cst, ncst = List.fold_left (
-        fun (i,cst,ncst) (constructor_name, constructor_props, _arg) ->
-          let kind = assert false (* TODO: next *) in
-          constructors.(i) <- { kind ; constructor_props; constructor_name };
-          (i + 1, cst, ncst)
-      ) (0,[],[]) variant.variant_constrs
-    in
+    let cst, ncst = ref [], ref [] in
+    List.iteri (fun i (name, constructor_props, arg) ->
+        let kind =
+          match arg with
+          | C_tuple [] -> cst := i :: !cst ; Constant
+          | C_tuple l ->
+            ncst := i :: !ncst;
+            let meta = StepMeta.constructor_regular ~name in
+            Regular (tuple ~meta l)
+          | C_inline (DT_node {rec_descr = DT_record r; _}) ->
+            ncst := i :: !ncst;
+            let meta = StepMeta.constructor_inline ~name in
+            Inlined (record ~meta r)
+          | C_inline _ -> assert false
+        in
+        constructors.(i) <- {kind ; constructor_props; constructor_name = name}
+      ) variant.variant_constrs;
     (* Lookup tables tag -> constructor index *)
-    let cst = Ext.Array.of_list_rev cst in
-    let ncst = Ext.Array.of_list_rev ncst in
+    let cst = Ext.Array.of_list_rev !cst in
+    let ncst = Ext.Array.of_list_rev !ncst in
     (* Constructor by value *)
     let constructor x : 'a constructor =
       let i =
@@ -250,8 +259,72 @@ let rec remove_first_props_xtype : type t. t xtype -> t xtype = function
 
 (* paths *)
 
-let all_paths _from _to = assert false
-let project_path ~t:_ _p = assert false
+let option_step_some : type a. a ttype -> (a option, a) Path.step =
+  (* ttype helps to avoid Obj.magic *)
+  fun _t ->
+    let get x = x
+    and set x v = match x with
+      | None -> None
+      | Some _ -> Some (Some v)
+    in Path.{ get; set} ,
+       StepMeta.constructor_regular ~name:"Some" ~nth:0 ~arity:1
+
+let rec all_paths: type a b. a ttype -> b ttype -> (a, b) Path.t list =
+  fun root target ->
+    match ttypes_equality root target with
+    | Some TypEq.Eq -> [Path.[]]
+    | None ->
+      match xtype_of_ttype root with
+      | Unit -> []
+      | Bool -> []
+      | Int -> []
+      | Float -> []
+      | String -> []
+      | Char -> []
+      | Int32 -> []
+      | Int64 -> []
+      | Nativeint -> []
+      | Option (t, _) ->
+        let paths = all_paths t target in
+        List.map Path.(fun p -> option_step_some t :: p) paths
+      | Tuple t -> tuple ~target t
+      | Record r -> record ~target r
+      | Sum sum ->
+        Ext.Array.map_to_list
+          (fun c -> match c.kind with
+             | Constant -> []
+             | Regular t -> tuple ~target t
+             | Inlined r -> record ~target r
+          ) sum.constructors
+        |> List.concat
+      | Prop (_, (t,_)) -> all_paths t target
+      | Object _ -> []
+      | List _ -> []
+      | Array _ -> []
+      | Function _ -> []
+      | Lazy _ -> []
+      | Abstract _ -> []
+
+and tuple : type a b. target: b ttype -> a tuple -> (a, b) Path.t list =
+  fun ~target t ->
+    Ext.Array.map_to_list
+      (function (Field f) ->
+         let paths = all_paths (fst f.t) target in
+         List.map Path.(fun p -> f.step :: p) paths
+      ) t
+    |> List.concat
+
+and record : type a b. target: b ttype -> a record -> (a, b) Path.t list =
+  fun ~target r ->
+    Ext.Array.map_to_list
+      (function (NamedField nf) ->
+         let paths = all_paths (fst nf.field.t) target in
+         List.map Path.(fun p -> nf.field.step :: p) paths
+      ) r.fields
+    |> List.concat
+
+
+let project_path ~t:_ _p = assert false (* TODO *)
 
 (* type matching *)
 

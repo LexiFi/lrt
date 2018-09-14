@@ -24,7 +24,7 @@ and ('a,'b) lens =
   }
 
 and meta = (* private *)
-  | Field of {name: string}
+  | Field of {field_name: string}
   | Constructor of {name: string; arg: constructor_argument}
   | Tuple of {nth: int; arity: int}
   | List of {nth: int}
@@ -32,14 +32,14 @@ and meta = (* private *)
 
 and constructor_argument =
   | Regular of {nth: int; arity: int}
-  | Inline of {field: string}
+  | Inline of {field_name: string}
 
 let rec print_step ppf = function
-  | Field {name} -> Format.fprintf ppf "%s" name
+  | Field {field_name} -> Format.fprintf ppf "%s" field_name
   | Constructor {name; arg = Regular {nth;arity}} ->
     Format.fprintf ppf "%s %a" name print_step (Tuple {nth;arity})
-  | Constructor {name; arg = Inline {field}} ->
-    Format.fprintf ppf "%s %a" name print_step (Field {name=field})
+  | Constructor {name; arg = Inline {field_name}} ->
+    Format.fprintf ppf "%s %a" name print_step (Field {field_name})
   | Tuple {nth; arity}->
     let a = Array.make arity "_" in
     Array.set a nth "[]";
@@ -115,10 +115,10 @@ end
 module Internal = struct
   let list ~nth = List {nth}
   let array ~nth = Array {nth}
-  let field ~name = Field {name}
+  let field ~field_name = Field {field_name}
   let tuple ~nth ~arity = Tuple {nth; arity}
   let constructor_regular ~name ~nth ~arity =
     Constructor {name; arg = Regular {nth; arity}}
-  let constructor_inline ~name ~field =
-    Constructor {name; arg = Inline {field}}
+  let constructor_inline ~name ~field_name =
+    Constructor {name; arg = Inline {field_name}}
 end

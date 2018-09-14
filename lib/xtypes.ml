@@ -213,9 +213,9 @@ let build_record (type s_) ttype record_repr record_fields : s_ Record.t =
   let fields =
     let unboxed = match record_repr with Record_unboxed -> true | _ -> false in
     List.mapi
-      (fun (type t_) i (name, props, t_stype) ->
+      (fun (type t_) i (field_name, props, t_stype) ->
         let t = (cast_ttype t_stype: t_ ttype) in
-        let step = StepMeta.field ~name
+        let step = StepMeta.field ~field_name
         and get x =
           if unboxed then (Obj.magic x)
           else Obj.magic (Obj.field (Obj.repr x) i)
@@ -230,7 +230,7 @@ let build_record (type s_) ttype record_repr record_fields : s_ Record.t =
           {
             rank = i;
             t;
-            name;
+            name = field_name;
             props;
             xtype = dummy_xtype;
             step;
@@ -450,12 +450,12 @@ let build_sum ttype variant_repr variant_constrs : _ Sum.t =
                (fun x -> Obj.magic x)
                (fun _ x -> Obj.magic x)
                (* TODO: field makes no sense *)
-               (StepMeta.constructor_inline ~name ~field:"")
+               (StepMeta.constructor_inline ~name ~field_name:"")
            else mk_noncst true t
                (fun x -> dup_tag x 0)
                (fun tag x -> dup_tag x tag)
                (* TODO: field makes no sense *)
-               (StepMeta.constructor_inline ~name ~field:"")
+               (StepMeta.constructor_inline ~name ~field_name:"")
       )
       variant_constrs
   in

@@ -33,7 +33,7 @@ and ('a, 'b) lens =
   }
 
 and meta = private
-  | Field of { name : string }
+  | Field of { field_name : string }
   | Constructor of { name : string; arg : constructor_argument }
   | Tuple of { nth : int; arity : int }
   | List of { nth : int }
@@ -41,7 +41,7 @@ and meta = private
 
 and constructor_argument =
   | Regular of { nth : int; arity : int }
-  | Inline of { field : string }
+  | Inline of { field_name : string }
 
 val ( @ ): ('a, 'b) t -> ('b, 'c) t -> ('a, 'c) t
 (** [a @ b] composes the paths a and b. *)
@@ -80,10 +80,10 @@ module Internal : sig
       because the rest of the module assumes consistency between the lens and
       meta information. *)
 
-  val field: name:string -> meta
+  val field: field_name:string -> meta
   val tuple: nth:int -> arity:int -> meta
   val constructor_regular: name:string -> nth:int -> arity:int -> meta
-  val constructor_inline: name:string -> field:string -> meta
+  val constructor_inline: name:string -> field_name:string -> meta
   val list: nth:int -> meta
   val array: nth:int -> meta
 end [@@ocaml.deprecated "Do not use this module directly"]

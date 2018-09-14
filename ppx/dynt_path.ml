@@ -129,7 +129,7 @@ let rec expand_step ~loc x =
       in
       ({ get ; set }, constructor_inline
          ~name:[%e estring ~loc:name.loc name.txt]
-         ~field:[%e estring ~loc:field.loc field.txt] )]
+         ~field_name:[%e estring ~loc:field.loc field.txt] )]
   | Field label ->
     let liloc = lid_loc_of_label_loc label in
     let get = pexp_field ~loc (evar ~loc "x") liloc
@@ -140,7 +140,8 @@ let rec expand_step ~loc x =
     [%expr
       let get x = Some [%e get]
       and set x y = begin [@ocaml.warning "-23"] Some [%e set] end
-      in ({ get ; set }, field ~name:[%e estring ~loc:label.loc label.txt] )]
+      in ( { get ; set }
+         , field ~field_name:[%e estring ~loc:label.loc label.txt] )]
   | Tuple (nth, arity) ->
     let p = tuple_pat ~loc nth arity in
     let patched = tuple_patch ~loc nth arity in
