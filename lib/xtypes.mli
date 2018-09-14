@@ -60,6 +60,7 @@ and 's constructor_kind =
 and 's constructor =
   { constructor_name: string
   ; constructor_props: stype_properties
+  ; tag: int
   ; kind: 's constructor_kind
   }
 
@@ -99,6 +100,34 @@ val xtype_of_ttype: 'a ttype -> 'a xtype
 
 val get_first_props_xtype: 'a xtype -> stype_properties
 val remove_first_props_xtype: 'a xtype -> 'a xtype
+
+(** {2 Building values from xtypes} *)
+
+module Builder : sig
+  (** Building values from xtypes.
+
+      The builder function [mk] is called for each field in the order of the
+      fields array.
+  *)
+
+  type 'a t = { mk: 't. ('a, 't) field -> 't } [@@unboxed]
+  type 'a named = { mk: 't. ('a, 't) named_field -> 't } [@@unboxed]
+
+  val tuple : 'a tuple -> 'a t -> 'a
+  val record : 'a record -> 'a named -> 'a
+
+  val constant_constructor : 'a constructor -> 'a
+  (** Raises [Invalid_argument "Not a constant constructor"] when kind does not
+      match *)
+
+  val regular_constructor : 'a constructor -> 'a t -> 'a
+  (** Raises [Invalid_argument "Not a regular constructor"] when kind does not
+      match *)
+
+  val inlined_constructor : 'a constructor -> 'a named -> 'a
+  (** Raises [Invalid_argument "Not an inline record constructor"] when kind
+      does not match *)
+end
 
 (** {2 Paths} *)
 
