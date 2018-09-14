@@ -8,6 +8,7 @@
 open Dynt_core.Ttype
 open Dynt_core.Stype
 open Dynt_core.Std
+module Xtypes = Xtypes_depr
 
 (* Utils. *)
 

@@ -662,9 +662,9 @@ module FloatRecord = struct
     ; f2z : float
     }
   and 'a record =
-    { f3x : float
-    ; f3y : float
-    ; f3z : float
+    { f3x : 'a
+    ; f3y : 'a
+    ; f3z : 'a
     }
   [@@deriving t]
 

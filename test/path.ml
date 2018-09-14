@@ -97,6 +97,7 @@ let%expect_test _ =
 module B1 = struct
   open Path
   open Ttype
+  module Xtypes = Xtypes_depr
 
   type steps = Internal.step list
   type 'a t = Path : {steps: steps; root: 'a ttype; target: 'b ttype} -> 'a t

@@ -1,511 +1,10 @@
 open Dynt_core
 open Dynt_core.Ttype
 open Dynt_core.Stype
-open Dynt_core.Std
 
-module StepMeta = Path.Internal [@@ocaml.warning "-3"]
+type 'a t = 'a ttype * 'a xtype Lazy.t
 
-let cast_ttype: stype -> 'a ttype = Obj.magic
-
-let arrow ?(label = "") t1 t2 = cast_ttype (DT_arrow (label, stype_of_ttype t1, stype_of_ttype t2))
-
-type 'a record_builder = Obj.t option array
-
-(* TODO: pk: What is going on here? *)
-let dummy_xtype = Obj.repr "foo"
-
-module RecordField = struct
-  type ('s, 't) t =
-    {
-      rank: int;
-      t: 't ttype;
-      name: string;
-      props: (string * string) list;
-      step: Path.meta;
-      get: 's -> 't;
-      set: 's -> 't -> 's;
-
-      mutable xtype: Obj.t;
-    }
-
-  let ttype r = r.t
-  let name r = r.name
-  let props r = r.props
-  let get r = r.get
-  let set r b x =
-    (* TODO: why record builder here, not r.set ? *)
-    (* TODO: This will fail almost surely on unboxed records *)
-    Array.unsafe_set b r.rank (Some (Obj.repr x))
-
-  let step r =
-    let set x v = Some (r.set x v)
-    and get x = Some (r.get x)
-    in Path.{ get; set}, r.step
-end
-
-type 's has_record_field = Field: ('s, 't) RecordField.t -> 's has_record_field
-
-type 's field_builder = { mk: 't. ('s, 't) RecordField.t -> 't }
-  [@@ocaml.unboxed]
-
-module Record = struct
-  type 's t =
-    {
-      ttype: 's ttype;
-      fields: 's has_record_field list;
-      make: default:'s option -> ('s record_builder -> unit) -> 's;
-      build: 's field_builder -> 's;
-      find_field: (string -> 's has_record_field option);
-    }
-
-  let ttype r = r.ttype
-  let fields r = r.fields
-  let make ?default r x = r.make ~default x
-
-  let build r x = r.build x
-  let find_field r s = r.find_field s
-end
-
-module Constructor = struct
-  type ('s, 't) t =
-    {
-      index: int;
-      t: 't ttype;
-      name: string;
-      props: (string * string) list;
-      inline: bool;
-      project: 's -> 't;
-      inject: 't -> 's;
-      step: Path.meta;
-
-      mutable xtype: Obj.t;
-    }
-
-  let ttype r = r.t
-  let index r = r.index
-  let name r = r.name
-  let props r = r.props
-  let inline r = r.inline
-  let project_exn r x = r.project x
-  let project r x = try Some (r.project x) with Not_found -> None
-  let inject r x = r.inject x
-
-  let step r =
-    let get x = project r x
-    and set x y =
-      match project r x with
-      | Some _ -> Some (inject r y)
-      | None -> None
-    in Path.{get; set}, r.step
-end
-
-type 's has_constructor = Constructor: ('s, 't) Constructor.t -> 's has_constructor
-
-module Sum = struct
-  type 's t =
-    {
-      ttype: 's ttype;
-      constructors: 's has_constructor array;
-      get_constructor_index: 's -> int;
-      lookup_constructor: string -> int;
-    }
-
-  let ttype x = x.ttype
-  let path x =
-    match stype_of_ttype x.ttype with
-    | DT_node{rec_name=s; _} -> s
-    | _ -> assert false
-
-  let constructors x = x.constructors
-  let get_constructor_index x y = x.get_constructor_index y
-  let lookup_constructor x y = x.lookup_constructor y
-  let constructor x y = x.constructors.(x.get_constructor_index y)
-end
-
-module Method = struct
-  type ('s, 't) t =
-    {
-     t: 't ttype;
-     name: string;
-     call: 's -> 't;
-
-     mutable xtype: Obj.t;
-    }
-
-  let ttype m = m.t
-  let name m = m.name
-  let call m x = m.call x
-end
-
-type 's has_method = Method: ('s, 't) Method.t -> 's has_method
-
-module Object = struct
-  type 's t =
-    {
-      ttype: 's ttype;
-      methods: 's has_method list;
-    }
-
-  let ttype o = o.ttype
-  let methods o = o.methods
-end
-
-type 'a is_function = Function: (string * 'b ttype * 'c ttype) -> ('b -> 'c) is_function
-type 's is_list = List: 't ttype -> ('t list) is_list
-type 's is_array = Array: 't ttype -> ('t array) is_array
-type 's is_option = Option: 't ttype -> ('t option) is_option
-type 's is_tuple2 = Tuple2: ('a ttype * 'b ttype) -> ('a * 'b) is_tuple2
-type 's is_tuple3 = Tuple3: ('a ttype * 'b ttype * 'c ttype) -> ('a * 'b * 'c) is_tuple3
-
-let is_list (type s_) (s_ttype: s_ ttype) (type t_): s_ is_list option =
-  match stype_of_ttype s_ttype with
-  | DT_list t_stype -> Some (Obj.magic (List (cast_ttype t_stype: t_ ttype)))
-  | _ -> None
-
-let is_array (type s_) (s_ttype: s_ ttype) (type t_): s_ is_array option =
-  match stype_of_ttype s_ttype with
-  | DT_array t_stype -> Some (Obj.magic (Array (cast_ttype t_stype: t_ ttype)))
-  | _ -> None
-
-let is_tuple2 (type s_) (s_ttype: s_ ttype) (type t1_) (type t2_) : s_ is_tuple2 option =
-  match stype_of_ttype s_ttype with
-  | DT_tuple [t1_stype; t2_stype] ->
-      Some (Obj.magic
-              (Tuple2 ((cast_ttype t1_stype: t1_ ttype),
-                       (cast_ttype t2_stype: t2_ ttype))))
-  | _ -> None
-
-let is_tuple3 (type s_) (s_ttype: s_ ttype) (type t1_) (type t2_) (type t3_) : s_ is_tuple3 option =
-  match stype_of_ttype s_ttype with
-  | DT_tuple [t1_stype; t2_stype; t3_stype] ->
-      Some (Obj.magic
-              (Tuple3 ((cast_ttype t1_stype: t1_ ttype),
-                       (cast_ttype t2_stype: t2_ ttype),
-                       (cast_ttype t3_stype: t3_ ttype))))
-  | _ -> None
-
-let is_option (type s_) (s_ttype: s_ ttype) (type t_): s_ is_option option =
-  match stype_of_ttype s_ttype with
-  | DT_option t_stype -> Some (Obj.magic (Option (cast_ttype t_stype: t_ ttype)))
-  | _ -> None
-
-let build_object s_ttype methods : _ Object.t =
-  let prepare (type t_) (name, t_stype) =
-    let t = (cast_ttype t_stype: t_ ttype) in
-    let label = CamlinternalOO.public_method_label name in
-    let call (x: t_) = Obj.magic (CamlinternalOO.send (Obj.magic x) label) in
-    Method {t; name; call; xtype = dummy_xtype}
-  in
-  {
-    ttype = s_ttype;
-    methods = List.map prepare methods;
-  }
-
-let is_object (type s_) (s_ttype: s_ ttype) : s_ Object.t option =
-  match stype_of_ttype s_ttype with
-  | DT_object methods -> Some (build_object s_ttype methods)
-  | _ -> None
-
-exception Missing_field_in_record_builder
-
-let build_record (type s_) ttype record_repr record_fields : s_ Record.t =
-  let len = List.length record_fields in
-  let fields =
-    let unboxed = match record_repr with Record_unboxed -> true | _ -> false in
-    List.mapi
-      (fun (type t_) i (field_name, props, t_stype) ->
-        let t = (cast_ttype t_stype: t_ ttype) in
-        let step = StepMeta.field ~field_name
-        and get x =
-          if unboxed then (Obj.magic x)
-          else Obj.magic (Obj.field (Obj.repr x) i)
-        and set x v =
-          if unboxed then (Obj.magic v)
-          else
-            let obj = Obj.repr x |> Obj.dup in
-            Obj.set_field obj i (Obj.repr v);
-            Obj.magic obj
-        in
-        Field
-          {
-            rank = i;
-            t;
-            name = field_name;
-            props;
-            xtype = dummy_xtype;
-            step;
-            set;
-            get;
-          }
-      )
-      record_fields
-  in
-  let make ~default init =
-    let b = Array.make len None in
-    init b;
-    match record_repr with
-    | Record_regular | Record_inline _ ->
-        (* we could copy b directly except if it is a float array *)
-        let r =
-          match default with
-          | None ->
-              let tag = match record_repr with Record_inline tag -> tag | _ -> 0 in
-              Obj.new_block tag len
-          | Some default -> Obj.dup (Obj.magic default)
-        in
-        for i = 0 to len - 1 do
-          match Array.unsafe_get b i with
-          | None -> if default == None then raise Missing_field_in_record_builder
-          | Some x -> Obj.set_field r i x
-        done;
-        Obj.magic r
-    | Record_float ->
-        let b =
-          Array.mapi
-            (fun i -> function
-              | Some x -> x
-              | None ->
-                  match default with
-                  | Some default -> Obj.magic ((Obj.magic default: float array).(i))
-                  | None -> raise Missing_field_in_record_builder
-            )
-            b
-        in
-        Obj.magic b (* b is already a float array *)
-    | Record_unboxed -> assert (len = 1);
-      let r =
-        match Array.unsafe_get b 0 with
-        | Some x -> x
-        | None ->
-          match default with
-          | Some default -> Obj.repr default
-          | None -> raise Missing_field_in_record_builder
-      in
-      Obj.magic r
-  in
-  let fields_arr = Array.of_list fields in
-  let build f =
-    match record_repr with
-    | Record_regular | Record_inline _ ->
-        let tag = match record_repr with Record_inline tag -> tag | _ -> 0 in
-        let r = Obj.new_block tag len in
-        for i = 0 to len - 1 do
-          let (Field field) = Array.unsafe_get fields_arr i in
-          Obj.set_field r i (Obj.repr (f.mk field))
-        done;
-        Obj.magic r
-    | Record_float ->
-        let r = Array.create_float len in
-        for i = 0 to len - 1 do
-          let (Field field) = Array.unsafe_get fields_arr i in
-          Array.unsafe_set r i (Obj.magic (f.mk field) : float)
-        done;
-        Obj.magic r
-    | Record_unboxed -> assert (len = 1);
-      let (Field field) = Array.unsafe_get fields_arr 0 in
-      Obj.magic (f.mk field)
-  in
-  let tbl = lazy (Ext.String.Tbl.prepare (List.map (fun (Field f) -> f.name) fields)) in
-  let find_field s =
-    let idx = Ext.String.Tbl.lookup (Lazy.force tbl) s in
-    if idx < 0 then None else Some (fields_arr.(idx))
-  in
-  {ttype; fields; make; build; find_field}
-
-let make len = fun ?default f ->
-  let b = Array.make len None in
-  f b;
-  let r =
-    match default with
-    | None -> Obj.new_block 0 len
-    | Some default -> Obj.dup (Obj.magic default)
-  in
-  for i = 0 to len - 1 do
-    match Array.unsafe_get b i with
-    | None -> if default == None then raise Missing_field_in_record_builder
-    | Some x -> Obj.set_field r i x
-  done;
-  Obj.magic r
-
-let makes = Array.init 500 make
-
-let build_tuple (type s_) ttype record_fields : s_ Record.t =
-  (* TODO: build the fields_arr directly *)
-  let arity = List.length record_fields in
-  let fields =
-    List.mapi
-      (fun (type t_) i t_stype ->
-        let t = (cast_ttype t_stype: t_ ttype) in
-        let step = StepMeta.tuple ~nth:i ~arity
-        and get x = Obj.magic (Obj.field (Obj.repr x) i)
-        and set x v =
-          let obj = Obj.repr x |> Obj.dup in
-          Obj.set_field obj i (Obj.repr v);
-          Obj.magic obj
-        in
-        Field {RecordField.rank = i; t; name = ""; props = [];
-               xtype = dummy_xtype; get; set ; step
-              }
-      )
-      record_fields
-  in
-  let make = Obj.magic (makes.(arity)) in
-  let fields_arr = Array.of_list fields in
-  let build f =
-    let len = Array.length fields_arr in
-    let r = Obj.new_block 0 len in
-    for i = 0 to len - 1 do
-      let (Field field) = Array.unsafe_get fields_arr i in
-      Obj.set_field r i (Obj.repr (f.mk field))
-    done;
-    Obj.magic r
-  in
-  {ttype; fields; make; build; find_field = (fun _ -> None)}
-
-let is_record s_ttype : _ Record.t option =
-  match stype_of_ttype s_ttype with
-  | DT_node{rec_descr=DT_record{record_repr; record_fields}; _} ->
-      Some (build_record s_ttype record_repr record_fields)
-  | _ ->
-      None
-
-let is_tuple s_ttype  : _ Record.t option =
-  match stype_of_ttype s_ttype with
-  | DT_tuple tl ->
-      Some (build_tuple s_ttype tl)
-  | _ ->
-      None
-
-let dup_tag x tag =
-  let r = Obj.dup x in
-  Obj.set_tag r tag;
-  r
-
-let build_sum ttype variant_repr variant_constrs : _ Sum.t =
-  let cst_ids = ref [] in
-  let noncst_ids = ref [] in
-  let constructors =
-    let nb_cst = ref 0 in
-    let nb_noncst = ref 0 in
-    let unboxed = match variant_repr with
-        Variant_unboxed -> true | _ -> false in
-    List.mapi
-      (* TODO: This should respect Variant_unboxed tags *)
-      (fun (type t_) i (name, props, tl) ->
-         let mk inline stype project inject step =
-           Constructor
-             {
-               index = i;
-               t = (cast_ttype stype: t_ ttype);
-               name;
-               props;
-               inline;
-               step;
-               project = Obj.magic project;
-               inject = Obj.magic inject;
-               xtype = dummy_xtype;
-             }
-         in
-         let mk_noncst inline stype project inject step=
-           let tag = !nb_noncst in
-           noncst_ids := i :: !noncst_ids;
-           incr nb_noncst;
-           mk inline stype
-             (fun x -> if Obj.tag x = tag then project x else raise Not_found)
-             (inject tag) step
-         in
-         match tl with
-         | C_tuple [] ->
-             assert (not unboxed);
-             let tag = Obj.magic !nb_cst in
-             cst_ids := i :: !cst_ids;
-             incr nb_cst;
-             mk false (stype_of_ttype [%t: unit])
-               (fun x ->
-                  if x == tag then () (* if x is a block, it won't be equal to the tag *)
-                  else raise Not_found)
-               (fun () -> tag)
-               (* TODO: This should be a different kind of step *)
-               (StepMeta.constructor_regular ~name ~nth:(-1) ~arity:(-1))
-         | C_tuple [t] ->
-           if unboxed then mk_noncst false t
-               (fun x -> Obj.magic x)
-               (fun _ x -> Obj.magic x)
-               (StepMeta.constructor_regular ~name ~nth:0 ~arity:1)
-           else mk_noncst false t
-               (fun x -> Obj.field x 0 (* if x is a constant constructor, Obj.tag x = 1000 *))
-               (fun tag x -> let r = Obj.new_block tag 1 in Obj.set_field r 0 x; r)
-               (* TODO: nth makes no sense *)
-               (StepMeta.constructor_regular ~name ~nth:0 ~arity:1)
-         | C_tuple tl ->
-             assert (not unboxed);
-             let arity = List.length tl in
-             mk_noncst false (DT_tuple tl)
-               (fun x -> dup_tag x 0)
-               (fun tag x -> dup_tag x tag)
-               (* TODO: nth makes no sense *)
-               (StepMeta.constructor_regular ~name ~nth:0 ~arity)
-         | C_inline t ->
-           if unboxed then mk_noncst true t
-               (fun x -> Obj.magic x)
-               (fun _ x -> Obj.magic x)
-               (* TODO: field makes no sense *)
-               (StepMeta.constructor_inline ~name ~field_name:"")
-           else mk_noncst true t
-               (fun x -> dup_tag x 0)
-               (fun tag x -> dup_tag x tag)
-               (* TODO: field makes no sense *)
-               (StepMeta.constructor_inline ~name ~field_name:"")
-      )
-      variant_constrs
-  in
-  let cst_ids = Ext.Array.of_list_rev !cst_ids in
-  let noncst_ids = Ext.Array.of_list_rev !noncst_ids in
-  let get_constructor_index x =
-    let x = Obj.repr x in
-    if Obj.is_int x then Array.unsafe_get cst_ids (Obj.magic x)
-    else Array.unsafe_get noncst_ids (Obj.tag x)
-  in
-  let tbl = lazy (Ext.String.Tbl.prepare (List.map (fun (name, _, _) -> name) variant_constrs)) in
-  let lookup_constructor s = Ext.String.Tbl.lookup (Lazy.force tbl) s in
-  {
-    ttype;
-    constructors = Array.of_list constructors;
-    get_constructor_index;
-    lookup_constructor;
-  }
-
-let is_sum (type s_) (s_ttype: s_ ttype) : s_ Sum.t option =
-  match stype_of_ttype s_ttype with
-  (* TODO: The first case is not needed since unit is represented as abstract *)
-  | DT_node{rec_name="unit"; _} ->
-      None
-  | DT_node{rec_descr=DT_variant{variant_constrs; variant_repr}; _} ->
-      Some (build_sum s_ttype variant_repr variant_constrs)
-  | _ ->
-      None
-
-let is_function (t : 'a ttype) (type t1_) (type t2_) : 'a is_function option =
-  match stype_of_ttype t with
-  | DT_arrow (s, t1, t2) ->
-      let t1_ttype = (cast_ttype t1: t1_ ttype) in
-      let t2_ttype = (cast_ttype t2: t2_ ttype) in
-      Some (Obj.magic (Function (s, t1_ttype, t2_ttype)))
-  | _ -> None
-
-let is_prop (type s_) (s_ttype: s_ ttype) =
-  match stype_of_ttype s_ttype with
-  | DT_prop (prop, t) -> Some (prop, (cast_ttype t: s_ ttype))
-  | _ -> None
-
-let is_abstract (type s_) (s_ttype: s_ ttype) =
-  match stype_of_ttype s_ttype with
-  | DT_abstract ("lazy_t", [_])
-  | DT_abstract (("char" | "int32" | "int64" | "nativeint"), []) -> None
-  | DT_abstract (name, args) -> Some (name, s_ttype, args)
-  | _ -> None
-
-type 'a xtype
+and 'a xtype
   = Unit: unit xtype
   | Bool: bool xtype
   | Int: int xtype
@@ -515,51 +14,106 @@ type 'a xtype
   | Int32: int32 xtype
   | Int64: int64 xtype
   | Nativeint: nativeint xtype
-  | Option: 'b ttype * 'b xtype Lazy.t -> 'b option xtype
-  | List: 'b ttype * 'b xtype Lazy.t -> 'b list xtype
-  | Array: 'b ttype * 'b xtype Lazy.t -> 'b array xtype
-  | Function: (string * ('b ttype * 'b xtype Lazy.t) * ('c ttype * 'c xtype Lazy.t)) -> ('b -> 'c) xtype
-  | Sum: 'a Sum.t -> 'a xtype
-  | Tuple: 'a Record.t -> 'a xtype
-  | Record: 'a Record.t -> 'a xtype
-  | Lazy: ('b ttype * 'b xtype Lazy.t) -> 'b Lazy.t xtype
-  | Prop: ((string * string) list * 'a ttype * 'a xtype Lazy.t) -> 'a xtype
-  | Object: 'a Object.t -> 'a xtype
-  | Abstract: (string * 'a ttype * stype list) -> 'a xtype
+  | Option: 'b t -> 'b option xtype
+  | List: 'b t -> 'b list xtype
+  | Array: 'b t -> 'b array xtype
+  | Lazy: 'b t -> 'b Lazy.t xtype
+  | Tuple: 'a tuple -> 'a xtype
+  | Record: 'a record -> 'a xtype
+  | Sum: 'a sum -> 'a xtype
+  | Function: ('b,'c) arrow -> ('b -> 'c) xtype
+  | Object: 'a object_ -> 'a xtype
+  | Prop: (stype_properties * 'a t) -> 'a xtype
+  | Abstract: (string * stype list) -> 'a xtype
 
-let ttype_of_xtype : type t. t xtype -> t ttype = function
-  | Unit -> unit_t
-  | Bool -> bool_t
-  | Int -> int_t
-  | Float -> float_t
-  | String -> string_t
-  | Char -> char_t
-  | Int32 -> int32_t
-  | Int64 -> int64_t
-  | Nativeint -> nativeint_t
-  | Option (t, _) -> option_t t
-  | List (t, _) -> list_t t
-  | Array (t, _) -> array_t t
-  | Function (label, (t1, _), (t2, _)) -> arrow ~label t1 t2
-  | Sum sum -> Sum.ttype sum
-  | Tuple r | Record r -> Record.ttype r
-  | Lazy (t, _) -> lazy_t t
-  | Prop (props, t, _) -> add_props props t
-  | Object o -> Object.ttype o
-  | Abstract (_, t, _) -> t
+and ('s,'t) field =
+  { t: 't t
+  ; step: ('s, 't) Path.step
+  }
 
+and 's has_field = Field: ('s, 't) field -> 's has_field
+
+and 's tuple = 's has_field array
+
+and ('s, 't) named_field =
+  { field: ('s, 't) field
+  ; field_name: string
+  ; field_props: stype_properties
+  }
+
+and 's has_named_field = NamedField: ('s, 't) named_field -> 's has_named_field
+
+and 's record =
+  { fields: 's has_named_field array
+  ; find_field: string -> 's has_named_field option
+  }
+
+and 's constructor_kind =
+  | Constant
+  | Regular of 's tuple
+  | Inlined of 's record
+
+and 's constructor =
+  { constructor_name: string
+  ; constructor_props: stype_properties
+  ; kind: 's constructor_kind
+  }
+
+and 's sum =
+  { constructors: 's constructor array
+  ; find_constructor: string -> 's constructor option
+  ; constructor: 's -> 's constructor
+  }
+
+and ('s, 't) arrow =
+  { label : string option
+  ; from_t: 's t
+  ; to_t: 't t
+  }
+
+and ('s, 't) method_ =
+  { method_name: string
+  ; method_type: 't t
+  ; call: 's -> 't
+  }
+
+and 's object_ =
+  { methods : 's has_method array
+  ; find_method : string -> 's has_method option
+  }
+
+and 's has_method = Method: ('s, 't) method_ -> 's has_method
+
+(* internal Helpers *)
+let cast_ttype: stype -> 'a ttype = Obj.magic
+let cast_xtype: type a b. a xtype -> b xtype = Obj.magic
+module StepMeta = Path.Internal [@@ocaml.warning "-3"]
+
+(* unsafe memory access *)
+
+let box_get : type a b. int -> a -> b = fun i o ->
+  Obj.magic (Obj.field (Obj.repr o) i)
+
+let box_set : type a b. int -> a -> b -> a = fun i o x ->
+  Obj.magic (Obj.set_field (Obj.repr o) i (Obj.repr x))
+
+(* correspond to set/get of Path.lens *)
+let box_get_some i x = Some (box_get i x)
+let box_set_some i x v = Some (box_set i x v)
+
+(* Memoize xtype in stype node *)
 type memoized_type_prop += Xtype of Obj.t xtype
 
 let rec search a n i =
-  if i = n then (Obj.magic Unit)
+  if i = n then None
   else match a.(i) with
-  | Xtype r -> r
+  | Xtype r -> Some r
   | _ -> search a n (i + 1)
 
-let find_memoized_xtype node : 'a xtype =
-  Obj.magic (search node.rec_memoized (Array.length node.rec_memoized) 0)
+let is_memoized (node : node) : Obj.t xtype option =
+  search node.rec_memoized (Array.length node.rec_memoized) 0
 
-let add_memoized_xtype node xt =
+let memoize: type a. node -> a xtype -> a xtype = fun node xt ->
   let s = Xtype (Obj.magic xt) in
   let old = node.rec_memoized in
   let a = Array.make (Array.length old + 1) s in
@@ -567,77 +121,132 @@ let add_memoized_xtype node xt =
   Internal.set_memoized node a;
   xt
 
-let rec xtype_of_ttype (type s_) (s: s_ ttype) : s_ xtype =
-  (* This function is used quite a lot (e.g. in the "cst" combinator),
-     so we accept some internal unsafety to improve performance. *)
-  match stype_of_ttype s with
-  | DT_int -> Obj.magic Int
-  | DT_float -> Obj.magic Float
-  | DT_string -> Obj.magic String
-  | DT_list t -> Obj.magic (List (cast_ttype t, lazy (xtype_of_ttype (cast_ttype t))))
-  | DT_array t -> Obj.magic (Array (cast_ttype t, lazy (xtype_of_ttype (cast_ttype t))))
-  | DT_option t -> Obj.magic (Option (cast_ttype t, lazy (xtype_of_ttype (cast_ttype t))))
-  | DT_arrow (l, t1, t2) -> Obj.magic (Function (l, (cast_ttype t1, lazy (xtype_of_ttype (cast_ttype t1))),
-                                                    (cast_ttype t2, lazy (xtype_of_ttype (cast_ttype t2)))))
-  | DT_prop (p, t) -> Obj.magic (Prop (p, cast_ttype t, lazy (xtype_of_ttype (cast_ttype t))))
-  | DT_abstract ("lazy_t", [t]) -> Obj.magic (Lazy (cast_ttype t, lazy (xtype_of_ttype (cast_ttype t))))
-  | DT_abstract ("unit", []) -> Obj.magic Unit
-  | DT_abstract ("bool", []) -> Obj.magic Bool
-  | DT_abstract ("char", []) -> Obj.magic Char
-  | DT_abstract ("int32", []) -> Obj.magic Int32
-  | DT_abstract ("int64", []) -> Obj.magic Int64
-  | DT_abstract ("nativeint", []) -> Obj.magic Nativeint
-  | DT_tuple tl -> Tuple (build_tuple s tl)
-  | DT_node({rec_descr=DT_record{record_repr; record_fields}; _} as node) ->
-      begin match find_memoized_xtype node with
-      | Unit -> add_memoized_xtype node (Record (build_record s record_repr record_fields))
-      | r -> Obj.magic r
-      end
+let rec xtype_of_ttype : type a. a ttype -> a xtype = fun t ->
+  (* CAUTION: This must be consistent with core/std.ml *)
+  match stype_of_ttype t with
+  | DT_int -> cast_xtype Int
+  | DT_float -> cast_xtype Float
+  | DT_string -> cast_xtype String
+  | DT_abstract ("unit", []) -> cast_xtype Unit
+  | DT_abstract ("bool", []) -> cast_xtype Bool
+  | DT_abstract ("char", []) -> cast_xtype Char
+  | DT_abstract ("int32", []) -> cast_xtype Int32
+  | DT_abstract ("int64", []) -> cast_xtype Int64
+  | DT_abstract ("nativeint", []) -> cast_xtype Nativeint
+  | DT_option t -> cast_xtype (Option (bundle t))
+  | DT_list t -> cast_xtype (List (bundle t))
+  | DT_array t -> cast_xtype (Array (bundle t))
+  | DT_abstract ("lazy_t", [t]) -> cast_xtype (Lazy (bundle t))
+  | DT_arrow (l, t1, t2) ->
+    let label = match l with
+      | "" -> None
+      | s -> Some s
+    in cast_xtype (Function {label; from_t = bundle t1; to_t = bundle t2})
+  | DT_tuple fields -> cast_xtype (Tuple (tuple fields))
+  | DT_node ({rec_descr = DT_record r; _} as node) ->
+    begin match is_memoized node with
+    | None -> memoize node (cast_xtype (Record (record r)))
+    | Some xt -> cast_xtype xt
+    end
+  | DT_node ({rec_descr = DT_variant variant; _} as node) ->
+    begin match is_memoized node with
+    | None -> memoize node (
+          cast_xtype (xtype_of_variant variant))
+    | Some xt -> cast_xtype xt
+    end
+  | DT_object _ -> assert false (* TODO *)
+  | DT_prop (props, s) -> Prop(props, bundle s)
+  | DT_abstract (name, l) -> Abstract (name, l)
+  | DT_var _ -> assert false
 
-  | DT_node({rec_descr=DT_variant{variant_repr;variant_constrs}; _} as node) ->
-      begin match find_memoized_xtype node with
-      | Unit -> add_memoized_xtype node (Sum (build_sum s variant_repr variant_constrs))
-      | r -> Obj.magic r
-      end
+and bundle : type a. stype -> a t = fun s ->
+    let t = cast_ttype s
+    in (t, lazy (xtype_of_ttype t))
 
-  | DT_object methods ->
-      Object (build_object s methods)
+and tuple ?(meta=StepMeta.tuple) fields : 'a has_field array =
+  let arity = List.length fields in
+  let fields = List.mapi (fun i t ->
+      Field { t = bundle t
+            ; step = { get = box_get_some i ; set = box_set_some i },
+                     meta ~nth:i ~arity }
+    ) fields
+  in Array.of_list fields
 
-  | DT_abstract (name, args) -> Abstract (name, s, args)
+and record ?(meta=StepMeta.field) record : 'a record =
+  match record.record_repr with
+  | Record_float | Record_inline _ | Record_unboxed -> assert false
+  | Record_regular ->
+    let fields = List.mapi (fun i (field_name, field_props, s) ->
+        let meta = meta ~field_name in
+        NamedField { field_name; field_props;
+                     field = { t = bundle s
+                             ; step = { get = box_get_some i
+                                      ; set = box_set_some i }, meta }}
+      ) record.record_fields
+    in
+    let tbl = lazy (
+      Ext.String.Tbl.prepare
+        (List.map (fun (NamedField f) -> f.field_name) fields))
+    in
+    let fields = Array.of_list fields in
+    let find_field s =
+      let i = Ext.String.Tbl.lookup (Lazy.force tbl) s in
+      if i < 0 then None else Some fields.(i)
+    in { fields; find_field }
 
-  | DT_var _ ->
-      assert false
+and xtype_of_variant variant : 'a xtype =
+  match variant.variant_repr with
+  | Variant_unboxed -> assert false
+  | Variant_regular ->
+    let n = List.length variant.variant_constrs in
+    let constructors = Array.make n
+        { constructor_name = ""
+        ; constructor_props = []
+        ; kind = Constant }
+    in
+    let cst, ncst = ref [], ref [] in
+    List.iteri (fun i (name, constructor_props, arg) ->
+        let kind =
+          match arg with
+          | C_tuple [] -> cst := i :: !cst ; Constant
+          | C_tuple l ->
+            ncst := i :: !ncst;
+            let meta = StepMeta.constructor_regular ~name in
+            Regular (tuple ~meta l)
+          | C_inline (DT_node {rec_descr = DT_record r; _}) ->
+            ncst := i :: !ncst;
+            let meta = StepMeta.constructor_inline ~name in
+            Inlined (record ~meta r)
+          | C_inline _ -> assert false
+        in
+        constructors.(i) <- {kind ; constructor_props; constructor_name = name}
+      ) variant.variant_constrs;
+    (* Lookup tables tag -> constructor index *)
+    let cst = Ext.Array.of_list_rev !cst in
+    let ncst = Ext.Array.of_list_rev !ncst in
+    (* Constructor by value *)
+    let constructor x : 'a constructor =
+      let i =
+        let x = Obj.repr x in
+        if Obj.is_int x then Array.get cst (Obj.magic x)
+        else Array.get ncst (Obj.tag x)
+      in constructors.(i)
+    in
+    (* Constructor by name *)
+    let tbl = lazy (
+      Ext.String.Tbl.prepare
+        (Ext.Array.map_to_list (fun c -> c.constructor_name) constructors))
+    in
+    let find_constructor s =
+      let i = Ext.String.Tbl.lookup (Lazy.force tbl) s in
+      if i < 0 then None else Some constructors.(i)
+    in Sum { constructors; find_constructor; constructor }
 
-let xtype_of_field (r : (_, 'a) RecordField.t) : 'a xtype =
-  if r.xtype != dummy_xtype then
-    Obj.magic r.xtype
-  else begin
-    let xt = xtype_of_ttype r.t in
-    r.xtype <- Obj.repr xt;
-    xt
-  end
-
-let xtype_of_constructor (r : (_, 'a) Constructor.t) : 'a xtype =
-  if r.xtype != dummy_xtype then
-    Obj.magic r.xtype
-  else begin
-    let xt = xtype_of_ttype r.t in
-    r.xtype <- Obj.repr xt;
-    xt
-  end
-
-let xtype_of_method (r : (_, 'a) Method.t) : 'a xtype =
-  if r.xtype != dummy_xtype then
-    Obj.magic r.xtype
-  else begin
-    let xt = xtype_of_ttype r.t in
-    r.xtype <- Obj.repr xt;
-    xt
-  end
+(* property handling *)
 
 let get_first_props_xtype xt =
   let rec loop accu = function
-    | Prop (l, _, lazy xt) ->
+    | Prop (l, (_, lazy xt)) ->
         loop (l :: accu) xt
     | _ ->
         List.concat (List.rev accu)
@@ -645,16 +254,20 @@ let get_first_props_xtype xt =
   loop [] xt
 
 let rec remove_first_props_xtype : type t. t xtype -> t xtype = function
-  | Prop (_, _, lazy xt) -> remove_first_props_xtype xt
+  | Prop (_, (_, lazy xt)) -> remove_first_props_xtype xt
   | xt -> xt
 
-let option_step_some : ('a option, 'a) Path.step =
-  let get x = x
-  and set x v = match x with
-    | None -> None
-    | Some _ -> Some (Some v)
-  in Path.{ get; set} ,
-     StepMeta.constructor_regular ~name:"Some" ~nth:0 ~arity:1
+(* paths *)
+
+let option_step_some : type a. a ttype -> (a option, a) Path.step =
+  (* ttype helps to avoid Obj.magic *)
+  fun _t ->
+    let get x = x
+    and set x v = match x with
+      | None -> None
+      | Some _ -> Some (Some v)
+    in Path.{ get; set} ,
+       StepMeta.constructor_regular ~name:"Some" ~nth:0 ~arity:1
 
 let rec all_paths: type a b. a ttype -> b ttype -> (a, b) Path.t list =
   fun root target ->
@@ -673,24 +286,18 @@ let rec all_paths: type a b. a ttype -> b ttype -> (a, b) Path.t list =
       | Nativeint -> []
       | Option (t, _) ->
         let paths = all_paths t target in
-        (* TODO: Avoid this Obj.magic *)
-        List.map Path.(fun p -> (Obj.magic option_step_some) :: p) paths
-      | Tuple record
-      | Record record ->
-        List.map
-          (function (Field f) ->
-             let paths = all_paths (RecordField.ttype f) target in
-             List.map Path.(fun p -> RecordField.step f :: p) paths)
-          (Record.fields record)
-        |> List.concat
+        List.map Path.(fun p -> option_step_some t :: p) paths
+      | Tuple t -> tuple ~target t
+      | Record r -> record ~target r
       | Sum sum ->
         Ext.Array.map_to_list
-          (function (Constructor c) ->
-             let paths = all_paths (Constructor.ttype c) target in
-             List.map Path.(fun p -> Constructor.step c :: p) paths)
-          (Sum.constructors sum)
+          (fun c -> match c.kind with
+             | Constant -> []
+             | Regular t -> tuple ~target t
+             | Inlined r -> record ~target r
+          ) sum.constructors
         |> List.concat
-      | Prop (_, t, _) -> all_paths t target
+      | Prop (_, (t,_)) -> all_paths t target
       | Object _ -> []
       | List _ -> []
       | Array _ -> []
@@ -698,6 +305,28 @@ let rec all_paths: type a b. a ttype -> b ttype -> (a, b) Path.t list =
       | Lazy _ -> []
       | Abstract _ -> []
 
+and tuple : type a b. target: b ttype -> a tuple -> (a, b) Path.t list =
+  fun ~target t ->
+    Ext.Array.map_to_list
+      (function (Field f) ->
+         let paths = all_paths (fst f.t) target in
+         List.map Path.(fun p -> f.step :: p) paths
+      ) t
+    |> List.concat
+
+and record : type a b. target: b ttype -> a record -> (a, b) Path.t list =
+  fun ~target r ->
+    Ext.Array.map_to_list
+      (function (NamedField nf) ->
+         let paths = all_paths (fst nf.field.t) target in
+         List.map Path.(fun p -> nf.field.step :: p) paths
+      ) r.fields
+    |> List.concat
+
+
+let project_path ~t:_ _p = assert false (* TODO *)
+
+(* type matching *)
 
 module type TYPE_0 = sig
   type t
@@ -865,7 +494,7 @@ module Matcher_1 (T : TYPE_1) = struct
 
   type _ is_t = Is: 'b ttype * ('a, 'b T.t) TypEq.t -> 'a is_t
 
-  let s = T.t unit_t |> stype_of_ttype
+  let s = T.t Std.unit_t |> stype_of_ttype
   let is_abstract = get_abstract_name s
 
   let key =
@@ -892,7 +521,7 @@ module Matcher_2 (T : TYPE_2) = struct
 
   type _ is_t = Is: 'aa ttype * 'bb ttype * ('a, ('aa,'bb) t) TypEq.t -> 'a is_t
 
-  let s = T.t unit_t unit_t |> stype_of_ttype
+  let s = T.t Std.unit_t Std.unit_t |> stype_of_ttype
   let is_abstract = get_abstract_name s
 
   let key =
