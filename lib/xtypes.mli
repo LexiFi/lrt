@@ -50,6 +50,7 @@ and 's has_named_field = NamedField: ('s, 't) named_field -> 's has_named_field
 and 's record =
   { fields: 's has_named_field array
   ; find_field: string -> 's has_named_field option
+  ; unboxed : bool
   }
 
 and 's constructor_kind =
@@ -57,10 +58,12 @@ and 's constructor_kind =
   | Regular of 's tuple
   | Inlined of 's record
 
+and constructor_repr = Tag of int | Unboxed
+
 and 's constructor =
   { constructor_name: string
   ; constructor_props: stype_properties
-  ; tag: int
+  ; constructor_repr: constructor_repr
   ; kind: 's constructor_kind
   }
 
@@ -136,7 +139,7 @@ val all_paths: 'a ttype -> 'b ttype -> ('a, 'b) Path.t list
     a value of type ['b]. Does not traverse list, array, lazy, objects.
     Will loop on recursive types. *)
 
-val project_path : t: 'a ttype -> ('a,'b) Path.t -> 'b ttype
+val project_path : 'a ttype -> ('a,'b) Path.t -> 'b ttype
 (** Extraction of sub-type pointed to by a path. *)
 
 (** {2 Type Matchers}

@@ -46,6 +46,7 @@ and 's has_named_field = NamedField: ('s, 't) named_field -> 's has_named_field
 and 's record =
   { fields: 's has_named_field array
   ; find_field: string -> 's has_named_field option
+  ; unboxed : bool
   }
 
 and 's constructor_kind =
@@ -53,10 +54,12 @@ and 's constructor_kind =
   | Regular of 's tuple
   | Inlined of 's record
 
+and constructor_repr = Tag of int | Unboxed
+
 and 's constructor =
   { constructor_name: string
   ; constructor_props: stype_properties
-  ; tag : int
+  ; constructor_repr: constructor_repr
   ; kind: 's constructor_kind
   }
 
@@ -110,8 +113,6 @@ let memoize: type a. node -> a xtype -> a xtype = fun node xt ->
   Internal.set_memoized node a;
   xt
 
-type constructor_repr = Unboxed | VTag of int
-
 let rec xtype_of_ttype : type a. a ttype -> a xtype = fun t ->
   (* CAUTION: This must be consistent with core/std.ml *)
   match stype_of_ttype t with
@@ -160,7 +161,7 @@ and tuple ?cstr ?(meta=StepMeta.tuple) fields : 'a has_field array =
     | Some Unboxed ->
       (fun _i o -> Some o),
       (fun _i _o v -> Some v)
-    | Some (VTag tag) ->
+    | Some (Tag tag) ->
       (fun i o -> if check tag o then Some (Obj.field o i) else None),
       (fun i o v -> if check tag o then
           let o = Obj.dup o in
@@ -189,7 +190,7 @@ and record ?cstr ?(meta=StepMeta.field) record : 'a record =
       ( fun i r v ->
           let r = Obj.dup r in
           Obj.set_double_field r i (Obj.magic v); Some r)
-    | Some (VTag tag), Record_float ->
+    | Some (Tag tag), Record_float ->
       ( fun i r -> if check tag r then
           Some (Obj.repr (Obj.double_field r i)) else None ),
       ( fun i r v ->
@@ -201,7 +202,7 @@ and record ?cstr ?(meta=StepMeta.field) record : 'a record =
          let r = Obj.dup r in
          Obj.set_field r i (Obj.repr v); Some r)
     (* TODO: We do not need the tag here. Can we drop it from the stype ? *)
-    | Some (VTag tag), Record_inline _->
+    | Some (Tag tag), Record_inline _->
       (fun i r -> if check tag r then
           Some (Obj.field r i) else None),
       (fun i r v -> if check tag r then
@@ -217,11 +218,11 @@ and record ?cstr ?(meta=StepMeta.field) record : 'a record =
     (* Boxed record within unboxed constructor *)
     | Some Unboxed, _ -> assert false
     (* Unboxed record inside boxed constructor *)
-    | Some (VTag _), Record_unboxed -> assert false
+    | Some (Tag _), Record_unboxed -> assert false
     (* Inline record outside constructor *)
     | None, Record_inline _ -> assert false
     (* Regular record as variant argument *)
-    | Some (VTag _), Record_regular -> assert false
+    | Some (Tag _), Record_regular -> assert false
   in
   let fields = List.mapi (fun i (field_name, field_props, s) ->
       let meta = meta ~field_name in
@@ -238,41 +239,44 @@ and record ?cstr ?(meta=StepMeta.field) record : 'a record =
   let fields = Array.of_list fields in
   let find_field s =
     let i = Ext.String.Tbl.lookup (Lazy.force tbl) s in
-    if i < 0 then None else Some fields.(i)
-  in { fields; find_field }
+    if i < 0 then None else Some fields.(i) in
+  let unboxed = match record.record_repr with Record_unboxed -> true | _ -> false
+  in { fields; find_field ; unboxed }
 
 and sum variant : 'a sum =
-  let cstr = match variant.variant_repr with
+  let repr = match variant.variant_repr with
     | Variant_unboxed -> fun _ -> Unboxed
-    | Variant_regular -> fun tag -> VTag tag
+    | Variant_regular -> fun tag -> Tag tag
   in
   let n = List.length variant.variant_constrs in
   let constructors = Array.make n
       { constructor_name = ""
       ; constructor_props = []
-      ; tag = 0
+      ; constructor_repr = Unboxed
       ; kind = Constant }
   in
   let pincr i = let r = !i in incr i; r in
   let cst_i, ncst_i = ref 0, ref 0 in
   let cst, ncst = ref [], ref [] in
   List.iteri (fun i (name, constructor_props, arg) ->
-      let tag, kind =
+      let constructor_repr, kind =
         match arg with
-        | C_tuple [] -> cst := i :: !cst ; pincr cst_i, Constant
+        | C_tuple [] -> cst := i :: !cst ; repr (pincr cst_i), Constant
         | C_tuple l ->
           ncst := i :: !ncst;
           let meta = StepMeta.constructor_regular ~name in
-          let cstr = cstr i in
-          pincr ncst_i, Regular (tuple ~cstr ~meta l)
+          let tag = pincr ncst_i in
+          let repr = repr tag in
+          repr, Regular (tuple ~cstr:repr ~meta l)
         | C_inline (DT_node {rec_descr = DT_record r; _}) ->
           ncst := i :: !ncst;
           let meta = StepMeta.constructor_inline ~name in
-          let cstr = cstr i in
-          pincr ncst_i, Inlined (record ~cstr ~meta r)
+          let tag = pincr ncst_i in
+          let repr = repr tag in
+          repr, Inlined (record ~cstr:repr ~meta r)
         | C_inline _ -> assert false
       in
-      constructors.(i) <- { tag; kind; constructor_props
+      constructors.(i) <- { constructor_repr ; kind; constructor_props
                           ; constructor_name = name}
     ) variant.variant_constrs;
   (* Lookup tables tag -> constructor index *)
@@ -313,7 +317,7 @@ module Builder = struct
       Obj.magic o
 
   let record : type a. a record -> a named -> a =
-    (* TODO: unboxed record *)
+    (* TODO: unboxed, float *)
     fun r b ->
       let arity = Array.length r.fields in
       let o = Obj.new_block 0 arity in
@@ -325,24 +329,27 @@ module Builder = struct
   (* TODO: Can we avoid these exceptions by mangling with the xtype definition?
    *)
   let constant_constructor : type a. a constructor -> a =
-    fun c -> match c.kind with
-      | Constant -> Obj.magic c.tag
+    fun c -> match c.kind, c.constructor_repr with
+      | Constant, Tag tag -> Obj.magic tag
+      | Constant, _ -> assert false
       | _ -> raise (Invalid_argument "Not a constant constructor")
 
   let regular_constructor : type a. a constructor -> a t -> a =
-    (* TODO: handle unboxed *)
-    fun c b -> match c.kind with
-      | Regular t ->
+    fun c b -> match c.kind, c.constructor_repr with
+      | Regular t, Tag tag ->
         let o = Obj.repr (tuple t b) in
-        Obj.set_tag o c.tag; Obj.magic o
+        Obj.set_tag o tag; Obj.magic o
+      | Regular [|Field f|], Unboxed -> Obj.magic (b.mk f)
+      | Regular _, Unboxed -> assert false
       | _ -> raise (Invalid_argument "Not a regular constructor")
 
   let inlined_constructor : type a. a constructor -> a named -> a =
-    (* TODO: handle unboxed *)
-    fun c b -> match c.kind with
-      | Inlined r ->
+    fun c b -> match c.kind, c.constructor_repr with
+      | Inlined r, Tag tag ->
         let o = Obj.repr (record r b) in
-        Obj.set_tag o c.tag; Obj.magic o
+        Obj.set_tag o tag; Obj.magic o
+      | Inlined {fields = [|NamedField f|]; _}, Unboxed -> Obj.magic (b.mk f)
+      | Inlined _, Unboxed -> assert false
       | _ -> raise (Invalid_argument "Not an inline record constructor")
 
 end
@@ -429,7 +436,7 @@ and record : type a b. target: b ttype -> a record -> (a, b) Path.t list =
     |> List.concat
 
 
-let project_path ~t:_ _p = assert false (* TODO *)
+let project_path _ _p = assert false (* TODO *)
 
 (* type matching *)
 
