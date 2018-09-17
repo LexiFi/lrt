@@ -97,6 +97,15 @@ let cast_ttype: stype -> 'a ttype = Obj.magic
 let cast_xtype: type a b. a xtype -> b xtype = Obj.magic
 module StepMeta = Path.Internal [@@ocaml.warning "-3"]
 
+(* Find fields / methods / constructors by name *)
+let finder get_name (arr: 'a array) : (string -> 'a option)=
+  let tbl = lazy (
+    Ext.String.Tbl.prepare (Ext.Array.map_to_list get_name arr))
+  in
+  fun n ->
+    let i = Ext.String.Tbl.lookup (Lazy.force tbl) n in
+    if i < 0 then None else Some arr.(i)
+
 (* Memoize xtype in stype node *)
 type memoized_type_prop += Xtype of Obj.t xtype
 
@@ -149,7 +158,7 @@ let rec xtype_of_ttype : type a. a ttype -> a xtype = fun t ->
     | None -> memoize node (cast_xtype (Sum (sum v)))
     | Some xt -> cast_xtype xt
     end
-  | DT_object _ -> assert false (* TODO *)
+  | DT_object methods -> cast_xtype (Object (object_ methods))
   | DT_prop (props, s) -> Prop(props, bundle s)
   | DT_abstract (name, l) -> Abstract (name, l)
   | DT_var _ -> assert false
@@ -234,16 +243,9 @@ and named_tuple ?cstr meta record : 'a named_tuple =
                    field = { t = bundle s
                            ; step = { get = get i
                                     ; set = set i }, meta }}
-    ) record.record_fields
+    ) record.record_fields |> Array.of_list
   in
-  let tbl = lazy (
-    Ext.String.Tbl.prepare
-      (List.map (fun (NamedField f) -> f.field_name) fields))
-  in
-  let fields = Array.of_list fields in
-  let find_field s =
-    let i = Ext.String.Tbl.lookup (Lazy.force tbl) s in
-    if i < 0 then None else Some fields.(i) in
+  let find_field = finder (fun (NamedField f) -> f.field_name) fields in
   { fields; find_field }
 
 and record record : 'a record =
@@ -302,15 +304,19 @@ and sum variant : 'a sum =
       else Array.get ncst (Obj.tag x)
     in constructors.(i)
   in
-  (* Constructor by name *)
-  let tbl = lazy (
-    Ext.String.Tbl.prepare
-      (Ext.Array.map_to_list (fun c -> c.constr_name) constructors))
-  in
-  let find_constructor s =
-    let i = Ext.String.Tbl.lookup (Lazy.force tbl) s in
-    if i < 0 then None else Some constructors.(i)
+  let find_constructor = finder (fun c -> c.constr_name) constructors
   in { constructors; find_constructor; constructor }
+
+and object_ methods : 'a object_ =
+  let prepare (type a) (method_name, stype) =
+    let method_type = (bundle stype : a t) in
+    let label = CamlinternalOO.public_method_label method_name in
+    let call (x: a) = Obj.magic (CamlinternalOO.send (Obj.magic x) label) in
+    Method {method_type; method_name; call}
+  in
+  let methods = List.map prepare methods |> Array.of_list in
+  let find_method = finder (function Method m -> m.method_name) methods in
+  { methods; find_method }
 
 (* builders *)
 
