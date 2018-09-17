@@ -467,8 +467,38 @@ and named_tuple :
       ) r.fields
     |> List.concat
 
+(* Project ttype along path *)
 
-let project_path _ _p = assert false (* TODO *)
+let assert_some = function
+  | Some x -> x
+  | None -> assert false
+
+let cast : type a b. a t -> b ttype = fun t -> Obj.magic (fst t)
+
+let rec project_path : type a b. a ttype -> (a,b) Path.t -> b ttype =
+  fun t -> function
+    | [] -> t
+    | (_, meta) :: tl ->
+      let t = match meta, xtype_of_ttype t with
+        | Field {field_name}, Record (nt,_) ->
+          (nt.find_field field_name |> assert_some
+           |> function NamedField f -> cast f.field.t)
+        | Tuple {nth; _}, Tuple fields ->
+          (fields.(nth) |> function Field f -> cast f.t)
+        | List _, List t -> cast t
+        | Array _, Array t -> cast t
+        | Constructor {name; arg}, Sum s ->
+          ( match arg, (s.find_constructor name |> assert_some).kind with
+            | Regular {nth;_}, Regular t ->
+              (t.(nth) |> function Field f -> cast f.t)
+            | Inline {field_name}, Inlined nt ->
+              (nt.find_field field_name |> assert_some
+               |> function NamedField f -> cast f.field.t)
+            | Regular _, _
+            | Inline _, _ -> assert false
+          )
+        | _ -> assert false
+      in project_path t tl
 
 (* type matching *)
 
