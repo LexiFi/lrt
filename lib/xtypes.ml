@@ -6,8 +6,7 @@ type record_repr = Regular | Float | Unboxed
 type constr_repr = Tag of int | Unboxed
 
 type 'a t = 'a ttype * 'a xtype Lazy.t
-(** The construction of xtypes is expensive and should not happen recursively.
-*)
+(** The construction of xtypes is expensive and should not happen recursively.*)
 
 and 'a xtype
   = Unit: unit xtype
@@ -55,22 +54,23 @@ and 's named_tuple =
 
 and 's record = 's named_tuple * record_repr
 
-and 's constr_kind =
-  | Constant
-  | Regular of 's tuple
-  | Inlined of 's named_tuple
+and ('s, _) constr_kind =
+  | Constant : int -> ('s, [> `Constant]) constr_kind
+  | Regular : 's tuple * constr_repr -> ('s, [> `Regular]) constr_kind
+  | Inlined : 's named_tuple * constr_repr -> ('s, [> `Inlined]) constr_kind
 
-and 's constructor =
+and ('s, 'kind) constructor =
   { constr_name: string
   ; constr_props: stype_properties
-  ; constr_repr: constr_repr
-  ; kind: 's constr_kind
+  ; kind: ('s, 'kind) constr_kind
   }
 
+and 's has_constructor = ('s, [`Constant|`Regular|`Inlined]) constructor
+
 and 's sum =
-  { constructors: 's constructor array
-  ; find_constructor: string -> 's constructor option
-  ; constructor: 's -> 's constructor
+  { constructors: 's has_constructor array
+  ; find_constructor: string -> 's has_constructor option
+  ; constructor: 's -> 's has_constructor
   }
 
 and ('s, 't) arrow =
@@ -91,6 +91,10 @@ and 's object_ =
   { methods : 's has_method array
   ; find_method : string -> 's has_method option
   }
+
+type 's constant_constructor = ('s, [`Constant]) constructor
+type 's regular_constructor = ('s, [`Regular]) constructor
+type 's inlined_constructor = ('s, [`Inlined]) constructor
 
 (* internal Helpers *)
 let cast_ttype: stype -> 'a ttype = Obj.magic
@@ -266,38 +270,37 @@ and sum variant : 'a sum =
   let constructors = Array.make n
       { constr_name = ""
       ; constr_props = []
-      ; constr_repr = Unboxed
-      ; kind = Constant }
+      ; kind = Constant 0}
   in
   let pincr i = let r = !i in incr i; r in
   let cst_i, ncst_i = ref 0, ref 0 in
   let cst, ncst = ref [], ref [] in
   List.iteri (fun i (name, constr_props, arg) ->
-      let constr_repr, kind =
+      let kind =
         match arg with
-        | C_tuple [] -> cst := i :: !cst ; repr (pincr cst_i), Constant
+        | C_tuple [] -> cst := i :: !cst ; Constant (pincr cst_i)
         | C_tuple l ->
           ncst := i :: !ncst;
           let meta = StepMeta.constructor_regular ~name in
           let tag = pincr ncst_i in
           let repr = repr tag in
-          repr, Regular (tuple ~cstr:repr ~meta l)
+          Regular (tuple ~cstr:repr ~meta l, repr)
         | C_inline (DT_node {rec_descr = DT_record r; _}) ->
           ncst := i :: !ncst;
           let meta = StepMeta.constructor_inline ~name in
           let tag = pincr ncst_i in
           let repr = repr tag in
-          repr, Inlined (named_tuple ~cstr:repr meta r)
+          Inlined (named_tuple ~cstr:repr meta r, repr)
         | C_inline _ -> assert false
       in
-      constructors.(i) <- { constr_repr ; kind; constr_props
+      constructors.(i) <- { kind; constr_props
                           ; constr_name = name}
     ) variant.variant_constrs;
   (* Lookup tables tag -> constructor index *)
   let cst = Ext.Array.of_list_rev !cst in
   let ncst = Ext.Array.of_list_rev !ncst in
   (* Constructor by value *)
-  let constructor x : 'a constructor =
+  let constructor x : ('a, _) constructor =
     let i =
       let x = Obj.repr x in
       if Obj.is_int x then Array.get cst (Obj.magic x)
@@ -358,31 +361,25 @@ module Builder = struct
           | _ -> assert false
         end
 
-  (* TODO: Can we avoid these exceptions by mangling the xtype definition? *)
-  let constant_constructor : type a. a constructor -> a =
-    fun c -> match c.kind, c.constr_repr with
-      | Constant, Tag tag -> Obj.magic tag
-      | Constant, _ -> assert false
-      | _ -> raise (Invalid_argument "Not a constant constructor")
+  let constant_constructor : type a. a constant_constructor -> a =
+    fun c -> match c.kind with
+      | Constant i-> Obj.magic i
 
-  let regular_constructor : type a. a constructor -> a t -> a =
-    fun c b -> match c.kind, c.constr_repr with
-      | Regular t, Tag tag ->
+  let regular_constructor : type a. a regular_constructor -> a t -> a =
+    fun c b -> match c.kind with
+      | Regular (t, Tag tag) ->
         let o = Obj.repr (tuple t b) in
         Obj.set_tag o tag; Obj.magic o
-      | Regular [|Field f|], Unboxed -> Obj.magic (b.mk f)
-      | Regular _, Unboxed -> assert false
-      | _ -> raise (Invalid_argument "Not a regular constructor")
+      | Regular ([|Field f|], Unboxed) -> Obj.magic (b.mk f)
+      | Regular _ -> assert false
 
-  let inlined_constructor : type a. a constructor -> a named -> a =
-    fun c b -> match c.kind, c.constr_repr with
-      | Inlined nt, Tag tag ->
+  let inlined_constructor : type a. a inlined_constructor -> a named -> a =
+    fun c b -> match c.kind with
+      | Inlined (nt, Tag tag) ->
         let o = Obj.repr (named_tuple nt b) in
         Obj.set_tag o tag; Obj.magic o
-      | Inlined {fields = [|NamedField f|]; _}, Unboxed -> Obj.magic (b.mk f)
-      | Inlined _, Unboxed -> assert false
-      | _ -> raise (Invalid_argument "Not an inline record constructor")
-
+      | Inlined ({fields = [|NamedField f|]; _}, Unboxed) -> Obj.magic (b.mk f)
+      | Inlined _ -> assert false
 end
 
 (* property handling *)
@@ -435,9 +432,9 @@ let rec all_paths: type a b. a ttype -> b ttype -> (a, b) Path.t list =
       | Sum sum ->
         Ext.Array.map_to_list
           (fun c -> match c.kind with
-             | Constant -> []
-             | Regular t -> tuple ~target t
-             | Inlined nt -> named_tuple ~target nt
+             | Constant _ -> []
+             | Regular (t,_) -> tuple ~target t
+             | Inlined (nt,_) -> named_tuple ~target nt
           ) sum.constructors
         |> List.concat
       | Prop (_, (t,_)) -> all_paths t target
@@ -489,9 +486,9 @@ let rec project_path : type a b. a ttype -> (a,b) Path.t -> b ttype =
         | Array _, Array t -> cast t
         | Constructor {name; arg}, Sum s ->
           ( match arg, (s.find_constructor name |> assert_some).kind with
-            | Regular {nth;_}, Regular t ->
+            | Regular {nth;_}, Regular (t,_) ->
               (t.(nth) |> function Field f -> cast f.t)
-            | Inline {field_name}, Inlined nt ->
+            | Inline {field_name}, Inlined (nt,_) ->
               (nt.find_field field_name |> assert_some
                |> function NamedField f -> cast f.field.t)
             | Regular _, _

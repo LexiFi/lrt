@@ -8,8 +8,7 @@ type record_repr = Regular | Float | Unboxed
 type constr_repr = Tag of int | Unboxed
 
 type 'a t = 'a ttype * 'a xtype Lazy.t
-(** The construction of xtypes is expensive and should not happen recursively.
-*)
+(** The construction of xtypes is expensive and should not happen recursively.*)
 
 and 'a xtype
   = Unit: unit xtype
@@ -57,22 +56,23 @@ and 's named_tuple =
 
 and 's record = 's named_tuple * record_repr
 
-and 's constr_kind =
-  | Constant
-  | Regular of 's tuple
-  | Inlined of 's named_tuple
+and ('s, _) constr_kind =
+  | Constant : int -> ('s, [> `Constant]) constr_kind
+  | Regular : 's tuple * constr_repr -> ('s, [> `Regular]) constr_kind
+  | Inlined : 's named_tuple * constr_repr -> ('s, [> `Inlined]) constr_kind
 
-and 's constructor =
+and ('s, 'kind) constructor =
   { constr_name: string
   ; constr_props: stype_properties
-  ; constr_repr: constr_repr
-  ; kind: 's constr_kind
+  ; kind: ('s, 'kind) constr_kind
   }
 
+and 's has_constructor = ('s, [`Constant|`Regular|`Inlined]) constructor
+
 and 's sum =
-  { constructors: 's constructor array
-  ; find_constructor: string -> 's constructor option
-  ; constructor: 's -> 's constructor
+  { constructors: 's has_constructor array
+  ; find_constructor: string -> 's has_constructor option
+  ; constructor: 's -> 's has_constructor
   }
 
 and ('s, 't) arrow =
@@ -93,6 +93,10 @@ and 's object_ =
   { methods : 's has_method array
   ; find_method : string -> 's has_method option
   }
+
+type 's constant_constructor = ('s, [`Constant]) constructor
+type 's regular_constructor = ('s, [`Regular]) constructor
+type 's inlined_constructor = ('s, [`Inlined]) constructor
 
 (** {2 Basics} *)
 
@@ -120,18 +124,9 @@ module Builder : sig
 
   val tuple : 'a tuple -> 'a t -> 'a
   val record : 'a record -> 'a named -> 'a
-
-  val constant_constructor : 'a constructor -> 'a
-  (** Raises [Invalid_argument "Not a constant constructor"] when kind does not
-      match *)
-
-  val regular_constructor : 'a constructor -> 'a t -> 'a
-  (** Raises [Invalid_argument "Not a regular constructor"] when kind does not
-      match *)
-
-  val inlined_constructor : 'a constructor -> 'a named -> 'a
-  (** Raises [Invalid_argument "Not an inline record constructor"] when kind
-      does not match *)
+  val constant_constructor : 'a constant_constructor -> 'a
+  val regular_constructor : 'a regular_constructor -> 'a t -> 'a
+  val inlined_constructor : 'a inlined_constructor -> 'a named -> 'a
 end
 
 (** {2 Paths} *)
