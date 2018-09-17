@@ -176,7 +176,6 @@ val dynamic: ?size: int -> UGen.t list -> dynamic gen
 (** Generate a random [Dyn ('a ttype, 'a)]. Arguments correspond to
  *  the ones of [of_type_gen]. *)
 
-type 'a shrink = 'a -> 'a list
 
 (** {2 Combinators to make writing properties easier} *)
 
@@ -185,35 +184,9 @@ val (=>): bool -> bool -> bool
 val (==>): bool -> (unit -> bool) -> bool
 (* Like [(=>)] but with a lazy second argument. *)
 
-(** {2 Running the generators} *)
-
-type 'a test_result =
-  | Succeed of {name: string option; test_run: int}
-  | Fail of {name: string option; test_run: int; seed: int;
-             test_case: 'a; shrink_count: int option}
-  | Throw of {name: string option; test_run: int; seed: int;
-              test_case: 'a; shrink_count: int option; backtrace: string}
-
-val test:
-  int ->
-  seed:int ->
-  ?name:string ->
-  generator:'a gen ->
-  ?depthmax: int ->
-  ?shrink:'a shrink ->
-  ('a -> bool) ->
-  'a test_result
-(** [test n ~generator prop] checks the property [prop] [n] times by feeding
-    it input from [generator]. If [seed] is specified, it is used to initialize the
-    random number generator, otherwise it is left uninitialized and the behaviour
-    is undeterministic. If [shrink] is specified, it should produce a (possibly
-    empty) list of immediate "shrinks" of the given value. It is used to
-    successively shrink values that falsifies the property until a "minimal" value
-    that falsfies the property is found. We don't yet provide exact definitions of
-    "shrinks" and "minimal". The function returns structured data to be used in external test runners.
-*)
-
 (** {2 Shrinking} *)
+
+type 'a shrink = 'a -> 'a list
 
 module Shrink:
 sig
@@ -249,7 +222,33 @@ sig
 
   val array: 'a shrink -> 'a array shrink
 
-  (* MLFi types. *)
-
-  val of_type: t:'a ttype -> 'a shrink
+  (* val of_type: t:'a ttype -> 'a shrink *)
 end
+
+(** {2 Running the generators} *)
+
+type 'a test_result =
+  | Succeed of {name: string option; test_run: int}
+  | Fail of {name: string option; test_run: int; seed: int;
+             test_case: 'a; shrink_count: int option}
+  | Throw of {name: string option; test_run: int; seed: int;
+              test_case: 'a; shrink_count: int option; backtrace: string}
+
+val test:
+  int ->
+  seed:int ->
+  ?name:string ->
+  generator:'a gen ->
+  ?depthmax: int ->
+  ?shrink:'a shrink ->
+  ('a -> bool) ->
+  'a test_result
+(** [test n ~generator prop] checks the property [prop] [n] times by feeding
+    it input from [generator]. If [seed] is specified, it is used to initialize the
+    random number generator, otherwise it is left uninitialized and the behaviour
+    is undeterministic. If [shrink] is specified, it should produce a (possibly
+    empty) list of immediate "shrinks" of the given value. It is used to
+    successively shrink values that falsifies the property until a "minimal" value
+    that falsfies the property is found. We don't yet provide exact definitions of
+    "shrinks" and "minimal". The function returns structured data to be used in external test runners.
+*)

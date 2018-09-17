@@ -321,6 +321,8 @@ and object_ methods : 'a object_ =
   let find_method = finder (function Method m -> m.method_name) methods in
   { methods; find_method }
 
+let t_of_ttype t = t, lazy (xtype_of_ttype t)
+
 (* builders *)
 
 module Builder = struct

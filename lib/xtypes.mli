@@ -106,6 +106,7 @@ type 's inlined_constructor = ('s, [`Inlined]) constructor
     implementation. *)
 
 val xtype_of_ttype: 'a ttype -> 'a xtype
+val t_of_ttype: 'a ttype -> 'a t
 
 val get_first_props_xtype: 'a xtype -> stype_properties
 val remove_first_props_xtype: 'a xtype -> 'a xtype

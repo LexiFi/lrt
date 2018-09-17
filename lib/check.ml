@@ -8,7 +8,6 @@
 open Dynt_core.Ttype
 open Dynt_core.Stype
 open Dynt_core.Std
-module Xtypes = Xtypes_depr
 
 (* Utils. *)
 
@@ -371,59 +370,68 @@ module H = Hashtbl.Make
       let hash = Internal.hash0
     end)
 
-let is_leaf: type a . a ttype -> bool = fun tty ->
+let is_leaf: type a . a ttype -> bool =
+  fun tty ->
   let seen = H.create 12 in
-  let rec really_loop: type a . a ttype -> bool = fun tty ->
-    match Xtypes.xtype_of_ttype tty with
-    | Xtypes.Unit -> true
-    | Xtypes.Bool -> true
-    | Xtypes.Char -> true
-    | Xtypes.Int -> true
-    | Xtypes.Int32 -> true
-    | Xtypes.Int64 -> true
-    | Xtypes.Nativeint -> true
-    | Xtypes.Float -> true
-    | Xtypes.String -> true
+  let replace t = H.replace seen (stype_of_ttype (fst t)) () in
+  let rec really_loop: type a. a Xtypes.t -> bool = fun t ->
+    match Lazy.force (snd t) with
+    | Unit -> true
+    | Bool -> true
+    | Char -> true
+    | Int -> true
+    | Int32 -> true
+    | Int64 -> true
+    | Nativeint -> true
+    | Float -> true
+    | String -> true
 
-    | Xtypes.Option (ttyp, _) -> loop ttyp
-    | Xtypes.List (ttyp, _) -> loop ttyp
-    | Xtypes.Array (ttyp, _) -> loop ttyp
-    | Xtypes.Function (_, (_, _), (tty_res, _)) -> loop tty_res
+    | Option t -> loop t
+    | List t -> loop t
+    | Array t -> loop t
+    | Function a -> loop a.to_t
 
-    | Xtypes.Sum sum ->
-        H.replace seen (stype_of_ttype tty) ();
-        let ctrs = Xtypes.Sum.constructors sum in
-        Array.for_all
-          (function
-              Xtypes.Constructor c ->
-                let ttyp = Xtypes.Constructor.ttype c in
-                loop ttyp
-          )
-          ctrs
+    | Sum sum ->
+      replace t;
+      let ctrs = sum.constructors in
+      Array.for_all
+        ( fun (c : (_,_) Xtypes.constructor) ->
+            match c.kind with
+            | Constant _ -> true
+            | Regular (tup, _) -> loop_tuple tup
+            | Inlined (ntup, _) -> loop_named_tuple ntup
+        )
+        ctrs
 
-    | Xtypes.Tuple record -> loop_record tty record
-    | Xtypes.Record record -> loop_record tty record
-    | Xtypes.Lazy (ttyp, _) -> loop ttyp
-    | Xtypes.Prop (_, ttyp, _) -> loop ttyp
+    | Tuple tup -> replace t; loop_tuple tup
+    | Record (ntup,_) -> replace t; loop_named_tuple ntup
+    | Lazy t -> loop t
+    | Prop (_, t) -> loop t
 
-    | Xtypes.Object _ -> false
-    | Xtypes.Abstract _ -> true
+    | Object _ -> false
+    | Abstract _ -> true
 
-  and loop_record: type a . a ttype -> a Xtypes.Record.t -> bool = fun tty record ->
-    H.replace seen (stype_of_ttype tty) ();
-    let fields = Xtypes.Record.fields record in
-    List.for_all
-      (function
-          Xtypes.Field field ->
-            let ttyp = Xtypes.RecordField.ttype field in
-            loop ttyp
+  and loop_tuple: type a. a Xtypes.tuple -> bool =
+    fun fields ->
+    Array.for_all
+      ( function Xtypes.Field field ->
+         loop field.t
       )
       fields
 
-  and loop: type a . a ttype -> bool = fun tty ->
-    not (H.mem seen (stype_of_ttype tty)) && really_loop tty
+  and loop_named_tuple: type a. a Xtypes.named_tuple -> bool =
+    fun nf ->
+    Array.for_all
+      ( function Xtypes.NamedField nf ->
+         loop nf.field.t
+      )
+      nf.fields
+
+  and loop: type a . a Xtypes.t -> bool =
+    fun t -> not (H.mem seen (stype_of_ttype (fst t))) && really_loop t
   in
-  loop tty
+
+  loop (Xtypes.t_of_ttype tty)
 
 module Test: sig end = struct
   [@@@warning "-37"]
@@ -455,9 +463,10 @@ end
 let of_type_gen_sized: type a. UGen.t list -> t: a ttype -> int -> a gen =
   fun l ~t sz ->
     let find_custom = of_list l in
-    let rec of_type_default_sized: type a. t: a ttype -> int -> a gen = fun ~t sz ->
+    let rec of_type_default_sized: type a. t: a ttype -> int -> a gen =
+      fun ~t sz ->
       let szp = pred_size sz in
-      let record: type a. a Xtypes.Record.t -> a gen =
+      (* let record: type a. a Xtypes.record -> a gen =
         let open Xtypes in
         fun record ->
           let fields = Xtypes.Record.fields record in
@@ -467,42 +476,46 @@ let of_type_gen_sized: type a. UGen.t list -> t: a ttype -> int -> a gen =
           in
           list_sequence (List.map f fields) >>= fun l ->
           return (make (fun b -> List.iter (fun f -> f b) l))
-      in
+      in *)
       match Xtypes.xtype_of_ttype t with
-      | Xtypes.Unit -> unit
-      | Xtypes.Bool -> bool
-      | Xtypes.Int -> int_of_size szp
-      | Xtypes.Float -> float_of_size szp
-      | Xtypes.String -> string_of_size (sz / 2) (char_of_size (min_char, max_char) szp)
-      | Xtypes.Option (t, _) -> option (of_type_sized ~t szp)
-      | Xtypes.List (t, _) -> list_of_size (sz / 2) (of_type_sized ~t szp)
-      | Xtypes.Array (t, _) -> array_of_size (sz / 2) (of_type_sized ~t szp)
-      | Xtypes.Function (_, (_targ, _), (tres, _)) -> arrow (of_type_sized ~t:tres szp)
-      | Xtypes.Sum sum ->
-          let constructors = Xtypes.Sum.constructors sum in
-          let open Xtypes in
-          let f (Constructor c) =
-            let t = Constructor.ttype c in
+      | Unit -> unit
+      | Bool -> bool
+      | Int -> int_of_size szp
+      | Float -> float_of_size szp
+      | String -> string_of_size (sz / 2) (char_of_size (min_char, max_char) szp)
+      | Option (t, _) -> option (of_type_sized ~t szp)
+      | List (t, _) -> list_of_size (sz / 2) (of_type_sized ~t szp)
+      | Array (t, _) -> array_of_size (sz / 2) (of_type_sized ~t szp)
+      | Function a -> arrow (of_type_sized ~t:(fst a.to_t) szp)
+      | Sum _sum ->
+          (* let open Xtypes in
+          let f c =
+            match c.kind with
+            | Constant _ -> Builder.constant_constructor c
+            | Regular (tup, _) -> named_tuple tup
+            | Inlined (ntup, _) -> tuple ntup
+            (* let t = Constructor.ttype c in
             if sz > 0 || is_leaf t then Some (lazy (Constructor.inject c <$> of_type_sized ~t (sz / 2)))
-            else None
+            else None *)
           in
-          let constructors = Array.to_list constructors in
-          oneof_lazy (Ext.List.choose f constructors)
-      | Xtypes.Record r | Xtypes.Tuple r -> record r
-      | Xtypes.Lazy (t, _) -> lazy_ (of_type_sized ~t szp)
-      | Xtypes.Prop (_, t, _) -> of_type_sized ~t szp
-      | Xtypes.Object _ ->
-          failwith "Mlfi_check.f: reached Xtypes.Object"
-      | Xtypes.Abstract _ ->
-          failwith "Mlfi_check.f: reached Xtypes.Abstract"
-      | Xtypes.Char ->
-          failwith "Mlfi_check.f: reached Xtypes.Char"
-      | Xtypes.Int32 ->
-          failwith "Mlfi_check.f: reached Xtypes.Int32"
-      | Xtypes.Int64 ->
-          failwith "Mlfi_check.f: reached Xtypes.Int64"
-      | Xtypes.Nativeint ->
-          failwith "Mlfi_check.f: reached Xtypes.Nativeint"
+          let constructors = Array.to_list sum.constructors in
+          oneof_lazy (Ext.List.choose f constructors) *) assert false
+      | Record (_ntup,_) -> assert false
+      | Tuple _tup -> assert false
+      | Lazy (t, _) -> lazy_ (of_type_sized ~t szp)
+      | Prop (_, (t,_)) -> of_type_sized ~t szp
+      | Object _ ->
+          failwith "Mlfi_check.f: reached Object"
+      | Abstract _ ->
+          failwith "Mlfi_check.f: reached Abstract"
+      | Char ->
+          failwith "Mlfi_check.f: reached Char"
+      | Int32 ->
+          failwith "Mlfi_check.f: reached Int32"
+      | Int64 ->
+          failwith "Mlfi_check.f: reached Int64"
+      | Nativeint ->
+          failwith "Mlfi_check.f: reached Nativeint"
     and of_type_sized: type a. t:a ttype -> int -> a gen = fun ~t sz ->
       match find_custom # apply t with
       | None -> of_type_default_sized ~t sz
@@ -681,7 +694,7 @@ module Shrink = struct
     let l = tuple sa (tuple6 sb sc sd se sf sg) (a, (b, c, d, e, f, g)) in
     List.map (fun (a', (b', c', d', e', f', g')) -> a', b', c', d', e', f', g') l
 
-  let lazy_ shrink (lazy x) = List.map (fun x -> lazy x) (shrink x)
+  (* let lazy_ shrink (lazy x) = List.map (fun x -> lazy x) (shrink x) *)
 
   let rec shrink_one2 shrink = function
     | [] | [_] -> assert false
@@ -699,7 +712,7 @@ module Shrink = struct
 
   (* Shrinking MLFi-specific types. *)
 
-  module T = Xtypes
+  (* module T = Xtypes
 
   type 's elem = E : 'a list * ('s T.record_builder -> 'a -> unit) -> 's elem
 
@@ -759,7 +772,7 @@ module Shrink = struct
     | T.Int32 ->
         (fun _ -> [])
     | T.Int64 ->
-        (fun _ -> [])
+        (fun _ -> []) *)
 end
 
 (* Checking. *)
