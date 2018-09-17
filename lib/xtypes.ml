@@ -2,7 +2,12 @@ open Dynt_core
 open Dynt_core.Ttype
 open Dynt_core.Stype
 
+type record_repr = Regular | Float | Unboxed
+type constr_repr = Tag of int | Unboxed
+
 type 'a t = 'a ttype * 'a xtype Lazy.t
+(** The construction of xtypes is expensive and should not happen recursively.
+*)
 
 and 'a xtype
   = Unit: unit xtype
@@ -28,7 +33,7 @@ and 'a xtype
 
 and ('s,'t) field =
   { t: 't t
-  ; step: ('s, 't) Path.step (* TODO: should we make this lazy? *)
+  ; step: ('s, 't) Path.step
   }
 
 and 's has_field = Field: ('s, 't) field -> 's has_field
@@ -43,24 +48,23 @@ and ('s, 't) named_field =
 
 and 's has_named_field = NamedField: ('s, 't) named_field -> 's has_named_field
 
-and 's record =
+and 's named_tuple =
   { fields: 's has_named_field array
   ; find_field: string -> 's has_named_field option
-  ; unboxed : bool
   }
 
-and 's constructor_kind =
+and 's record = 's named_tuple * record_repr
+
+and 's constr_kind =
   | Constant
   | Regular of 's tuple
-  | Inlined of 's record
-
-and constructor_repr = Tag of int | Unboxed
+  | Inlined of 's named_tuple
 
 and 's constructor =
-  { constructor_name: string
-  ; constructor_props: stype_properties
-  ; constructor_repr: constructor_repr
-  ; kind: 's constructor_kind
+  { constr_name: string
+  ; constr_props: stype_properties
+  ; constr_repr: constr_repr
+  ; kind: 's constr_kind
   }
 
 and 's sum =
@@ -81,12 +85,12 @@ and ('s, 't) method_ =
   ; call: 's -> 't
   }
 
+and 's has_method = Method: ('s, 't) method_ -> 's has_method
+
 and 's object_ =
   { methods : 's has_method array
   ; find_method : string -> 's has_method option
   }
-
-and 's has_method = Method: ('s, 't) method_ -> 's has_method
 
 (* internal Helpers *)
 let cast_ttype: stype -> 'a ttype = Obj.magic
@@ -181,7 +185,7 @@ and tuple ?cstr ?(meta=StepMeta.tuple) fields : 'a has_field array =
     ) fields
   in Array.of_list fields
 
-and record ?cstr ?(meta=StepMeta.field) record : 'a record =
+and named_tuple ?cstr meta record : 'a named_tuple =
   let check tag o = Obj.is_block o && Obj.tag o = tag in
   let get, set =
     match cstr, record.record_repr with
@@ -240,8 +244,16 @@ and record ?cstr ?(meta=StepMeta.field) record : 'a record =
   let find_field s =
     let i = Ext.String.Tbl.lookup (Lazy.force tbl) s in
     if i < 0 then None else Some fields.(i) in
-  let unboxed = match record.record_repr with Record_unboxed -> true | _ -> false
-  in { fields; find_field ; unboxed }
+  { fields; find_field }
+
+and record record : 'a record =
+  let nt = named_tuple StepMeta.field record in
+  let repr : record_repr = match record.record_repr with
+    | Record_unboxed -> Unboxed
+    | Record_float -> Float
+    | Record_regular -> Regular
+    | Record_inline _ -> assert false
+  in nt , repr
 
 and sum variant : 'a sum =
   let repr = match variant.variant_repr with
@@ -250,16 +262,16 @@ and sum variant : 'a sum =
   in
   let n = List.length variant.variant_constrs in
   let constructors = Array.make n
-      { constructor_name = ""
-      ; constructor_props = []
-      ; constructor_repr = Unboxed
+      { constr_name = ""
+      ; constr_props = []
+      ; constr_repr = Unboxed
       ; kind = Constant }
   in
   let pincr i = let r = !i in incr i; r in
   let cst_i, ncst_i = ref 0, ref 0 in
   let cst, ncst = ref [], ref [] in
-  List.iteri (fun i (name, constructor_props, arg) ->
-      let constructor_repr, kind =
+  List.iteri (fun i (name, constr_props, arg) ->
+      let constr_repr, kind =
         match arg with
         | C_tuple [] -> cst := i :: !cst ; repr (pincr cst_i), Constant
         | C_tuple l ->
@@ -273,11 +285,11 @@ and sum variant : 'a sum =
           let meta = StepMeta.constructor_inline ~name in
           let tag = pincr ncst_i in
           let repr = repr tag in
-          repr, Inlined (record ~cstr:repr ~meta r)
+          repr, Inlined (named_tuple ~cstr:repr meta r)
         | C_inline _ -> assert false
       in
-      constructors.(i) <- { constructor_repr ; kind; constructor_props
-                          ; constructor_name = name}
+      constructors.(i) <- { constr_repr ; kind; constr_props
+                          ; constr_name = name}
     ) variant.variant_constrs;
   (* Lookup tables tag -> constructor index *)
   let cst = Ext.Array.of_list_rev !cst in
@@ -293,7 +305,7 @@ and sum variant : 'a sum =
   (* Constructor by name *)
   let tbl = lazy (
     Ext.String.Tbl.prepare
-      (Ext.Array.map_to_list (fun c -> c.constructor_name) constructors))
+      (Ext.Array.map_to_list (fun c -> c.constr_name) constructors))
   in
   let find_constructor s =
     let i = Ext.String.Tbl.lookup (Lazy.force tbl) s in
@@ -316,26 +328,39 @@ module Builder = struct
         ) t;
       Obj.magic o
 
-  let record : type a. a record -> a named -> a =
-    (* TODO: unboxed, float *)
-    fun r b ->
-      let arity = Array.length r.fields in
+  let named_tuple : type a. a named_tuple -> a named -> a =
+    fun nt b ->
+      let arity = Array.length nt.fields in
       let o = Obj.new_block 0 arity in
       Array.iteri (fun i -> function NamedField f ->
           Obj.set_field o i (Obj.repr (b.mk f))
-        ) r.fields;
+        ) nt.fields;
       Obj.magic o
 
-  (* TODO: Can we avoid these exceptions by mangling with the xtype definition?
-   *)
+  let record : type a. a record -> a named -> a =
+    fun (nt, repr) b -> match repr with
+      | Regular -> named_tuple nt b
+      | Float ->
+        let arity = Array.length nt.fields in
+        let o = Obj.new_block Obj.double_array_tag arity in
+        Array.iteri (fun i -> function NamedField f ->
+            Obj.set_double_field o i (Obj.magic (b.mk f))
+          ) nt.fields;
+        Obj.magic o
+      | Unboxed -> begin match nt with
+          | {fields =  [|NamedField f|]; _} -> Obj.magic (b.mk f)
+          | _ -> assert false
+        end
+
+  (* TODO: Can we avoid these exceptions by mangling the xtype definition? *)
   let constant_constructor : type a. a constructor -> a =
-    fun c -> match c.kind, c.constructor_repr with
+    fun c -> match c.kind, c.constr_repr with
       | Constant, Tag tag -> Obj.magic tag
       | Constant, _ -> assert false
       | _ -> raise (Invalid_argument "Not a constant constructor")
 
   let regular_constructor : type a. a constructor -> a t -> a =
-    fun c b -> match c.kind, c.constructor_repr with
+    fun c b -> match c.kind, c.constr_repr with
       | Regular t, Tag tag ->
         let o = Obj.repr (tuple t b) in
         Obj.set_tag o tag; Obj.magic o
@@ -344,9 +369,9 @@ module Builder = struct
       | _ -> raise (Invalid_argument "Not a regular constructor")
 
   let inlined_constructor : type a. a constructor -> a named -> a =
-    fun c b -> match c.kind, c.constructor_repr with
-      | Inlined r, Tag tag ->
-        let o = Obj.repr (record r b) in
+    fun c b -> match c.kind, c.constr_repr with
+      | Inlined nt, Tag tag ->
+        let o = Obj.repr (named_tuple nt b) in
         Obj.set_tag o tag; Obj.magic o
       | Inlined {fields = [|NamedField f|]; _}, Unboxed -> Obj.magic (b.mk f)
       | Inlined _, Unboxed -> assert false
@@ -400,13 +425,13 @@ let rec all_paths: type a b. a ttype -> b ttype -> (a, b) Path.t list =
         let paths = all_paths t target in
         List.map Path.(fun p -> option_step_some t :: p) paths
       | Tuple t -> tuple ~target t
-      | Record r -> record ~target r
+      | Record (nt, _repr) -> named_tuple ~target nt
       | Sum sum ->
         Ext.Array.map_to_list
           (fun c -> match c.kind with
              | Constant -> []
              | Regular t -> tuple ~target t
-             | Inlined r -> record ~target r
+             | Inlined nt -> named_tuple ~target nt
           ) sum.constructors
         |> List.concat
       | Prop (_, (t,_)) -> all_paths t target
@@ -426,7 +451,8 @@ and tuple : type a b. target: b ttype -> a tuple -> (a, b) Path.t list =
       ) t
     |> List.concat
 
-and record : type a b. target: b ttype -> a record -> (a, b) Path.t list =
+and named_tuple :
+  type a b. target: b ttype -> a named_tuple -> (a, b) Path.t list =
   fun ~target r ->
     Ext.Array.map_to_list
       (function (NamedField nf) ->
