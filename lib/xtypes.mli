@@ -32,53 +32,33 @@ and 'a xtype
   | Prop: (stype_properties * 'a t) -> 'a xtype
   | Abstract: (string * stype list) -> 'a xtype
 
-and ('s,'t) field =
-  { t: 't t
-  ; nth: int
-  }
+and label = string * stype_properties
+and ('s,'t) element = { typ: 't t; nth: int } (** Better name? *)
 
-and 's has_field = Field: ('s, 't) field -> 's has_field
+and 's field = Field: ('s, 't) element -> 's field
+and 's tuple = 's field array
+and 's record_field = label * 's field
+and 's record = 's record_field array * record_repr
 
-and 's tuple = 's has_field array
+and 's constant_constructor = label * int
+and 's regular_constructor  = label * 's field array * constr_repr
+and 's inlined_constructor  = label * 's record_field array * constr_repr
 
-and ('s, 't) named_field =
-  { field: ('s, 't) field
-  ; field_name: string (* Move into FieldFinder *)
-  ; field_props: stype_properties
-  }
-
-and 's has_named_field = NamedField: ('s, 't) named_field -> 's has_named_field
-
-and 's named_tuple =
-  { fields: 's has_named_field array
-  ; find_field: string -> 's has_named_field option
-  }
-
-and 's record = 's named_tuple * record_repr
-
-and ('s, _) constr_kind =
-  | Constant : int -> ('s, [> `Constant]) constr_kind
-  | Regular : 's tuple * constr_repr -> ('s, [> `Regular]) constr_kind
-  | Inlined : 's named_tuple * constr_repr -> ('s, [> `Inlined]) constr_kind
-
-and ('s, 'kind) constructor =
-  { constr_name: string
-  ; constr_props: stype_properties
-  ; kind: ('s, 'kind) constr_kind
-  }
-
-and 's has_constructor = ('s, [`Constant|`Regular|`Inlined]) constructor
+and 's constructor =
+  | Constant of 's constant_constructor
+  | Regular of 's regular_constructor
+  | Inlined of 's inlined_constructor
 
 and 's sum =
-  { constructors: 's has_constructor array
-  ; find_constructor: string -> 's has_constructor option
-  ; constructor: 's -> 's has_constructor
+  { constructors: 's constructor array
+  ; find_constructor: string -> 's constructor option
+  ; constructor: 's -> 's constructor
   }
 
 and ('s, 't) arrow =
   { label : string option
-  ; from_t: 's t
-  ; to_t: 't t
+  ; arg_t: 's t
+  ; res_t: 't t
   }
 
 and ('s, 't) method_ =
@@ -93,10 +73,6 @@ and 's object_ =
   { methods : 's has_method array
   ; find_method : string -> 's has_method option
   }
-
-type 's constant_constructor = ('s, [`Constant]) constructor
-type 's regular_constructor = ('s, [`Regular]) constructor
-type 's inlined_constructor = ('s, [`Inlined]) constructor
 
 (** {2 Basics} *)
 
@@ -120,14 +96,13 @@ module Builder : sig
       fields array.
   *)
 
-  type 'a t = { mk: 't. ('a, 't) field -> 't } [@@unboxed]
-  type 'a named = { mk: 't. ('a, 't) named_field -> 't } [@@unboxed]
+  type 'a t = { mk: 't. ('a, 't) element -> 't } [@@unboxed]
 
   val tuple : 'a tuple -> 'a t -> 'a
-  val record : 'a record -> 'a named -> 'a
+  val record : 'a record -> 'a t -> 'a
   val constant_constructor : 'a constant_constructor -> 'a
   val regular_constructor : 'a regular_constructor -> 'a t -> 'a
-  val inlined_constructor : 'a inlined_constructor -> 'a named -> 'a
+  val inlined_constructor : 'a inlined_constructor -> 'a t -> 'a
 end
 
 module Make : sig
@@ -136,7 +111,7 @@ module Make : sig
   type 'a t
   exception Missing_field of string
 
-  val set: 'a t -> ('a, 'b) field -> 'b -> unit
+  val set: 'a t -> ('a, 'b) element -> 'b -> unit
 
   val tuple: 'a tuple -> ('a t -> unit) -> 'a
   (** Throws [Missing_field] if not all fields where set via [set]. *)
@@ -144,20 +119,19 @@ module Make : sig
   val record: 'a record -> ('a t -> unit) -> 'a
   (** Throws [Missing_field] if not all fields where set via [set]. *)
 
-  val constructor: ('a, [`Constant | `Inlined | `Regular ]) constructor
-    -> ('a t -> unit) -> 'a
+  val constructor: 'a constructor -> ('a t -> unit) -> 'a
   (** Throws [Missing_field] if not all fields where set via [set]. *)
 end
 
 (** {2 Paths} *)
 
 module Step : sig
-  val tuple: 'a tuple -> ('a, 'b) field -> ('a,'b) Path.step
-  val record: 'a record -> ('a, 'b) named_field -> ('a,'b) Path.step
+  val tuple: 'a tuple -> ('a, 'b) element -> ('a,'b) Path.step
+  val record: 'a record -> ('a, 'b) element -> ('a,'b) Path.step
   val regular_constructor:
-    'a regular_constructor -> ('a,'b) field -> ('a,'b) Path.step
+    'a regular_constructor -> ('a,'b) element -> ('a,'b) Path.step
   val inlined_constructor:
-    'a inlined_constructor -> ('a,'b) named_field -> ('a,'b) Path.step
+    'a inlined_constructor -> ('a,'b) element -> ('a,'b) Path.step
 end
 
 val all_paths: 'a ttype -> 'b ttype -> ('a, 'b) Path.t list
