@@ -32,6 +32,7 @@ and 'a xtype
 
 and ('s,'t) field =
   { t: 't t
+  ; nth: int
   ; step: ('s, 't) Path.step
   }
 
@@ -193,6 +194,7 @@ and tuple ?cstr ?(meta=StepMeta.tuple) fields : 'a has_field array =
   let arity = List.length fields in
   let fields = List.mapi (fun i t ->
       Field { t = bundle t
+            ; nth = i
             ; step = { get = get i ; set = set i },
                      meta ~nth:i ~arity }
     ) fields
@@ -245,6 +247,7 @@ and named_tuple ?cstr meta record : 'a named_tuple =
       let meta = meta ~field_name in
       NamedField { field_name; field_props;
                    field = { t = bundle s
+                           ; nth = i
                            ; step = { get = get i
                                     ; set = set i }, meta }}
     ) record.record_fields |> Array.of_list
@@ -383,6 +386,58 @@ module Builder = struct
       | Inlined ({fields = [|NamedField f|]; _}, Unboxed) -> Obj.magic (b.mk f)
       | Inlined _ -> assert false
 end
+
+module Make = struct
+
+  type 'a t = Obj.t option array
+  exception Missing_field of string
+
+  let fresh: int -> 'a t = fun n -> Array.make n None
+
+  let set: 'a t -> ('a, 'b) field -> 'b -> unit =
+    fun arr {nth;_} x -> Array.set arr nth (Some (Obj.repr x))
+
+  (* Reuse logic of Builder *)
+
+  let t_builder arr : 'a Builder.t =
+    let mk {nth; _} = match arr.(nth) with
+      | None -> raise (Missing_field (string_of_int nth))
+      | Some o -> Obj.magic o
+    in {mk}
+
+  let named_builder arr : 'a Builder.named =
+    let mk {field={nth; _}; field_name; _} = match arr.(nth) with
+      | None -> raise (Missing_field field_name)
+      | Some o -> Obj.magic o
+    in {mk}
+
+  let tuple: 'a tuple -> ('a t -> unit) -> 'a =
+    fun tup f ->
+      let arr = fresh (Array.length tup) in
+      f arr;
+      Builder.tuple tup (t_builder arr)
+
+  let record: 'a record -> ('a t -> unit) -> 'a =
+    fun r f ->
+      let arr = fresh (Array.length (fst r).fields) in
+      f arr;
+      Builder.record r (named_builder arr)
+
+  let constructor: type a. (a, [`Constant | `Inlined | `Regular ]) constructor
+    -> (a t -> unit) -> a =
+    fun c f -> match c.kind with
+      (* TODO: Subtyping *)
+      | Constant _ -> Builder.constant_constructor (Obj.magic c)
+      | Regular (tup,_) ->
+        let arr = fresh (Array.length tup) in
+        f arr;
+        Builder.regular_constructor (Obj.magic c) (t_builder arr)
+      | Inlined (nt,_) ->
+        let arr = fresh (Array.length nt.fields) in
+        f arr;
+        Builder.inlined_constructor (Obj.magic c) (named_builder arr)
+end
+
 
 (* property handling *)
 

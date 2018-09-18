@@ -34,6 +34,7 @@ and 'a xtype
 
 and ('s,'t) field =
   { t: 't t
+  ; nth: int
   ; step: ('s, 't) Path.step
   }
 
@@ -128,6 +129,25 @@ module Builder : sig
   val constant_constructor : 'a constant_constructor -> 'a
   val regular_constructor : 'a regular_constructor -> 'a t -> 'a
   val inlined_constructor : 'a inlined_constructor -> 'a named -> 'a
+end
+
+module Make : sig
+  (** Similar to [Builder] but with active interface instead of passive *)
+
+  type 'a t
+  exception Missing_field of string
+
+  val set: 'a t -> ('a, 'b) field -> 'b -> unit
+
+  val tuple: 'a tuple -> ('a t -> unit) -> 'a
+  (** Throws [Missing_field] if not all fields where set via [set]. *)
+
+  val record: 'a record -> ('a t -> unit) -> 'a
+  (** Throws [Missing_field] if not all fields where set via [set]. *)
+
+  val constructor: ('a, [`Constant | `Inlined | `Regular ]) constructor
+    -> ('a t -> unit) -> 'a
+  (** Throws [Missing_field] if not all fields where set via [set]. *)
 end
 
 (** {2 Paths} *)
