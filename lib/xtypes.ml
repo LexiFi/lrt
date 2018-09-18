@@ -33,7 +33,6 @@ and 'a xtype
 and ('s,'t) field =
   { t: 't t
   ; nth: int
-  ; step: ('s, 't) Path.step
   }
 
 and 's has_field = Field: ('s, 't) field -> 's has_field
@@ -172,91 +171,25 @@ and bundle : type a. stype -> a t = fun s ->
     let t = cast_ttype s
     in (t, lazy (xtype_of_ttype t))
 
-and tuple ?cstr ?(meta=StepMeta.tuple) fields : 'a has_field array =
-  let check tag o = Obj.is_block o && Obj.tag o = tag in
-  let get, set = match cstr with
-    (* TODO: Can this code be reused for the record case below? *)
-    | Some Unboxed ->
-      (fun _i o -> Some o),
-      (fun _i _o v -> Some v)
-    | Some (Tag tag) ->
-      (fun i o -> if check tag o then Some (Obj.field o i) else None),
-      (fun i o v -> if check tag o then
-          let o = Obj.dup o in
-          Obj.set_field o i (Obj.repr v); Some o
-        else None)
-    | None ->
-      (fun i o -> Some (Obj.field o i)),
-      (fun i o v ->
-          let o = Obj.dup o in
-          Obj.set_field o i (Obj.repr v); Some o)
-  in
-  let arity = List.length fields in
+and tuple fields : 'a has_field array =
   let fields = List.mapi (fun i t ->
       Field { t = bundle t
-            ; nth = i
-            ; step = { get = get i ; set = set i },
-                     meta ~nth:i ~arity }
+            ; nth = i }
     ) fields
   in Array.of_list fields
 
-and named_tuple ?cstr meta record : 'a named_tuple =
-  let check tag o = Obj.is_block o && Obj.tag o = tag in
-  let get, set =
-    match cstr, record.record_repr with
-    | None, Record_float ->
-      ( fun i r -> Some (Obj.repr (Obj.double_field r i))),
-      ( fun i r v ->
-          let r = Obj.dup r in
-          Obj.set_double_field r i (Obj.magic v); Some r)
-    | Some (Tag tag), Record_float ->
-      ( fun i r -> if check tag r then
-          Some (Obj.repr (Obj.double_field r i)) else None ),
-      ( fun i r v ->
-          let r = Obj.dup r in
-          Obj.set_double_field r i (Obj.magic v); Some r)
-    | None, Record_regular ->
-      (fun i r -> Some (Obj.field r i)),
-      (fun i r v ->
-         let r = Obj.dup r in
-         Obj.set_field r i (Obj.repr v); Some r)
-    (* TODO: We do not need the tag here. Can we drop it from the stype ? *)
-    | Some (Tag tag), Record_inline _->
-      (fun i r -> if check tag r then
-          Some (Obj.field r i) else None),
-      (fun i r v -> if check tag r then
-          let r = Obj.dup r in
-          Obj.set_field r i (Obj.repr v); Some r
-        else None)
-    | None, Record_unboxed
-    | Some Unboxed, Record_unboxed ->
-      (fun _i r -> Some (Obj.repr r)),
-      (fun _i _r v -> Some (Obj.repr v))
-    (* TODO: Parts of record representation seem superfluous with this new
-       xtype implementation. Should ditch from stype? *)
-    (* Boxed record within unboxed constructor *)
-    | Some Unboxed, _ -> assert false
-    (* Unboxed record inside boxed constructor *)
-    | Some (Tag _), Record_unboxed -> assert false
-    (* Inline record outside constructor *)
-    | None, Record_inline _ -> assert false
-    (* Regular record as variant argument *)
-    | Some (Tag _), Record_regular -> assert false
-  in
+and named_tuple record : 'a named_tuple =
   let fields = List.mapi (fun i (field_name, field_props, s) ->
-      let meta = meta ~field_name in
       NamedField { field_name; field_props;
                    field = { t = bundle s
-                           ; nth = i
-                           ; step = { get = get i
-                                    ; set = set i }, meta }}
+                           ; nth = i }}
     ) record.record_fields |> Array.of_list
   in
   let find_field = finder (fun (NamedField f) -> f.field_name) fields in
   { fields; find_field }
 
 and record record : 'a record =
-  let nt = named_tuple StepMeta.field record in
+  let nt = named_tuple record in
   let repr : record_repr = match record.record_repr with
     | Record_unboxed -> Unboxed
     | Record_float -> Float
@@ -284,16 +217,14 @@ and sum variant : 'a sum =
         | C_tuple [] -> cst := i :: !cst ; Constant (pincr cst_i)
         | C_tuple l ->
           ncst := i :: !ncst;
-          let meta = StepMeta.constructor_regular ~name in
           let tag = pincr ncst_i in
           let repr = repr tag in
-          Regular (tuple ~cstr:repr ~meta l, repr)
+          Regular (tuple l, repr)
         | C_inline (DT_node {rec_descr = DT_record r; _}) ->
           ncst := i :: !ncst;
-          let meta = StepMeta.constructor_inline ~name in
           let tag = pincr ncst_i in
           let repr = repr tag in
-          Inlined (named_tuple ~cstr:repr meta r, repr)
+          Inlined (named_tuple r, repr)
         | C_inline _ -> assert false
       in
       constructors.(i) <- { kind; constr_props
@@ -456,6 +387,85 @@ let rec remove_first_props_xtype : type t. t xtype -> t xtype = function
 
 (* paths *)
 
+module Step = struct
+  let cast : (Obj.t, Obj.t) Path.lens -> ('a, 'b) Path.lens = Obj.magic
+  let check tag o = Obj.is_block o && Obj.tag o = tag
+
+  let tuple: 'a tuple -> ('a, 'b) field -> ('a,'b) Path.step =
+    fun tup f ->
+      let arity = Array.length tup in
+      let nth = f.nth in
+      let get = (fun o -> Some (Obj.field o nth)) in
+      let set =
+        (fun o v ->
+           let o = Obj.dup o in
+           Obj.set_field o nth (Obj.repr v); Some o)
+      in
+      cast { get ; set }, StepMeta.tuple ~nth ~arity
+
+
+  let regular_constructor:
+    'a regular_constructor -> ('a,'b) field -> ('a,'b) Path.step =
+    fun c f ->
+      let Regular (tup, cstr) = c.kind in
+      let arity = Array.length tup in
+      let nth = f.nth in
+      let get, set = match cstr with
+      | Unboxed ->
+        (fun o -> Some o),
+        (fun _o v -> Some v)
+      | Tag tag ->
+        (fun o -> if check tag o then Some (Obj.field o nth) else None),
+        (fun o v -> if check tag o then
+            let o = Obj.dup o in
+            Obj.set_field o nth (Obj.repr v); Some o
+          else None)
+      in
+      cast { get ; set },
+      StepMeta.constructor_regular ~name:c.constr_name ~nth ~arity
+
+
+  let record: 'a record -> ('a, 'b) named_field -> ('a,'b) Path.step =
+    fun (_, repr) nf ->
+      let i = nf.field.nth in
+      let get, set = match repr with
+        | Regular ->
+          (fun r -> Some (Obj.field r i)),
+          (fun r v ->
+             let r = Obj.dup r in
+             Obj.set_field r i (Obj.repr v); Some r)
+        | Float ->
+          ( fun r -> Some (Obj.repr (Obj.double_field r i))),
+          ( fun r v ->
+              let r = Obj.dup r in
+              Obj.set_double_field r i (Obj.magic v); Some r)
+        | Unboxed ->
+          (fun r -> Some (Obj.repr r)),
+          (fun _r v -> Some (Obj.repr v))
+      in
+      cast {get; set}, StepMeta.field ~field_name:nf.field_name
+
+  let inlined_constructor:
+    'a inlined_constructor -> ('a,'b) named_field -> ('a,'b) Path.step =
+    fun c nf ->
+      let Inlined (_, repr) = c.kind in
+      let i = nf.field.nth in
+      let get, set = match repr with
+        | Tag tag ->
+          (fun r -> if check tag r then
+              Some (Obj.field r i) else None),
+          (fun r v -> if check tag r then
+              let r = Obj.dup r in
+              Obj.set_field r i (Obj.repr v); Some r
+            else None)
+        | Unboxed ->
+          (fun r -> Some (Obj.repr r)),
+          (fun _r v -> Some (Obj.repr v))
+      in
+      cast {get; set},
+      StepMeta.constructor_inline ~name:c.constr_name ~field_name:nf.field_name
+end
+
 let option_step_some : type a. a ttype -> (a option, a) Path.step =
   (* ttype helps to avoid Obj.magic *)
   fun _t ->
@@ -485,13 +495,14 @@ let rec all_paths: type a b. a ttype -> b ttype -> (a, b) Path.t list =
         let paths = all_paths t target in
         List.map Path.(fun p -> option_step_some t :: p) paths
       | Tuple t -> tuple ~target t
-      | Record (nt, _repr) -> named_tuple ~target nt
+      | Record r -> record ~target r
       | Sum sum ->
         Ext.Array.map_to_list
           (fun c -> match c.kind with
              | Constant _ -> []
-             | Regular (t,_) -> tuple ~target t
-             | Inlined (nt,_) -> named_tuple ~target nt
+             (* TODO: suptyping *)
+             | Regular _ -> regular_constructor ~target (Obj.magic c : a regular_constructor)
+             | Inlined _ -> inlined_constructor ~target (Obj.magic c : a inlined_constructor)
           ) sum.constructors
         |> List.concat
       | Prop (_, (t,_)) -> all_paths t target
@@ -503,22 +514,42 @@ let rec all_paths: type a b. a ttype -> b ttype -> (a, b) Path.t list =
       | Abstract _ -> []
 
 and tuple : type a b. target: b ttype -> a tuple -> (a, b) Path.t list =
-  fun ~target t ->
+  fun ~target tup ->
     Ext.Array.map_to_list
       (function (Field f) ->
          let paths = all_paths (fst f.t) target in
-         List.map Path.(fun p -> f.step :: p) paths
-      ) t
+         List.map Path.(fun p -> Step.tuple tup f :: p) paths
+      ) tup
     |> List.concat
 
-and named_tuple :
-  type a b. target: b ttype -> a named_tuple -> (a, b) Path.t list =
-  fun ~target r ->
+and record :
+  type a b. target: b ttype -> a record -> (a, b) Path.t list =
+  fun ~target ((nf,_) as r) ->
     Ext.Array.map_to_list
       (function (NamedField nf) ->
          let paths = all_paths (fst nf.field.t) target in
-         List.map Path.(fun p -> nf.field.step :: p) paths
-      ) r.fields
+         List.map Path.(fun p -> Step.record r nf :: p) paths
+      ) nf.fields
+    |> List.concat
+
+and regular_constructor : type a b.
+  target: b ttype -> a regular_constructor -> (a, b) Path.t list =
+  fun ~target ({ kind = Regular (tup,_);_} as c) ->
+    Ext.Array.map_to_list
+      (function (Field f) ->
+         let paths = all_paths (fst f.t) target in
+         List.map Path.(fun p -> Step.regular_constructor c f :: p) paths
+      ) tup
+    |> List.concat
+
+and inlined_constructor : type a b.
+  target: b ttype -> a inlined_constructor -> (a, b) Path.t list =
+  fun ~target ({ kind = Inlined (nt,_);_} as c) ->
+    Ext.Array.map_to_list
+      (function (NamedField nf) ->
+         let paths = all_paths (fst nf.field.t) target in
+         List.map Path.(fun p -> Step.inlined_constructor c nf :: p) paths
+      ) nt.fields
     |> List.concat
 
 (* Project ttype along path *)

@@ -35,7 +35,6 @@ and 'a xtype
 and ('s,'t) field =
   { t: 't t
   ; nth: int
-  ; step: ('s, 't) Path.step
   }
 
 and 's has_field = Field: ('s, 't) field -> 's has_field
@@ -44,7 +43,7 @@ and 's tuple = 's has_field array
 
 and ('s, 't) named_field =
   { field: ('s, 't) field
-  ; field_name: string
+  ; field_name: string (* Move into FieldFinder *)
   ; field_props: stype_properties
   }
 
@@ -151,6 +150,15 @@ module Make : sig
 end
 
 (** {2 Paths} *)
+
+module Step : sig
+  val tuple: 'a tuple -> ('a, 'b) field -> ('a,'b) Path.step
+  val record: 'a record -> ('a, 'b) named_field -> ('a,'b) Path.step
+  val regular_constructor:
+    'a regular_constructor -> ('a,'b) field -> ('a,'b) Path.step
+  val inlined_constructor:
+    'a inlined_constructor -> ('a,'b) named_field -> ('a,'b) Path.step
+end
 
 val all_paths: 'a ttype -> 'b ttype -> ('a, 'b) Path.t list
 (** Returns all the paths leading to a value of type ['a] inside
