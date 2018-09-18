@@ -565,18 +565,20 @@ and dt_constructor const_type =
         )
   | `C_inline ->
       uident >>= fun c_name ->
-      dt_record () >>= fun inline_type ->
+      dt_record ~inline:true () >>= fun inline_type ->
       return
         (Internal.create_variant_type name []
            (fun _ -> [c_name, [], C_inline inline_type], Variant_regular )
         )
 
-and dt_record () =
+and dt_record ?(inline=false) () =
   let field = tuple3 lident (return []) (stype ()) in
   all_different (fun (x, _, _) -> x) field >>= fun fields ->
   string_lowercase >>= fun type_name ->
   let fields = List.map (fun (f, x, y) -> f, x, y) fields in
-  return (Internal.create_record_type type_name [] (fun _ -> fields, Record_regular))
+  (* TODO: What happens when all fields are floats? *)
+  let repr = if inline then Record_inline 0 else Record_regular in
+  return (Internal.create_record_type type_name [] (fun _ -> fields, repr))
 
 and stype_gen () =
   elements_freq_lazy
