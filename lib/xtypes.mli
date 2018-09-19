@@ -49,30 +49,16 @@ and 's constructor =
   | Regular of 's regular_constructor
   | Inlined of 's inlined_constructor
 
-and 's sum =
-  { constructors: 's constructor array
-  ; find_constructor: string -> 's constructor option
-  ; constructor: 's -> 's constructor
-  }
+and 's sum = 's constructor array
 
 and ('s, 't) arrow =
-  { label : string option
+  { arg_label : string option
   ; arg_t: 's t
   ; res_t: 't t
   }
 
-and ('s, 't) method_ =
-  { method_name: string
-  ; method_type: 't t
-  ; call: 's -> 't
-  }
-
-and 's has_method = Method: ('s, 't) method_ -> 's has_method
-
-and 's object_ =
-  { methods : 's has_method array
-  ; find_method : string -> 's has_method option
-  }
+and 's method_ = Method: string * ('s, 't) element -> 's method_
+and 's object_ = 's method_ array
 
 (** {2 Basics} *)
 
@@ -86,6 +72,22 @@ val t_of_ttype: 'a ttype -> 'a t
 
 val get_first_props_xtype: 'a xtype -> stype_properties
 val remove_first_props_xtype: 'a xtype -> 'a xtype
+
+(** {2 Find named elements} *)
+
+module Lookup : sig
+  val record_field: 'a record -> string -> 'a record_field option
+  val constructor: 'a sum -> string -> 'a constructor option
+  val constructor_field:
+    'a inlined_constructor -> string -> 'a record_field option
+  val method_: 'a object_ -> string -> 'a method_ option
+
+  val constructor_by_value: 'a sum -> 'a -> 'a constructor
+end
+
+(** {2 Object call method} *)
+
+val call_method: 'a object_ -> ('a, 'b) element -> 'a -> 'b
 
 (** {2 Building values from xtypes} *)
 
@@ -103,6 +105,7 @@ module Builder : sig
   val constant_constructor : 'a constant_constructor -> 'a
   val regular_constructor : 'a regular_constructor -> 'a t -> 'a
   val inlined_constructor : 'a inlined_constructor -> 'a t -> 'a
+  val constructor : 'a constructor -> 'a t -> 'a
 end
 
 module Make : sig
@@ -132,6 +135,11 @@ module Step : sig
     'a regular_constructor -> ('a,'b) element -> ('a,'b) Path.step
   val inlined_constructor:
     'a inlined_constructor -> ('a,'b) element -> ('a,'b) Path.step
+
+  val constructor : 'a constructor -> ('a,'b) element -> ('a,'b) Path.step
+
+  (** TODO: It is possible to use an element of different constructor. This
+      leads to unspecified behaviour including SEGV *)
 end
 
 val all_paths: 'a ttype -> 'b ttype -> ('a, 'b) Path.t list

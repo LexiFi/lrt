@@ -30,85 +30,38 @@ and 'a xtype
   | Prop: (stype_properties * 'a t) -> 'a xtype
   | Abstract: (string * stype list) -> 'a xtype
 
-and ('s,'t) field =
-  { t: 't t
-  ; nth: int
-  }
+and label = string * stype_properties
+and ('s,'t) element = { typ: 't t; nth: int } (** Better name? *)
 
-and 's has_field = Field: ('s, 't) field -> 's has_field
+and 's field = Field: ('s, 't) element -> 's field
+and 's tuple = 's field array
+and 's record_field = label * 's field
+and 's record = 's record_field array * record_repr
 
-and 's tuple = 's has_field array
+and 's constant_constructor = label * int
+and 's regular_constructor  = label * 's field array * constr_repr
+and 's inlined_constructor  = label * 's record_field array * constr_repr
 
-and ('s, 't) named_field =
-  { field: ('s, 't) field
-  ; field_name: string
-  ; field_props: stype_properties
-  }
+and 's constructor =
+  | Constant of 's constant_constructor
+  | Regular of 's regular_constructor
+  | Inlined of 's inlined_constructor
 
-and 's has_named_field = NamedField: ('s, 't) named_field -> 's has_named_field
-
-and 's named_tuple =
-  { fields: 's has_named_field array
-  ; find_field: string -> 's has_named_field option
-  }
-
-and 's record = 's named_tuple * record_repr
-
-and ('s, _) constr_kind =
-  | Constant : int -> ('s, [> `Constant]) constr_kind
-  | Regular : 's tuple * constr_repr -> ('s, [> `Regular]) constr_kind
-  | Inlined : 's named_tuple * constr_repr -> ('s, [> `Inlined]) constr_kind
-
-and ('s, 'kind) constructor =
-  { constr_name: string
-  ; constr_props: stype_properties
-  ; kind: ('s, 'kind) constr_kind
-  }
-
-and 's has_constructor = ('s, [`Constant|`Regular|`Inlined]) constructor
-
-and 's sum =
-  { constructors: 's has_constructor array
-  ; find_constructor: string -> 's has_constructor option
-  ; constructor: 's -> 's has_constructor
-  }
+and 's sum = 's constructor array
 
 and ('s, 't) arrow =
-  { label : string option
-  ; from_t: 's t
-  ; to_t: 't t
+  { arg_label : string option
+  ; arg_t: 's t
+  ; res_t: 't t
   }
 
-and ('s, 't) method_ =
-  { method_name: string
-  ; method_type: 't t
-  ; call: 's -> 't
-  }
-
-and 's has_method = Method: ('s, 't) method_ -> 's has_method
-
-and 's object_ =
-  { methods : 's has_method array
-  ; find_method : string -> 's has_method option
-  }
-
-type 's constant_constructor = ('s, [`Constant]) constructor
-type 's regular_constructor = ('s, [`Regular]) constructor
-type 's inlined_constructor = ('s, [`Inlined]) constructor
+and 's method_ = Method: string * ('s, 't) element -> 's method_
+and 's object_ = 's method_ array
 
 (* internal Helpers *)
 let cast_ttype: stype -> 'a ttype = Obj.magic
 let cast_xtype: type a b. a xtype -> b xtype = Obj.magic
 module StepMeta = Path.Internal [@@ocaml.warning "-3"]
-
-(* Find fields / methods / constructors by name *)
-let finder get_name (arr: 'a array) : (string -> 'a option)=
-  let tbl = lazy (
-    Ext.String.Tbl.prepare (Ext.Array.map_to_list get_name arr))
-  in
-  fun n ->
-    let i = Ext.String.Tbl.lookup (Lazy.force tbl) n in
-    if i < 0 then None else Some arr.(i)
 
 (* Memoize xtype in stype node *)
 type memoized_type_prop += Xtype of Obj.t xtype
@@ -147,11 +100,11 @@ let rec xtype_of_ttype : type a. a ttype -> a xtype = fun t ->
   | DT_array t -> cast_xtype (Array (bundle t))
   | DT_abstract ("lazy_t", [t]) -> cast_xtype (Lazy (bundle t))
   | DT_arrow (l, t1, t2) ->
-    let label = match l with
+    let arg_label = match l with
       | "" -> None
       | s -> Some s
-    in cast_xtype (Function {label; from_t = bundle t1; to_t = bundle t2})
-  | DT_tuple fields -> cast_xtype (Tuple (tuple fields))
+    in cast_xtype (Function {arg_label; arg_t = bundle t1; res_t = bundle t2})
+  | DT_tuple l -> cast_xtype (Tuple (fields l))
   | DT_node ({rec_descr = DT_record r; _} as node) ->
     begin match is_memoized node with
     | None -> memoize node (cast_xtype (Record (record r)))
@@ -171,89 +124,54 @@ and bundle : type a. stype -> a t = fun s ->
     let t = cast_ttype s
     in (t, lazy (xtype_of_ttype t))
 
-and tuple fields : 'a has_field array =
+and fields (fields : stype list) : 'a field array =
   let fields = List.mapi (fun i t ->
-      Field { t = bundle t
+      Field { typ = bundle t
             ; nth = i }
     ) fields
   in Array.of_list fields
 
-and named_tuple record : 'a named_tuple =
-  let fields = List.mapi (fun i (field_name, field_props, s) ->
-      NamedField { field_name; field_props;
-                   field = { t = bundle s
-                           ; nth = i }}
-    ) record.record_fields |> Array.of_list
-  in
-  let find_field = finder (fun (NamedField f) -> f.field_name) fields in
-  { fields; find_field }
+and record_fields fields : 'a record_field array =
+  List.mapi (fun nth (field_name, field_props, s) ->
+      (field_name, field_props), Field { typ = bundle s ; nth }
+    ) fields |> Array.of_list
 
-and record record : 'a record =
-  let nt = named_tuple record in
-  let repr : record_repr = match record.record_repr with
+and record (r: record_descr)  : 'a record =
+  let fields = record_fields r.record_fields in
+  let repr : record_repr = match r.record_repr with
     | Record_unboxed -> Unboxed
     | Record_float -> Float
     | Record_regular -> Regular
     | Record_inline _ -> assert false
-  in nt , repr
+  in fields , repr
 
-and sum variant : 'a sum =
-  let repr = match variant.variant_repr with
+and sum (v: variant_descr) : 'a sum =
+  let repr = match v.variant_repr with
     | Variant_unboxed -> fun _ -> Unboxed
     | Variant_regular -> fun tag -> Tag tag
   in
-  let n = List.length variant.variant_constrs in
-  let constructors = Array.make n
-      { constr_name = ""
-      ; constr_props = []
-      ; kind = Constant 0}
-  in
-  let pincr i = let r = !i in incr i; r in
+  let pincr i = let r = !i in incr i; r in (* post increment *)
   let cst_i, ncst_i = ref 0, ref 0 in
-  let cst, ncst = ref [], ref [] in
-  List.iteri (fun i (name, constr_props, arg) ->
-      let kind =
-        match arg with
-        | C_tuple [] -> cst := i :: !cst ; Constant (pincr cst_i)
-        | C_tuple l ->
-          ncst := i :: !ncst;
-          let tag = pincr ncst_i in
-          let repr = repr tag in
-          Regular (tuple l, repr)
-        | C_inline (DT_node {rec_descr = DT_record r; _}) ->
-          ncst := i :: !ncst;
-          let tag = pincr ncst_i in
-          let repr = repr tag in
-          Inlined (named_tuple r, repr)
-        | C_inline _ -> assert false
-      in
-      constructors.(i) <- { kind; constr_props
-                          ; constr_name = name}
-    ) variant.variant_constrs;
-  (* Lookup tables tag -> constructor index *)
-  let cst = Ext.Array.of_list_rev !cst in
-  let ncst = Ext.Array.of_list_rev !ncst in
-  (* Constructor by value *)
-  let constructor x : ('a, _) constructor =
-    let i =
-      let x = Obj.repr x in
-      if Obj.is_int x then Array.get cst (Obj.magic x)
-      else Array.get ncst (Obj.tag x)
-    in constructors.(i)
-  in
-  let find_constructor = finder (fun c -> c.constr_name) constructors
-  in { constructors; find_constructor; constructor }
+  List.map (fun (name, props, arg) ->
+      let label = name, props in
+      match arg with
+      | C_tuple [] -> Constant (label, pincr cst_i)
+      | C_tuple l ->
+        let tag = pincr ncst_i in
+        Regular (label, fields l, repr tag)
+      | C_inline (DT_node {rec_descr = DT_record r; _}) ->
+        let tag = pincr ncst_i in
+        Inlined (label, record_fields r.record_fields, repr tag)
+      | C_inline _ -> assert false
+    ) v.variant_constrs
+  |> Array.of_list
 
 and object_ methods : 'a object_ =
-  let prepare (type a) (method_name, stype) =
-    let method_type = (bundle stype : a t) in
-    let label = CamlinternalOO.public_method_label method_name in
-    let call (x: a) = Obj.magic (CamlinternalOO.send (Obj.magic x) label) in
-    Method {method_type; method_name; call}
+  let prepare (type a) nth (name, stype) =
+    let typ = (bundle stype : a t) in
+    Method (name, {typ; nth})
   in
-  let methods = List.map prepare methods |> Array.of_list in
-  let find_method = finder (function Method m -> m.method_name) methods in
-  { methods; find_method }
+  List.mapi prepare methods |> Array.of_list
 
 let t_of_ttype t = t, lazy (xtype_of_ttype t)
 
@@ -261,61 +179,66 @@ let t_of_ttype t = t, lazy (xtype_of_ttype t)
 
 module Builder = struct
 
-  type 'a t = { mk: 't. ('a, 't) field -> 't } [@@unboxed]
-  type 'a named = { mk: 't. ('a, 't) named_field -> 't } [@@unboxed]
+  type 'a t = { mk: 't. ('a, 't) element -> 't } [@@unboxed]
 
-  let tuple : type a. a tuple -> a t -> a =
-    fun t b ->
-      let arity = Array.length t in
+  let fields : type a. a field array -> a t -> a =
+    fun arr b ->
+      let arity = Array.length arr in
       let o = Obj.new_block 0 arity in
       Array.iteri (fun i -> function Field f ->
           Obj.set_field o i (Obj.repr (b.mk f))
-        ) t;
+        ) arr;
       Obj.magic o
 
-  let named_tuple : type a. a named_tuple -> a named -> a =
-    fun nt b ->
-      let arity = Array.length nt.fields in
-      let o = Obj.new_block 0 arity in
-      Array.iteri (fun i -> function NamedField f ->
-          Obj.set_field o i (Obj.repr (b.mk f))
-        ) nt.fields;
-      Obj.magic o
+  let tuple = fields
 
-  let record : type a. a record -> a named -> a =
-    fun (nt, repr) b -> match repr with
-      | Regular -> named_tuple nt b
+  let record_fields : type a. a record_field array -> a t -> a =
+    fun arr b ->
+      let arr = Array.map (fun (_, f) -> f) arr in
+      fields arr b
+
+  let record : type a. a record -> a t -> a =
+    fun (arr, repr) b -> match repr with
+      | Regular -> record_fields arr b
       | Float ->
-        let arity = Array.length nt.fields in
+        let arity = Array.length arr in
         let o = Obj.new_block Obj.double_array_tag arity in
-        Array.iteri (fun i -> function NamedField f ->
+        Array.iteri (fun i -> function _, Field f ->
             Obj.set_double_field o i (Obj.magic (b.mk f))
-          ) nt.fields;
+          ) arr ;
         Obj.magic o
-      | Unboxed -> begin match nt with
-          | {fields =  [|NamedField f|]; _} -> Obj.magic (b.mk f)
+      | Unboxed -> begin match arr with
+          | [|_, Field f|] -> Obj.magic (b.mk f)
           | _ -> assert false
         end
 
   let constant_constructor : type a. a constant_constructor -> a =
-    fun c -> match c.kind with
-      | Constant i-> Obj.magic i
+    fun (_,i) -> Obj.magic i
 
   let regular_constructor : type a. a regular_constructor -> a t -> a =
-    fun c b -> match c.kind with
-      | Regular (t, Tag tag) ->
-        let o = Obj.repr (tuple t b) in
+    fun (_, arr, repr) b ->
+      match repr, arr with
+      | Tag tag, _ ->
+        let o = Obj.repr (fields arr b) in
         Obj.set_tag o tag; Obj.magic o
-      | Regular ([|Field f|], Unboxed) -> Obj.magic (b.mk f)
-      | Regular _ -> assert false
+      | Unboxed, [|Field f|] -> Obj.magic (b.mk f)
+      | Unboxed, _ -> assert false
 
-  let inlined_constructor : type a. a inlined_constructor -> a named -> a =
-    fun c b -> match c.kind with
-      | Inlined (nt, Tag tag) ->
-        let o = Obj.repr (named_tuple nt b) in
+  let inlined_constructor : type a. a inlined_constructor -> a t -> a =
+    fun (_, arr, repr) b ->
+      match repr, arr with
+      | Tag tag, _ ->
+        let o = Obj.repr (record_fields arr b) in
         Obj.set_tag o tag; Obj.magic o
-      | Inlined ({fields = [|NamedField f|]; _}, Unboxed) -> Obj.magic (b.mk f)
-      | Inlined _ -> assert false
+      | Unboxed, [|_, Field f|] -> Obj.magic (b.mk f)
+      | Unboxed, _ -> assert false
+
+  let constructor : type a. a constructor -> a t -> a =
+    fun c b ->
+      match c with
+      | Constant c -> constant_constructor c
+      | Regular c -> regular_constructor c b
+      | Inlined c -> inlined_constructor c b
 end
 
 module Make = struct
@@ -323,50 +246,34 @@ module Make = struct
   type 'a t = Obj.t option array
   exception Missing_field of string
 
-  let fresh: int -> 'a t = fun n -> Array.make n None
-
-  let set: 'a t -> ('a, 'b) field -> 'b -> unit =
+  let set: 'a t -> ('a, 'b) element  -> 'b -> unit =
     fun arr {nth;_} x -> Array.set arr nth (Some (Obj.repr x))
 
-  (* Reuse logic of Builder *)
+  (* Reuse Builder *)
 
-  let t_builder arr : 'a Builder.t =
-    let mk {nth; _} = match arr.(nth) with
-      | None -> raise (Missing_field (string_of_int nth))
-      | Some o -> Obj.magic o
-    in {mk}
-
-  let named_builder arr : 'a Builder.named =
-    let mk {field={nth; _}; field_name; _} = match arr.(nth) with
-      | None -> raise (Missing_field field_name)
-      | Some o -> Obj.magic o
-    in {mk}
+  let builder : ('a t -> unit) -> int -> 'a Builder.t =
+    fun init n ->
+      let arr = Array.make n None in
+      let mk {nth; _} = match arr.(nth) with
+        | None -> raise (Missing_field (string_of_int nth))
+        | Some o -> Obj.magic o
+      in init arr; {mk}
 
   let tuple: 'a tuple -> ('a t -> unit) -> 'a =
-    fun tup f ->
-      let arr = fresh (Array.length tup) in
-      f arr;
-      Builder.tuple tup (t_builder arr)
+    fun flds f ->
+      Builder.fields flds (builder f (Array.length flds))
 
   let record: 'a record -> ('a t -> unit) -> 'a =
     fun r f ->
-      let arr = fresh (Array.length (fst r).fields) in
-      f arr;
-      Builder.record r (named_builder arr)
+      Builder.record r (builder f (Array.length (fst r)))
 
-  let constructor: type a. (a, [`Constant | `Inlined | `Regular ]) constructor
-    -> (a t -> unit) -> a =
-    fun c f -> match c.kind with
-      (* TODO: Subtyping *)
-      | Constant _ -> Builder.constant_constructor (Obj.magic c)
-      | Regular (tup,_) ->
-        let arr = fresh (Array.length tup) in
-        f arr;
-        Builder.regular_constructor (Obj.magic c) (t_builder arr)
-      | Inlined (nt,_) ->
-        let arr = fresh (Array.length nt.fields) in
-        f arr;
-        Builder.inlined_constructor (Obj.magic c) (named_builder arr)
+  let constructor: type a. a constructor -> (a t -> unit) -> a =
+    fun c f -> match c with
+      | Constant c -> Builder.constant_constructor c
+      | Regular ((_,flds,_) as c) ->
+        Builder.regular_constructor c (builder f (Array.length flds))
+      | Inlined ((_,flds,_) as c) ->
+        Builder.inlined_constructor c (builder f (Array.length flds))
 end
 
 
@@ -385,13 +292,69 @@ let rec remove_first_props_xtype : type t. t xtype -> t xtype = function
   | Prop (_, (_, lazy xt)) -> remove_first_props_xtype xt
   | xt -> xt
 
+(* fast lookup for named elements *)
+
+module Lookup = struct
+  (* TODO: The finders should be memoized. *)
+
+  let finder get_name (arr: 'a array) : (string -> 'a option)=
+    let tbl = lazy (
+      Ext.String.Tbl.prepare (Ext.Array.map_to_list get_name arr))
+    in
+    fun n ->
+      let i = Ext.String.Tbl.lookup (Lazy.force tbl) n in
+      if i < 0 then None else Some arr.(i)
+
+  let record_field (arr,_repr) =
+    let f = function (name,_),_ -> name in
+    finder f arr
+
+  let constructor_field (_,arr,_) =
+    let f = function (name,_),_ -> name in
+    finder f arr
+
+  let constructor arr =
+    let f = function
+      | Constant ((name, _) , _)
+      | Regular ((name, _) , _, _)
+      | Inlined ((name, _) , _, _) -> name
+    in finder f arr
+
+  let method_ arr =
+    let f = function Method (name, _) -> name in
+    finder f arr
+
+  let constructor_by_value : type a. a sum -> a -> a constructor =
+    fun sum ->
+      let cst, ncst = ref [], ref [] in
+      Array.iteri (fun i -> function
+          | Constant _ -> cst := i :: !cst
+          | Regular _
+          | Inlined _ -> ncst := i :: !ncst
+        ) sum;
+      let cst = Ext.Array.of_list_rev !cst in
+      let ncst = Ext.Array.of_list_rev !ncst in
+      fun x ->
+        let i =
+          let x = Obj.repr x in
+          if Obj.is_int x then Array.get cst (Obj.magic x)
+          else Array.get ncst (Obj.tag x)
+        in sum.(i)
+end
+
+let call_method: 'a object_ -> ('a, 'b) element -> 'a -> 'b =
+  fun o e ->
+    let Method (name,_) = o.(e.nth) in
+    let label = CamlinternalOO.public_method_label name in
+    fun x -> Obj.magic (CamlinternalOO.send (Obj.magic x) label)
+
 (* paths *)
 
 module Step = struct
   let cast : (Obj.t, Obj.t) Path.lens -> ('a, 'b) Path.lens = Obj.magic
   let check tag o = Obj.is_block o && Obj.tag o = tag
 
-  let tuple: 'a tuple -> ('a, 'b) field -> ('a,'b) Path.step =
+  let tuple: 'a tuple -> ('a, 'b) element-> ('a,'b) Path.step =
     fun tup f ->
       let arity = Array.length tup in
       let nth = f.nth in
@@ -403,31 +366,10 @@ module Step = struct
       in
       cast { get ; set }, StepMeta.tuple ~nth ~arity
 
-
-  let regular_constructor:
-    'a regular_constructor -> ('a,'b) field -> ('a,'b) Path.step =
-    fun c f ->
-      let Regular (tup, cstr) = c.kind in
-      let arity = Array.length tup in
-      let nth = f.nth in
-      let get, set = match cstr with
-      | Unboxed ->
-        (fun o -> Some o),
-        (fun _o v -> Some v)
-      | Tag tag ->
-        (fun o -> if check tag o then Some (Obj.field o nth) else None),
-        (fun o v -> if check tag o then
-            let o = Obj.dup o in
-            Obj.set_field o nth (Obj.repr v); Some o
-          else None)
-      in
-      cast { get ; set },
-      StepMeta.constructor_regular ~name:c.constr_name ~nth ~arity
-
-
-  let record: 'a record -> ('a, 'b) named_field -> ('a,'b) Path.step =
-    fun (_, repr) nf ->
-      let i = nf.field.nth in
+  let record: 'a record -> ('a, 'b) element -> ('a,'b) Path.step =
+    fun (arr, repr) f ->
+      let i = f.nth in
+      let (field_name, _),_ = arr.(i) in
       let get, set = match repr with
         | Regular ->
           (fun r -> Some (Obj.field r i)),
@@ -443,13 +385,31 @@ module Step = struct
           (fun r -> Some (Obj.repr r)),
           (fun _r v -> Some (Obj.repr v))
       in
-      cast {get; set}, StepMeta.field ~field_name:nf.field_name
+      cast {get; set}, StepMeta.field ~field_name
+
+  let regular_constructor:
+    'a regular_constructor -> ('a,'b) element -> ('a,'b) Path.step =
+    fun ((name,_), flds, repr) f ->
+      let arity = Array.length flds in
+      let nth = f.nth in
+      let get, set = match repr with
+      | Unboxed ->
+        (fun o -> Some o),
+        (fun _o v -> Some v)
+      | Tag tag ->
+        (fun o -> if check tag o then Some (Obj.field o nth) else None),
+        (fun o v -> if check tag o then
+            let o = Obj.dup o in
+            Obj.set_field o nth (Obj.repr v); Some o
+          else None)
+      in
+      cast { get ; set }, StepMeta.constructor_regular ~name ~nth ~arity
 
   let inlined_constructor:
-    'a inlined_constructor -> ('a,'b) named_field -> ('a,'b) Path.step =
-    fun c nf ->
-      let Inlined (_, repr) = c.kind in
-      let i = nf.field.nth in
+    'a inlined_constructor -> ('a,'b) element -> ('a,'b) Path.step =
+    fun ((name,_), flds, repr) f ->
+      let i = f.nth in
+      let (field_name, _),_ = flds.(i) in
       let get, set = match repr with
         | Tag tag ->
           (fun r -> if check tag r then
@@ -463,7 +423,14 @@ module Step = struct
           (fun _r v -> Some (Obj.repr v))
       in
       cast {get; set},
-      StepMeta.constructor_inline ~name:c.constr_name ~field_name:nf.field_name
+      StepMeta.constructor_inline ~name ~field_name
+
+  let constructor c e =
+    match c with
+    | Regular c -> regular_constructor c e
+    | Inlined c -> inlined_constructor c e
+    | Constant _c -> (* TODO : Prevent this case *)
+      raise (Invalid_argument "Non-constant constructor expected")
 end
 
 let option_step_some : type a. a ttype -> (a option, a) Path.step =
@@ -498,12 +465,11 @@ let rec all_paths: type a b. a ttype -> b ttype -> (a, b) Path.t list =
       | Record r -> record ~target r
       | Sum sum ->
         Ext.Array.map_to_list
-          (fun c -> match c.kind with
+          (function
              | Constant _ -> []
-             (* TODO: suptyping *)
-             | Regular _ -> regular_constructor ~target (Obj.magic c : a regular_constructor)
-             | Inlined _ -> inlined_constructor ~target (Obj.magic c : a inlined_constructor)
-          ) sum.constructors
+             | Regular c -> regular_constructor ~target c
+             | Inlined c -> inlined_constructor ~target c
+          ) sum
         |> List.concat
       | Prop (_, (t,_)) -> all_paths t target
       | Object _ -> []
@@ -517,39 +483,39 @@ and tuple : type a b. target: b ttype -> a tuple -> (a, b) Path.t list =
   fun ~target tup ->
     Ext.Array.map_to_list
       (function (Field f) ->
-         let paths = all_paths (fst f.t) target in
+         let paths = all_paths (fst f.typ) target in
          List.map Path.(fun p -> Step.tuple tup f :: p) paths
       ) tup
     |> List.concat
 
 and record :
   type a b. target: b ttype -> a record -> (a, b) Path.t list =
-  fun ~target ((nf,_) as r) ->
+  fun ~target ((flds,_) as r) ->
     Ext.Array.map_to_list
-      (function (NamedField nf) ->
-         let paths = all_paths (fst nf.field.t) target in
-         List.map Path.(fun p -> Step.record r nf :: p) paths
-      ) nf.fields
+      (function (_, Field f) ->
+         let paths = all_paths (fst f.typ) target in
+         List.map Path.(fun p -> Step.record r f :: p) paths
+      ) flds
     |> List.concat
 
 and regular_constructor : type a b.
   target: b ttype -> a regular_constructor -> (a, b) Path.t list =
-  fun ~target ({ kind = Regular (tup,_);_} as c) ->
+  fun ~target (_, flds, _ as c) ->
     Ext.Array.map_to_list
       (function (Field f) ->
-         let paths = all_paths (fst f.t) target in
+         let paths = all_paths (fst f.typ) target in
          List.map Path.(fun p -> Step.regular_constructor c f :: p) paths
-      ) tup
+      ) flds
     |> List.concat
 
 and inlined_constructor : type a b.
   target: b ttype -> a inlined_constructor -> (a, b) Path.t list =
-  fun ~target ({ kind = Inlined (nt,_);_} as c) ->
+  fun ~target (_, flds, _ as c) ->
     Ext.Array.map_to_list
-      (function (NamedField nf) ->
-         let paths = all_paths (fst nf.field.t) target in
-         List.map Path.(fun p -> Step.inlined_constructor c nf :: p) paths
-      ) nt.fields
+      (function (_, Field f) ->
+         let paths = all_paths (fst f.typ) target in
+         List.map Path.(fun p -> Step.inlined_constructor c f :: p) paths
+      ) flds
     |> List.concat
 
 (* Project ttype along path *)
@@ -565,20 +531,20 @@ let rec project_path : type a b. a ttype -> (a,b) Path.t -> b ttype =
     | [] -> t
     | (_, meta) :: tl ->
       let t = match meta, xtype_of_ttype t with
-        | Field {field_name}, Record (nt,_) ->
-          (nt.find_field field_name |> assert_some
-           |> function NamedField f -> cast f.field.t)
+        | Field {field_name}, Record r ->
+          (Lookup.record_field r field_name |> assert_some
+           |> function _, Field f -> cast f.typ)
         | Tuple {nth; _}, Tuple fields ->
-          (fields.(nth) |> function Field f -> cast f.t)
+          (fields.(nth) |> function Field f -> cast f.typ)
         | List _, List t -> cast t
         | Array _, Array t -> cast t
         | Constructor {name; arg}, Sum s ->
-          ( match arg, (s.find_constructor name |> assert_some).kind with
-            | Regular {nth;_}, Regular (t,_) ->
-              (t.(nth) |> function Field f -> cast f.t)
-            | Inline {field_name}, Inlined (nt,_) ->
-              (nt.find_field field_name |> assert_some
-               |> function NamedField f -> cast f.field.t)
+          ( match arg, (Lookup.constructor s name |> assert_some) with
+            | Regular {nth;_}, Regular (_,arr,_) ->
+              (arr.(nth) |> function Field f -> cast f.typ)
+            | Inline {field_name}, Inlined c ->
+              (Lookup.constructor_field c field_name |> assert_some
+               |> function _, Field f -> cast f.typ)
             | Regular _, _
             | Inline _, _ -> assert false
           )

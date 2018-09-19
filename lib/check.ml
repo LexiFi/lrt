@@ -371,6 +371,14 @@ module H = Hashtbl.Make
       let hash = Internal.hash0
     end)
 
+(* TODO: Should this go to xtype? *)
+let fields_of_record_fields flds = Array.map (function _, f -> f) flds
+let fields_of_record (flds,_) = fields_of_record_fields flds
+let fields_of_constructor = Xtypes.(function
+    | Constant _ -> [||]
+    | Regular (_,flds, _) -> flds
+    | Inlined (_,flds, _) -> fields_of_record_fields flds)
+
 let is_leaf: type a . a ttype -> bool =
   fun tty ->
   let seen = H.create 12 in
@@ -390,43 +398,25 @@ let is_leaf: type a . a ttype -> bool =
     | Option t -> loop t
     | List t -> loop t
     | Array t -> loop t
-    | Function a -> loop a.to_t
+    | Function a -> loop a.res_t
 
     | Sum sum ->
       replace t;
-      let ctrs = sum.constructors in
-      Array.for_all
-        ( fun (c : (_,_) Xtypes.constructor) ->
-            match c.kind with
-            | Constant _ -> true
-            | Regular (tup, _) -> loop_tuple tup
-            | Inlined (ntup, _) -> loop_named_tuple ntup
-        )
-        ctrs
+      Array.for_all (fun c -> loop_fields (fields_of_constructor c)) sum
 
-    | Tuple tup -> replace t; loop_tuple tup
-    | Record (ntup,_) -> replace t; loop_named_tuple ntup
+    | Tuple tup -> replace t; loop_fields tup
+    | Record r -> replace t; loop_fields (fields_of_record r)
     | Lazy t -> loop t
     | Prop (_, t) -> loop t
 
     | Object _ -> false
     | Abstract _ -> true
 
-  and loop_tuple: type a. a Xtypes.tuple -> bool =
+  and loop_fields: type a. a Xtypes.field array -> bool =
     fun fields ->
-    Array.for_all
-      ( function Xtypes.Field field ->
-         loop field.t
-      )
-      fields
-
-  and loop_named_tuple: type a. a Xtypes.named_tuple -> bool =
-    fun nf ->
-    Array.for_all
-      ( function Xtypes.NamedField nf ->
-         loop nf.field.t
-      )
-      nf.fields
+      Array.for_all
+        ( function Xtypes.Field field -> loop field.typ )
+        fields
 
   and loop: type a . a Xtypes.t -> bool =
     fun t -> not (H.mem seen (stype_of_ttype (fst t))) && really_loop t
@@ -469,20 +459,12 @@ let of_type_gen_sized: type a. UGen.t list -> t: a ttype -> int -> a gen =
     let rec of_type_default_sized: type a. t: a ttype -> int -> a gen =
       fun ~t sz ->
       let szp = pred_size sz in
-      let tuple: type a. a mk -> a Xtypes.tuple -> int -> a gen =
+      let fields: type a. a mk -> a Xtypes.field array -> int -> a gen =
         fun mk tup sz ->
-        let f (Xtypes.Field f) = of_type_sized ~t:(fst f.t) sz >>=
+        let f (Xtypes.Field f) = of_type_sized ~t:(fst f.typ) sz >>=
           fun x -> return (fun b -> Xtypes.Make.set b f x)
         in
         array_sequence (Array.map f tup) >>= fun l ->
-        return (mk (fun b -> Array.iter (fun f -> f b) l))
-      in
-      let named_tuple: type a. a mk -> a Xtypes.named_tuple -> int -> a gen =
-        fun mk nt sz ->
-        let f (Xtypes.NamedField f) = of_type_sized ~t:(fst f.field.t) sz >>=
-          fun x -> return (fun b -> Xtypes.Make.set b f.field x)
-        in
-        array_sequence (Array.map f nt.fields) >>= fun l ->
         return (mk (fun b -> Array.iter (fun f -> f b) l))
       in
       match Xtypes.xtype_of_ttype t with
@@ -490,41 +472,36 @@ let of_type_gen_sized: type a. UGen.t list -> t: a ttype -> int -> a gen =
       | Bool -> bool
       | Int -> int_of_size szp
       | Float -> float_of_size szp
-      | String -> string_of_size (sz / 2) (char_of_size (min_char, max_char) szp)
+      | String -> string_of_size (sz/2) (char_of_size (min_char, max_char) szp)
       | Option (t, _) -> option (of_type_sized ~t szp)
-      | List (t, _) -> list_of_size (sz / 2) (of_type_sized ~t szp)
-      | Array (t, _) -> array_of_size (sz / 2) (of_type_sized ~t szp)
-      | Function a -> arrow (of_type_sized ~t:(fst a.to_t) szp)
-      | Tuple tup -> tuple (Xtypes.Make.tuple tup) tup szp
-      | Record r -> named_tuple (Xtypes.Make.record r) (fst r) szp
+      | List (t, _) -> list_of_size (sz/2) (of_type_sized ~t szp)
+      | Array (t, _) -> array_of_size (sz/2) (of_type_sized ~t szp)
+      | Function a -> arrow (of_type_sized ~t:(fst a.res_t) szp)
+      | Tuple flds -> fields (Xtypes.Make.tuple flds) flds szp
+      | Record r -> fields (Xtypes.Make.record r) (fields_of_record r) szp
       | Sum sum ->
         let open Xtypes in
         let f (c : _ constructor) =
-          if sz > 0 || is_leaf t then Some (lazy begin
-              let sz = sz / 2 in
-              match c.kind with
-              | Constant _ -> tuple (Xtypes.Make.constructor c) [||] sz
-              | Regular (tup, _) -> tuple (Xtypes.Make.constructor c) tup sz
-              | Inlined (nt, _) -> named_tuple (Xtypes.Make.constructor c) nt sz
-            end)
+          if sz > 0 || is_leaf t
+          then Some (lazy (
+              fields (Make.constructor c) (fields_of_constructor c) (sz/2)))
           else None
         in
-        let constructors = Array.to_list sum.constructors in
-        oneof_lazy (Ext.List.choose f constructors)
+        oneof_lazy (Ext.List.choose f (Array.to_list sum))
       | Lazy (t, _) -> lazy_ (of_type_sized ~t szp)
       | Prop (_, (t,_)) -> of_type_sized ~t szp
       | Object _ ->
-          failwith "Check.f: reached Object"
+        failwith "Check.f: reached Object"
       | Abstract _ ->
-          failwith "Check.f: reached Abstract"
+        failwith "Check.f: reached Abstract"
       | Char ->
-          failwith "Check.f: reached Char"
+        failwith "Check.f: reached Char"
       | Int32 ->
-          failwith "Check.f: reached Int32"
+        failwith "Check.f: reached Int32"
       | Int64 ->
-          failwith "Check.f: reached Int64"
+        failwith "Check.f: reached Int64"
       | Nativeint ->
-          failwith "Check.f: reached Nativeint"
+        failwith "Check.f: reached Nativeint"
     and of_type_sized: type a. t:a ttype -> int -> a gen = fun ~t sz ->
       match find_custom # apply t with
       | None -> of_type_default_sized ~t sz
