@@ -371,13 +371,8 @@ module H = Hashtbl.Make
       let hash = Internal.hash0
     end)
 
-(* TODO: Should this go to xtype? *)
 let fields_of_record_fields flds = Array.map (function _, f -> f) flds
 let fields_of_record (flds,_) = fields_of_record_fields flds
-let fields_of_constructor = Xtypes.(function
-    | Constant _ -> [||]
-    | Regular (_,flds, _) -> flds
-    | Inlined (_,flds, _) -> fields_of_record_fields flds)
 
 let is_leaf: type a . a ttype -> bool =
   fun tty ->
@@ -402,7 +397,11 @@ let is_leaf: type a . a ttype -> bool =
 
     | Sum sum ->
       replace t;
-      Array.for_all (fun c -> loop_fields (fields_of_constructor c)) sum
+      Array.for_all Xtypes.(function
+          | Constant _ -> true
+          | Regular (_,flds,_) -> loop_fields flds
+          | Inlined (_,flds,_) -> loop_fields (fields_of_record_fields flds)
+        ) sum
 
     | Tuple tup -> replace t; loop_fields tup
     | Record r -> replace t; loop_fields (fields_of_record r)
@@ -451,7 +450,7 @@ module Test: sig end = struct
   let%test _ = is_leaf point_t
 end
 
-type 'a mk = ('a Xtypes.Make.t -> unit) -> 'a
+type ('a, 'b) mk = ('a Xtypes.Make.t -> unit) -> 'b
 
 let of_type_gen_sized: type a. UGen.t list -> t: a ttype -> int -> a gen =
   fun l ~t sz ->
@@ -459,7 +458,7 @@ let of_type_gen_sized: type a. UGen.t list -> t: a ttype -> int -> a gen =
     let rec of_type_default_sized: type a. t: a ttype -> int -> a gen =
       fun ~t sz ->
       let szp = pred_size sz in
-      let fields: type a. a mk -> a Xtypes.field array -> int -> a gen =
+      let fields: type a b. (a, b) mk -> a Xtypes.field array -> int -> b gen =
         fun mk tup sz ->
         let f (Xtypes.Field f) = of_type_sized ~t:(fst f.typ) sz >>=
           fun x -> return (fun b -> Xtypes.Make.set b f x)
@@ -483,8 +482,13 @@ let of_type_gen_sized: type a. UGen.t list -> t: a ttype -> int -> a gen =
         let open Xtypes in
         let f (c : _ constructor) =
           if sz > 0 || is_leaf t
-          then Some (lazy (
-              fields (Make.constructor c) (fields_of_constructor c) (sz/2)))
+          then Some (lazy ( match c with
+              | Constant c -> Builder.constant_constructor c
+              | Regular (_,flds,_ as c) ->
+                fields (Make.regular_constructor c) flds (sz/2)
+              | Inlined (_,flds,_ as c) ->
+                fields (Make.inlined_constructor c)
+                  (fields_of_record_fields flds) (sz/2)))
           else None
         in
         oneof_lazy (Ext.List.choose f (Array.to_list sum))

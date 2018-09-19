@@ -39,13 +39,13 @@ and 's record_field = label * 's field
 and 's record = 's record_field array * record_repr
 
 and 's constant_constructor = label * int
-and 's regular_constructor  = label * 's field array * constr_repr
-and 's inlined_constructor  = label * 's record_field array * constr_repr
+and ('s, 't) regular_constructor  = label * 't field array * constr_repr
+and ('s, 't) inlined_constructor  = label * 't record_field array * constr_repr
 
 and 's constructor =
-  | Constant of 's constant_constructor
-  | Regular of 's regular_constructor
-  | Inlined of 's inlined_constructor
+  | Constant : 's constant_constructor -> 's constructor
+  | Regular : ('s, 't) regular_constructor -> 's constructor
+  | Inlined : ('s, 't) inlined_constructor -> 's constructor
 
 and 's sum = 's constructor array
 
@@ -215,7 +215,7 @@ module Builder = struct
   let constant_constructor : type a. a constant_constructor -> a =
     fun (_,i) -> Obj.magic i
 
-  let regular_constructor : type a. a regular_constructor -> a t -> a =
+  let regular_constructor : type a b. (a, b) regular_constructor -> b t -> a =
     fun (_, arr, repr) b ->
       match repr, arr with
       | Tag tag, _ ->
@@ -224,7 +224,7 @@ module Builder = struct
       | Unboxed, [|Field f|] -> Obj.magic (b.mk f)
       | Unboxed, _ -> assert false
 
-  let inlined_constructor : type a. a inlined_constructor -> a t -> a =
+  let inlined_constructor : type a b. (a, b) inlined_constructor -> b t -> a =
     fun (_, arr, repr) b ->
       match repr, arr with
       | Tag tag, _ ->
@@ -233,12 +233,14 @@ module Builder = struct
       | Unboxed, [|_, Field f|] -> Obj.magic (b.mk f)
       | Unboxed, _ -> assert false
 
-  let constructor : type a. a constructor -> a t -> a =
+  type generic = { mk: 's 't. ('s, 't) element -> 't } [@@unboxed]
+
+  let constructor : type a. a constructor -> generic -> a =
     fun c b ->
       match c with
       | Constant c -> constant_constructor c
-      | Regular c -> regular_constructor c b
-      | Inlined c -> inlined_constructor c b
+      | Regular c -> regular_constructor c { mk = b.mk }
+      | Inlined c -> inlined_constructor c { mk = b.mk }
 end
 
 module Make = struct
@@ -267,13 +269,15 @@ module Make = struct
     fun r f ->
       Builder.record r (builder f (Array.length (fst r)))
 
-  let constructor: type a. a constructor -> (a t -> unit) -> a =
-    fun c f -> match c with
-      | Constant c -> Builder.constant_constructor c
-      | Regular ((_,flds,_) as c) ->
-        Builder.regular_constructor c (builder f (Array.length flds))
-      | Inlined ((_,flds,_) as c) ->
-        Builder.inlined_constructor c (builder f (Array.length flds))
+  let regular_constructor: type a b.
+    (a, b) regular_constructor -> (b t -> unit) -> a =
+    fun ( _,flds,_ as c) f ->
+      Builder.regular_constructor c (builder f (Array.length flds))
+
+  let inlined_constructor: type a b.
+    (a, b) inlined_constructor -> (b t -> unit) -> a =
+    fun ( _,flds,_ as c) f ->
+      Builder.inlined_constructor c (builder f (Array.length flds))
 end
 
 
@@ -323,24 +327,24 @@ module Lookup = struct
   let method_ arr =
     let f = function Method (name, _) -> name in
     finder f arr
-
-  let constructor_by_value : type a. a sum -> a -> a constructor =
-    fun sum ->
-      let cst, ncst = ref [], ref [] in
-      Array.iteri (fun i -> function
-          | Constant _ -> cst := i :: !cst
-          | Regular _
-          | Inlined _ -> ncst := i :: !ncst
-        ) sum;
-      let cst = Ext.Array.of_list_rev !cst in
-      let ncst = Ext.Array.of_list_rev !ncst in
-      fun x ->
-        let i =
-          let x = Obj.repr x in
-          if Obj.is_int x then Array.get cst (Obj.magic x)
-          else Array.get ncst (Obj.tag x)
-        in sum.(i)
 end
+
+let constructor_by_value : type a. a sum -> a -> a constructor =
+  fun sum ->
+    let cst, ncst = ref [], ref [] in
+    Array.iteri (fun i -> function
+        | Constant _ -> cst := i :: !cst
+        | Regular _
+        | Inlined _ -> ncst := i :: !ncst
+      ) sum;
+    let cst = Ext.Array.of_list_rev !cst in
+    let ncst = Ext.Array.of_list_rev !ncst in
+    fun x ->
+      let i =
+        let x = Obj.repr x in
+        if Obj.is_int x then Array.get cst (Obj.magic x)
+        else Array.get ncst (Obj.tag x)
+      in sum.(i)
 
 let call_method: 'a object_ -> ('a, 'b) element -> 'a -> 'b =
   fun o e ->
@@ -388,7 +392,7 @@ module Step = struct
       cast {get; set}, StepMeta.field ~field_name
 
   let regular_constructor:
-    'a regular_constructor -> ('a,'b) element -> ('a,'b) Path.step =
+    ('a, 'b) regular_constructor -> ('b,'c) element -> ('a,'c) Path.step =
     fun ((name,_), flds, repr) f ->
       let arity = Array.length flds in
       let nth = f.nth in
@@ -406,7 +410,7 @@ module Step = struct
       cast { get ; set }, StepMeta.constructor_regular ~name ~nth ~arity
 
   let inlined_constructor:
-    'a inlined_constructor -> ('a,'b) element -> ('a,'b) Path.step =
+    ('a, 'b) inlined_constructor -> ('b,'c) element -> ('a,'c) Path.step =
     fun ((name,_), flds, repr) f ->
       let i = f.nth in
       let (field_name, _),_ = flds.(i) in
@@ -424,13 +428,6 @@ module Step = struct
       in
       cast {get; set},
       StepMeta.constructor_inline ~name ~field_name
-
-  let constructor c e =
-    match c with
-    | Regular c -> regular_constructor c e
-    | Inlined c -> inlined_constructor c e
-    | Constant _c -> (* TODO : Prevent this case *)
-      raise (Invalid_argument "Non-constant constructor expected")
 end
 
 let option_step_some : type a. a ttype -> (a option, a) Path.step =
@@ -498,8 +495,8 @@ and record :
       ) flds
     |> List.concat
 
-and regular_constructor : type a b.
-  target: b ttype -> a regular_constructor -> (a, b) Path.t list =
+and regular_constructor : type a b c.
+  target: c ttype -> (a, b) regular_constructor -> (a, c) Path.t list =
   fun ~target (_, flds, _ as c) ->
     Ext.Array.map_to_list
       (function (Field f) ->
@@ -508,8 +505,8 @@ and regular_constructor : type a b.
       ) flds
     |> List.concat
 
-and inlined_constructor : type a b.
-  target: b ttype -> a inlined_constructor -> (a, b) Path.t list =
+and inlined_constructor : type a b c.
+  target: c ttype -> (a, b) inlined_constructor -> (a, c) Path.t list =
   fun ~target (_, flds, _ as c) ->
     Ext.Array.map_to_list
       (function (_, Field f) ->

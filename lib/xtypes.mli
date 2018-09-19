@@ -41,13 +41,13 @@ and 's record_field = label * 's field
 and 's record = 's record_field array * record_repr
 
 and 's constant_constructor = label * int
-and 's regular_constructor  = label * 's field array * constr_repr
-and 's inlined_constructor  = label * 's record_field array * constr_repr
+and ('s, 't) regular_constructor  = label * 't field array * constr_repr
+and ('s, 't) inlined_constructor  = label * 't record_field array * constr_repr
 
 and 's constructor =
-  | Constant of 's constant_constructor
-  | Regular of 's regular_constructor
-  | Inlined of 's inlined_constructor
+  | Constant : 's constant_constructor -> 's constructor
+  | Regular : ('s, 't) regular_constructor -> 's constructor
+  | Inlined : ('s, 't) inlined_constructor -> 's constructor
 
 and 's sum = 's constructor array
 
@@ -75,12 +75,11 @@ val remove_first_props_xtype: 'a xtype -> 'a xtype
 
 (** {2 Find elements} *)
 
-
 module Lookup : sig
   val record_field: 'a record -> string -> 'a record_field option
   val constructor: 'a sum -> string -> 'a constructor option
   val constructor_field:
-    'a inlined_constructor -> string -> 'a record_field option
+    ('a, 'b) inlined_constructor -> string -> 'b record_field option
   val method_: 'a object_ -> string -> 'a method_ option
 end
 (** Find by name. *)
@@ -99,14 +98,16 @@ module Builder : sig
       fields array.
   *)
 
-  type 'a t = { mk: 't. ('a, 't) element -> 't } [@@unboxed]
+  type 's t = { mk: 't. ('s, 't) element -> 't } [@@unboxed]
 
   val tuple : 'a tuple -> 'a t -> 'a
   val record : 'a record -> 'a t -> 'a
   val constant_constructor : 'a constant_constructor -> 'a
-  val regular_constructor : 'a regular_constructor -> 'a t -> 'a
-  val inlined_constructor : 'a inlined_constructor -> 'a t -> 'a
-  val constructor : 'a constructor -> 'a t -> 'a
+  val regular_constructor : ('a, 'b) regular_constructor -> 'b t -> 'a
+  val inlined_constructor : ('a, 'b) inlined_constructor -> 'b t -> 'a
+
+  type generic = { mk: 's 't. ('s, 't) element -> 't } [@@unboxed]
+  val constructor : 'a constructor -> generic -> 'a
 end
 (** Building values from xtypes. *)
 
@@ -122,7 +123,12 @@ module Make : sig
   val record: 'a record -> ('a t -> unit) -> 'a
   (** Throws [Missing_field] if not all fields where set via [set]. *)
 
-  val constructor: 'a constructor -> ('a t -> unit) -> 'a
+  val regular_constructor:
+    ('a, 'b) regular_constructor -> ('b t -> unit) -> 'a
+  (** Throws [Missing_field] if not all fields where set via [set]. *)
+
+  val inlined_constructor:
+    ('a, 'b) inlined_constructor -> ('b t -> unit) -> 'a
   (** Throws [Missing_field] if not all fields where set via [set]. *)
 end
 (** Similar to [Builder] but with active interface. *)
@@ -130,17 +136,12 @@ end
 (** {2 Paths} *)
 
 module Step : sig
-  val tuple: 'a tuple -> ('a, 'b) element -> ('a,'b) Path.step
-  val record: 'a record -> ('a, 'b) element -> ('a,'b) Path.step
+  val tuple: 'a tuple -> ('a, 'b) element -> ('a, 'b) Path.step
+  val record: 'a record -> ('a, 'b) element -> ('a, 'b) Path.step
   val regular_constructor:
-    'a regular_constructor -> ('a,'b) element -> ('a,'b) Path.step
+    ('a, 'b) regular_constructor -> ('b, 'c) element -> ('a, 'c) Path.step
   val inlined_constructor:
-    'a inlined_constructor -> ('a,'b) element -> ('a,'b) Path.step
-
-  val constructor : 'a constructor -> ('a,'b) element -> ('a,'b) Path.step
-
-  (** TODO: It is possible to use an element of different constructor. This
-      leads to unspecified behaviour including SEGV *)
+    ('a, 'b) inlined_constructor -> ('b, 'c) element -> ('a, 'c) Path.step
 end
 (** Build steps from elements. *)
 
