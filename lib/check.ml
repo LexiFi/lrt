@@ -482,8 +482,8 @@ let of_type_gen_sized: type a. UGen.t list -> t: a ttype -> int -> a gen =
         let open Xtypes in
         let f (c : _ constructor) =
           if sz > 0 || is_leaf t
-          then Some (lazy ( match c with
-              | Constant c -> Builder.constant_constructor c
+          then Some (lazy (match c with
+              | Constant c -> return (Builder.constant_constructor c)
               | Regular (_,flds,_ as c) ->
                 fields (Make.regular_constructor c) flds (sz/2)
               | Inlined (_,flds,_ as c) ->

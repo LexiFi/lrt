@@ -1,0 +1,327 @@
+Type: int
+Value: (-8)
+Type: bool
+Value: true
+Type: float
+Value: (-0.726736938581)
+Type: bool
+Value: false
+Type: bool
+Value: false
+Type: float
+Value: 7.66574516706
+Type: int array option
+Value: None
+Type: float
+Value: (-0.832550805062)
+Type: int
+Value: 2
+Type: unit
+Value: ()
+Type: (llm =
+         {
+           l___: int;
+           l____: float;
+           lMMM: unit;
+           m: string;
+         })
+Value: {l___ = 8; l____ = 6.68766626716; lMMM = (); m = ""}
+Type: string list option
+Value: Some ["UR"]
+Type: float
+Value: (-6.08185204491)
+Type: float
+Value: (-0.169677799568)
+Type: bool
+Value: true
+Type: float
+Value: (-0.605384733528)
+Type: bool
+Value: true
+Type: float
+Value: 1.6629260201
+Type: float
+Value: 6.93821501546
+Type: float
+Value: (-2.95146084018)
+Type: bool
+Value: true
+Type: float
+Value: 4.47026727721
+Type: string
+Value: "U"
+Type: bool list
+Value: [true; true; true; false; true]
+Type: (mlpnoo =
+         | Njj
+         | Ppppp
+         | J of (int * float))
+Value: Ppppp
+Type: float
+Value: (-8.34662305377)
+Type: bool
+Value: true
+Type: float list
+Value: [0.295829176903]
+Type: bool
+Value: false
+Type: int
+Value: 6
+Type: (string
+       *
+       (int list * bool * int option)
+       *
+       int
+       *
+       (int
+        *
+        (int
+         *
+         (jpkqqonjkq =
+            | L66666 of bool
+            | OLLLLLL of (float * bool)
+            | LO of
+             (string
+              *
+              int
+              *
+              string
+              *
+              (o =
+                 | P7777 of
+                  (float
+                   *
+                   int
+                   *
+                   (p =
+                      | M of bool
+                      | Ollllll of int
+                      | N______
+                      | L888 of
+                       (float
+                        *
+                        (joo =
+                           {
+                             oNNNNNN: int;
+                             m______: float;
+                             i____: bool;
+                           })
+                        *
+                        bool)
+                      | P of string))
+                 | K
+                 | N
+                 | P__ of (unit * string)
+                 | PKKKKK of ((float * unit) * string * int * int)))
+            | JQQQ of ((bool * bool * float * int) * string * string * bool)) list
+         *
+         bool
+         *
+         string)
+        *
+        (q =
+           {
+             m5555: string;
+             k11111: string;
+             ljjj: float;
+             q: unit;
+             l7777: 
+             (nqinlkm =
+                {
+                  pmmmmmm: bool;
+                });
+           })))
+Value: ("TRO", ([(-4); 1; 2; (-1)], true, Some 4), (-8),
+        ((-6), ((-1), [OLLLLLL(0.372465454042, false)], false, "Q"),
+         {m5555 = "NJ";
+          k11111 = "MO";
+          ljjj = 1.80609724671;
+          q = ();
+          l7777 = {pmmmmmm = false}}))
+Type: bool
+Value: true
+Type: string list
+Value: ["OI"; "K"; "NN"; "IQTK"]
+Type: (m =
+         | Oqq of
+          (ipnhmj =
+             {
+               r5: bool;
+             })) option array
+Value: [|Some (Oqq{r5 = false})|]
+Type: string
+Value: "JF"
+Type: (hooqnjp =
+         {
+           kLLL: float;
+         })
+Value: {kLLL = 0.867790102959}
+Type: float
+Value: (-0.0199229121208)
+Type: bool
+Value: false
+Type: bool
+Value: false
+Type: (j =
+         | L_ of (int * string * string option * int)
+         | Ollllll of (int * int)
+         | Rqqqqqq of (bool * float)
+         | Jmm of (int array * float * int * bool))
+Value: Jmm([|(-2)|], (-3.21997129172), (-2), false)
+Type: float
+Value: 3.49551822245
+Type: bool
+Value: false
+Type: string
+Value: "GWFF"
+Type: float
+Value: 2.78587498516
+Type: float
+Value: (-8.62680137716)
+Type: bool
+Value: false
+Type: bool
+Value: false
+Type: float
+Value: 1.03791576438
+Type: bool
+Value: false
+Type: bool
+Value: true
+Type: bool
+Value: false
+Type: float
+Value: 6.91571242176
+Type: bool option
+Value: None
+Type: string
+Value: ""
+Type: int
+Value: (-5)
+Type: unit
+Value: ()
+Type: (u =
+         | P______ of
+          (gg =
+             {
+               m_: 
+               (sls =
+                  | L555 of (bool * float)
+                  | K______ of (float * (bool option * string) * string * float));
+               i___: string;
+             }))
+Value: P______
+        {m_ = K______(0.862855944782, (Some true, ""), "", 0.0678518041968);
+         i___ = "P"}
+Type: int
+Value: 5
+Type: bool option
+Value: Some true
+Type: int
+Value: 1
+Type: string
+Value: "QRN"
+Type: float
+Value: (-0.131442943588)
+Type: float
+Value: (-2.71974756941)
+Type: int
+Value: (-3)
+Type: float
+Value: 6.6916341763
+Type: bool
+Value: false
+Type: string
+Value: "NJ"
+Type: (unit * int)
+Value: ((), 4)
+Type: bool
+Value: false
+Type: float
+Value: (-1.15411953628)
+Type: string
+Value: "R"
+Type: string
+Value: "TXMI"
+Type: float
+Value: 7.28440127894
+Type: bool list
+Value: [false; false; false; false]
+Type: string
+Value: "TGRJ"
+Type: string
+Value: ""
+Type: unit
+Value: ()
+Type: int
+Value: (-8)
+Type: bool
+Value: true
+Type: string
+Value: "HTKV"
+Type: float
+Value: (-2.96703346074)
+Type: int
+Value: (-1)
+Type: unit
+Value: ()
+Type: bool option
+Value: None
+Type: (idffpywivr =
+         | H000000 of (bool * string * bool * float array * int * bool * float * string * unit))
+Value: H000000
+        (true, "PS", true, [|1.76102723368; 2.58578483574|], (-1), false,
+         3.64284520596, "R", ())
+Type: string
+Value: ""
+Type: int
+Value: 4
+Type: int
+Value: 9
+Type: bool array
+Value: [|true|]
+Type: string
+Value: ""
+Type: string
+Value: "FIQ"
+Type: unit
+Value: ()
+Type: bool
+Value: false
+Type: float
+Value: 4.46564893238
+Type: (string * float * string option)
+Value: ("KGVP", (-0.723065301776), None)
+Type: string list
+Value: []
+Type: string
+Value: "UIMT"
+Type: bool
+Value: false
+Type: unit
+Value: ()
+Type: int
+Value: (-8)
+Type: float
+Value: 5.14485806599
+Type: bool
+Value: true
+Type: float array
+Value: [|(-7.74153405428); 7.57578535378; (-3.09495897591);
+         (-5.57386896014)|]
+Type: float
+Value: 0.911281552166
+Type: int
+Value: 3
+Type: int
+Value: 0
+Type: bool
+Value: true
+Type: float
+Value: inf
+Type: string
+Value: "JQI"
+Type: float
+Value: (-2.18654659577)
+Type: string
+Value: "VJ"
