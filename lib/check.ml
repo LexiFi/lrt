@@ -583,6 +583,7 @@ let stype = stype ()
 let dynamic ?size l =
   stype >>= fun s ->
     let Ttype t = ttype_of_stype s in
+    Format.eprintf "%a\n%!" print_stype s;
     let valgen = of_type_gen ?size l ~t in
     map (fun v -> Dyn (t, v)) valgen
 

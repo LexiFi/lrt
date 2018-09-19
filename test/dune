@@ -2,4 +2,11 @@
  (name ppx_test)
  (libraries dynt inspect)
  (inline_tests)
+ (modules path ppx)
  (preprocess (pps ppx_expect ppx_inline_test dynt.deriving)))
+
+(test
+  (name fuzzing)
+  (libraries dynt)
+  (modules fuzzing)
+  (preprocess (pps ppx_expect ppx_inline_test dynt.deriving)))
