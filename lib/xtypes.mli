@@ -73,7 +73,8 @@ val t_of_ttype: 'a ttype -> 'a t
 val get_first_props_xtype: 'a xtype -> stype_properties
 val remove_first_props_xtype: 'a xtype -> 'a xtype
 
-(** {2 Find named elements} *)
+(** {2 Find elements} *)
+
 
 module Lookup : sig
   val record_field: 'a record -> string -> 'a record_field option
@@ -81,9 +82,11 @@ module Lookup : sig
   val constructor_field:
     'a inlined_constructor -> string -> 'a record_field option
   val method_: 'a object_ -> string -> 'a method_ option
-
-  val constructor_by_value: 'a sum -> 'a -> 'a constructor
 end
+(** Find by name. *)
+
+val constructor_by_value: 'a sum -> 'a -> 'a constructor
+(** Find by value. *)
 
 (** {2 Object call method} *)
 
@@ -92,9 +95,7 @@ val call_method: 'a object_ -> ('a, 'b) element -> 'a -> 'b
 (** {2 Building values from xtypes} *)
 
 module Builder : sig
-  (** Building values from xtypes.
-
-      The builder function [mk] is called for each field in the order of the
+  (** The builder function [mk] is called for each field in the order of the
       fields array.
   *)
 
@@ -107,10 +108,9 @@ module Builder : sig
   val inlined_constructor : 'a inlined_constructor -> 'a t -> 'a
   val constructor : 'a constructor -> 'a t -> 'a
 end
+(** Building values from xtypes. *)
 
 module Make : sig
-  (** Similar to [Builder] but with active interface instead of passive *)
-
   type 'a t
   exception Missing_field of string
 
@@ -125,6 +125,7 @@ module Make : sig
   val constructor: 'a constructor -> ('a t -> unit) -> 'a
   (** Throws [Missing_field] if not all fields where set via [set]. *)
 end
+(** Similar to [Builder] but with active interface. *)
 
 (** {2 Paths} *)
 
@@ -141,6 +142,7 @@ module Step : sig
   (** TODO: It is possible to use an element of different constructor. This
       leads to unspecified behaviour including SEGV *)
 end
+(** Build steps from elements. *)
 
 val all_paths: 'a ttype -> 'b ttype -> ('a, 'b) Path.t list
 (** Returns all the paths leading to a value of type ['a] inside
