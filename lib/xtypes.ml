@@ -330,6 +330,37 @@ let rec remove_first_props_xtype : type t. t xtype -> t xtype = function
   | Prop (_, {xt=lazy xt;_}) -> remove_first_props_xtype xt
   | xt -> xt
 
+module Read = struct
+  let check tag o = Obj.is_block o && Obj.tag o = tag
+
+  let cast: (Obj.t -> Obj.t) -> 'a -> 'b = Obj.magic
+
+  let tuple : type a b. a tuple -> (a, b) element -> a -> b =
+    fun _ el -> cast (fun o -> Obj.field o el.nth)
+
+  let record : type a b. a record -> (a, b) element -> a -> b =
+    fun r el -> cast (match r.r_repr with
+      | Regular -> fun o -> Obj.field o el.nth
+      | Float -> fun o -> Obj.repr (Obj.double_field o el.nth)
+      | Unboxed -> fun o -> Obj.repr o)
+
+  let cast: (Obj.t -> Obj.t option) -> 'a -> 'b option = Obj.magic
+  let checked tag i o =
+      if check tag o then Some (Obj.field o i) else None
+
+  let regular_constructor : type a b c.
+    (a, b) regular_constructor -> (b,c) element -> a -> c option =
+    fun c el -> cast (match c.rc_repr with
+      | Tag tag -> checked tag el.nth
+      | Unboxed -> fun o -> Some (Obj.repr o))
+
+  let inlined_constructor : type a b c.
+    (a, b) inlined_constructor -> (b,c) element -> a -> c option =
+    fun c el -> cast (match c.ic_repr with
+      | Tag tag -> checked tag el.nth
+      | Unboxed -> fun o -> Some (Obj.repr o))
+end
+
 (* fast lookup for named elements *)
 
 module Lookup = struct
@@ -392,6 +423,8 @@ let call_method: 'a object_ -> ('a, 'b) element -> 'a -> 'b =
 module Step = struct
   let cast : (Obj.t, Obj.t) Path.lens -> ('a, 'b) Path.lens = Obj.magic
   let check tag o = Obj.is_block o && Obj.tag o = tag
+
+  (* TODO: This could use the above Read module *)
 
   let tuple: 'a tuple -> ('a, 'b) element-> ('a,'b) Path.step =
     fun tup f ->

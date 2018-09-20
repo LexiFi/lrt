@@ -104,6 +104,16 @@ val t_of_ttype: 'a ttype -> 'a t
 val get_first_props_xtype: 'a xtype -> stype_properties
 val remove_first_props_xtype: 'a xtype -> 'a xtype
 
+module Read : sig
+  val tuple : 'a tuple -> ('a, 'b) element -> 'a -> 'b
+  val record : 'a record -> ('a, 'b) element -> 'a -> 'b
+  val regular_constructor :
+    ('a, 'b) regular_constructor -> ('b, 'c) element -> 'a -> 'c option
+  val inlined_constructor :
+    ('a, 'b) inlined_constructor -> ('b, 'c) element -> 'a -> 'c option
+end
+(** Read values from tuples, records and constructors. *)
+
 (** {2 Find elements} *)
 
 module Lookup : sig
