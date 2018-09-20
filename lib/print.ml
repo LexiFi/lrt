@@ -1,7 +1,6 @@
 open Dynt_core.Stype
 open Dynt_core.Ttype
 open Dynt_core.Std
-module Xtypes = Xtypes_depr
 
 type 'a printer = 'a -> unit
 
@@ -132,6 +131,8 @@ let pp_par_when_neg ppf abs print x =
   end else
     print x
 
+let assert_some = function Some x -> x | None -> assert false
+
 let print_dynamic ppf (t, x) =
   let open Format in
   let open Xtypes in
@@ -153,7 +154,7 @@ let print_dynamic ppf (t, x) =
       | String -> pp_print_char ppf '\"';
         pp_print_string ppf (String.escaped x); pp_print_char ppf '\"'
       (* | Date -> pp_print_string ppf (string_of_date x) *)
-      | Option (t, _) -> begin
+      | Option {t;_} -> begin
           match x with
           | None -> pp_print_string ppf "None"
           | Some next_x ->
@@ -162,8 +163,8 @@ let print_dynamic ppf (t, x) =
             print_dynamic t true next_x ;
             pp_may_right_paren ppf parens
         end
-      | List (_, _) when x = [] -> pp_print_string ppf "[]"
-      | List (t, _) ->
+      | List _ when x = [] -> pp_print_string ppf "[]"
+      | List {t;_} ->
         let rec p_list = function
           | [] -> ()
           | [e] -> print_dynamic t false e
@@ -173,59 +174,79 @@ let print_dynamic ppf (t, x) =
         in
         pp_open_box ppf 1; pp_print_char ppf '['; p_list x;
         pp_print_char ppf ']'; pp_close_box ppf ()
-      | Array (t,_) ->
+      | Array {t;_} ->
         pp_open_box ppf 2; pp_print_string ppf "[|";
         for i = 0 to Array.length x - 1 do
           if i > 0 then begin pp_print_char ppf ';'; pp_print_space ppf () end;
           print_dynamic t false x.(i)
         done;
         pp_print_string ppf "|]"; pp_close_box ppf ()
-      | Tuple record ->
-        let fields = Record.fields record in
+      | Tuple tup ->
         let rec pr i = function
           | [] -> ()
           | Field hd :: tl ->
-            let t = RecordField.ttype hd in
             if i > 0 then
               begin pp_print_char ppf ','; pp_print_space ppf () end;
-            print_dynamic t false (RecordField.get hd x) ;
+            print_dynamic hd.typ.t false (Read.tuple tup hd x) ;
             pr (i+1) tl
         in
-        pp_open_box ppf 1; pp_print_char ppf '('; pr 0 fields;
+        pp_open_box ppf 1; pp_print_char ppf '('; pr 0 tup.t_flds;
         pp_print_char ppf ')'; pp_close_box ppf ()
-      | Record record ->
-        let fields = Record.fields record in
+      | Record r->
         let rec pr i = function
           | [] -> ()
-          | Field hd :: tl ->
-            let name = RecordField.name hd in
-            let t = RecordField.ttype hd in
+          | ((name,_), Field f) :: tl ->
             if i > 0 then
               begin pp_print_char ppf ';'; pp_print_space ppf () end;
             pp_open_box ppf 1;
             pp_print_string ppf name; pp_print_string ppf " =";
             pp_print_space ppf ();
-            print_dynamic t false (RecordField.get hd x);
+            print_dynamic f.typ.t false (Read.record r f x);
             pp_close_box ppf ();
             pr (i+1) tl
         in
-        pp_open_hvbox ppf 1; pp_print_char ppf '{'; pr 0 fields;
+        pp_open_hvbox ppf 1; pp_print_char ppf '{'; pr 0 r.r_flds;
         pp_print_char ppf '}'; pp_close_box ppf ()
       | Sum s ->
-        let Constructor c = Sum.constructor s x in
-        let t = Constructor.ttype c in
-        let print_constr () =
-          print_dynamic t false (Constructor.project_exn c x) in
         pp_may_left_paren ppf parens;
-        pp_print_string ppf (Constructor.name c);
-        ( match xtype_of_ttype t with
-          | Unit -> ()
-          | Record _
-          | Tuple _ -> pp_print_cut ppf () ; print_constr ()
-          | _ -> pp_print_cut ppf () ; pp_print_space ppf () ; print_constr ()
+        ( match constructor_by_value s x with
+          (* TODO: share code with tuple/record *)
+          | Constant c -> pp_print_string ppf (fst c.cc_label);
+          | Inlined c ->
+            pp_print_cut ppf () ;
+            pp_print_string ppf (fst c.ic_label) ;
+            let rec pr i = function
+              | [] -> ()
+              | ((name,_), Field f) :: tl ->
+                if i > 0 then
+                  begin pp_print_char ppf ';'; pp_print_space ppf () end;
+                pp_open_box ppf 1;
+                pp_print_string ppf name; pp_print_string ppf " =";
+                pp_print_space ppf ();
+                print_dynamic f.typ.t false (
+                  Read.inlined_constructor c f x |> assert_some );
+                pp_close_box ppf ();
+                pr (i+1) tl
+            in
+            pp_open_hvbox ppf 1; pp_print_char ppf '{'; pr 0 c.ic_flds;
+            pp_print_char ppf '}'; pp_close_box ppf ()
+          | Regular c ->
+            pp_print_cut ppf () ;
+            pp_print_string ppf (fst c.rc_label);
+            let rec pr i = function
+              | [] -> ()
+              | Field hd :: tl ->
+                if i > 0 then
+                  begin pp_print_char ppf ','; pp_print_space ppf () end;
+                print_dynamic hd.typ.t false (
+                  Read.regular_constructor c hd x |> assert_some ) ;
+                pr (i+1) tl
+            in
+            pp_open_box ppf 1; pp_print_char ppf '('; pr 0 c.rc_flds;
+            pp_print_char ppf ')'; pp_close_box ppf ()
         ) ;
         pp_may_right_paren ppf parens
-      | Lazy (t, _) ->
+      | Lazy {t;_} ->
         pp_may_left_paren ppf parens;
         pp_print_string ppf "lazy ";
         begin match (Lazy.force x) with
@@ -238,8 +259,8 @@ let print_dynamic ppf (t, x) =
         pp_may_right_paren ppf parens
       | Function _ -> pp_print_string ppf "<fun>"
       | Object _ -> pp_print_string ppf "<object>"
-      | Prop (_, t, _) -> print_dynamic t parens x
-      | Abstract (name, t, _l) ->
+      | Prop (_, {t;_}) -> print_dynamic t parens x
+      | Abstract (name, _) ->
         let rec use_first = function
           | [] ->
             pp_print_string ppf "<abstract: ";
