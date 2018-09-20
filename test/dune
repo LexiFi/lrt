@@ -10,3 +10,9 @@
   (libraries dynt)
   (modules fuzzing)
   (preprocess (pps ppx_expect ppx_inline_test dynt.deriving)))
+
+(executable
+  (name segfault)
+  (libraries dynt)
+  (modules segfault)
+  (preprocess (pps ppx_expect ppx_inline_test dynt.deriving)))
