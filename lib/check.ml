@@ -480,9 +480,10 @@ let of_type_gen_sized: type a. UGen.t list -> t: a ttype -> int -> a gen =
       | Record r -> fields (Xtypes.Make.record r) (fields_of_record r) szp
       | Sum sum ->
         let open Xtypes in
-        let f (c : _ constructor) =
+        let f (type a) (c : a constructor) : a gen Lazy.t option =
           if sz > 0 || is_leaf t
           then Some (lazy (match c with
+              (* TODO: SEGV by removing return *)
               | Constant c -> return (Builder.constant_constructor c)
               | Regular (_,flds,_ as c) ->
                 fields (Make.regular_constructor c) flds (sz/2)
@@ -583,7 +584,6 @@ let stype = stype ()
 let dynamic ?size l =
   stype >>= fun s ->
     let Ttype t = ttype_of_stype s in
-    Format.eprintf "%a\n%!" print_stype s;
     let valgen = of_type_gen ?size l ~t in
     map (fun v -> Dyn (t, v)) valgen
 
