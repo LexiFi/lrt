@@ -6,7 +6,7 @@
  (preprocess (pps ppx_expect ppx_inline_test dynt.deriving)))
 
 (tests
-  (names fuzzing segfault)
+  (names fuzzing)
   (libraries dynt)
-  (modules fuzzing segfault)
+  (modules fuzzing)
   (preprocess (pps ppx_expect ppx_inline_test dynt.deriving)))
