@@ -1,23 +1,13 @@
-type 's constant_constructor = 's
-type ('s, 't) noncst_constructor = 't -> 's
+type 's constant_constructor = string
 
 type 's constructor =
-  | Constant of 's constant_constructor
-  | NonConstant : ('s, 't) noncst_constructor -> 's constructor
+  | Constant: 's constant_constructor -> 's constructor
 
 module Build : sig
-  type 'a t = { mk : 'b. ('a,'b) noncst_constructor -> 'b }
-
   val constant_constructor : 'a constant_constructor -> 'a
-  val noncst_constructor : ('a,'b) noncst_constructor -> 'a t -> 'a
 end = struct
-  type 'a t = { mk : 'b. ('a,'b) noncst_constructor -> 'b }
-
   let constant_constructor : type a. a constant_constructor -> a =
-    fun x -> x
-
-  let noncst_constructor : type a b. (a,b) noncst_constructor -> a t -> a =
-    fun f t -> f (t.mk f)
+    fun x -> failwith x
 end
 
 module Gen : sig
@@ -35,8 +25,7 @@ let magic = Obj.magic ()
 
 let _gen_of_constructor (type a) (c : a constructor) : a Gen.t =
   match c with
-  | Constant c -> Gen.return (Build.constant_constructor c)
-  | NonConstant c -> Gen.return (Build.noncst_constructor c magic)
+  | Constant c -> Build.constant_constructor c
 
 open Dynt
 open Xtypes
@@ -53,8 +42,9 @@ type enum = A | B | C [@@deriving t]
 let _ = A, B, C
 
 let _ =
+  let open Xtypes in
   match xtype_of_ttype enum_t with
-  | Sum [| a ; _b; _c |] -> Gen.run (gen_of_constructor a)
+  | Sum { cstrs = [_;_;c] } -> Gen.run (gen_of_constructor c)
   | _ -> assert false
 
 let () =

@@ -7,11 +7,13 @@ open Dynt_core.Stype
 type record_repr = Regular | Float | Unboxed
 type constr_repr = Tag of int | Unboxed
 
-type 'a t = 'a ttype * 'a xtype Lazy.t
-(** The construction of xtypes is expensive and should not happen recursively.*)
+type 'a t = private
+  { t: 'a ttype
+  ; xt: 'a xtype Lazy.t
+  }
 
-and 'a xtype
-  = Unit: unit xtype
+and 'a xtype = private
+  | Unit: unit xtype
   | Bool: bool xtype
   | Int: int xtype
   | Float: float xtype
@@ -32,33 +34,62 @@ and 'a xtype
   | Prop: (stype_properties * 'a t) -> 'a xtype
   | Abstract: (string * stype list) -> 'a xtype
 
+and ('s,'t) element = private
+  { typ: 't t
+  ; nth: int
+  }
+
+and 's field = private
+  | Field: ('s, 't) element -> 's field
+
+and 's tuple = private
+  { t_flds : 's field list }
+
 and label = string * stype_properties
-and ('s,'t) element = { typ: 't t; nth: int } (** Better name? *)
 
-and 's field = Field: ('s, 't) element -> 's field
-and 's tuple = 's field array
 and 's record_field = label * 's field
-and 's record = 's record_field array * record_repr
 
-and 's constant_constructor = label * int
-and ('s, 't) regular_constructor  = label * 't field array * constr_repr
-and ('s, 't) inlined_constructor  = label * 't record_field array * constr_repr
+and 's record = private
+  { r_flds: 's record_field list
+  ; r_repr: record_repr
+  }
 
-and 's constructor =
+and 's constant_constructor = private
+  { cc_label: label
+  ; cc_nr: int
+  }
+
+and ('s, 't) regular_constructor  = private
+  { rc_label: label
+  ; rc_flds: 't field list
+  ; rc_repr: constr_repr
+  }
+
+and ('s, 't) inlined_constructor  = private
+  { ic_label: label
+  ; ic_flds: 't record_field list
+  ; ic_repr: constr_repr
+  }
+
+and 's constructor = private
   | Constant : 's constant_constructor -> 's constructor
   | Regular : ('s, 't) regular_constructor -> 's constructor
   | Inlined : ('s, 't) inlined_constructor -> 's constructor
 
-and 's sum = 's constructor array
+and 's sum = private
+  { cstrs : 's constructor list }
 
-and ('s, 't) arrow =
+and ('s, 't) arrow = private
   { arg_label : string option
   ; arg_t: 's t
   ; res_t: 't t
   }
 
-and 's method_ = Method: string * ('s, 't) element -> 's method_
-and 's object_ = 's method_ array
+and 's method_ = private
+  | Method: string * ('s, 't) element -> 's method_
+
+and 's object_ = private
+  { methods : 's method_ list }
 
 (** {2 Basics} *)
 

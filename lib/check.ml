@@ -208,14 +208,14 @@ let oneof_lazy gs = elements gs >>= Lazy.force
 let elements_freq_lazy = function
   | [] -> failwith "Mlfi_check.frequency used with empty list"
   | xs0 ->
-      let tot = List.fold_left (fun acc (xs, _) -> acc + xs) 0 xs0 in
-      let rec pick n = function
-        | (k, x) :: _ when n <= k -> Lazy.force x
-        | (k, _) :: xs -> pick (n-k) xs
-        | _ -> assert false
-      in
-      choose_int (1, tot) >>= fun n ->
-      return (pick n xs0)
+    let tot = List.fold_left (fun acc (xs, _) -> acc + xs) 0 xs0 in
+    let rec pick n = function
+      | (k, x) :: _ when n <= k -> Lazy.force x
+      | (k, _) :: xs -> pick (n-k) xs
+      | _ -> assert false
+    in
+    choose_int (1, tot) >>= fun n ->
+    return (pick n xs0)
 
 let elements_freq l = elements_freq_lazy (List.map (fun (n, g) -> n, lazy g) l)
 
@@ -349,10 +349,10 @@ let rec find_custom: type a. UGen.t list -> a ttype -> (int -> a gen) option = f
   match l with
   | [] -> None
   | (UGen.Gen (u, fu)) :: tl ->
-      begin match ttypes_equality t u with
+    begin match ttypes_equality t u with
       | Some TypEq.Eq -> Some fu
       | None -> find_custom tl t
-      end
+    end
 
 class type custom_of_type =
   object
@@ -371,57 +371,57 @@ module H = Hashtbl.Make
       let hash = Internal.hash0
     end)
 
-let fields_of_record_fields flds = Array.map (function _, f -> f) flds
-let fields_of_record (flds,_) = fields_of_record_fields flds
+let fields_of_record_fields flds = List.map (function _, f -> f) flds
 
 let is_leaf: type a . a ttype -> bool =
   fun tty ->
-  let seen = H.create 12 in
-  let replace t = H.replace seen (stype_of_ttype (fst t)) () in
-  let rec really_loop: type a. a Xtypes.t -> bool = fun t ->
-    match Lazy.force (snd t) with
-    | Unit -> true
-    | Bool -> true
-    | Char -> true
-    | Int -> true
-    | Int32 -> true
-    | Int64 -> true
-    | Nativeint -> true
-    | Float -> true
-    | String -> true
+    let open Xtypes in
+    let seen = H.create 12 in
+    let replace t = H.replace seen (stype_of_ttype t.t) () in
+    let rec really_loop: type a. a Xtypes.t -> bool =
+      fun t -> match Lazy.force t.xt with
+        | Unit -> true
+        | Bool -> true
+        | Char -> true
+        | Int -> true
+        | Int32 -> true
+        | Int64 -> true
+        | Nativeint -> true
+        | Float -> true
+        | String -> true
 
-    | Option t -> loop t
-    | List t -> loop t
-    | Array t -> loop t
-    | Function a -> loop a.res_t
+        | Option t -> loop t
+        | List t -> loop t
+        | Array t -> loop t
+        | Function a -> loop a.res_t
 
-    | Sum sum ->
-      replace t;
-      Array.for_all Xtypes.(function
-          | Constant _ -> true
-          | Regular (_,flds,_) -> loop_fields flds
-          | Inlined (_,flds,_) -> loop_fields (fields_of_record_fields flds)
-        ) sum
+        | Sum sum ->
+          replace t;
+          List.for_all Xtypes.(function
+              | Constant _ -> true
+              | Regular c -> loop_fields c.rc_flds
+              | Inlined c -> loop_fields (fields_of_record_fields c.ic_flds)
+            ) sum.cstrs
 
-    | Tuple tup -> replace t; loop_fields tup
-    | Record r -> replace t; loop_fields (fields_of_record r)
-    | Lazy t -> loop t
-    | Prop (_, t) -> loop t
+        | Tuple tup -> replace t; loop_fields tup.t_flds
+        | Record r -> replace t; loop_fields (fields_of_record_fields r.r_flds)
+        | Lazy t -> loop t
+        | Prop (_, t) -> loop t
 
-    | Object _ -> false
-    | Abstract _ -> true
+        | Object _ -> false
+        | Abstract _ -> true
 
-  and loop_fields: type a. a Xtypes.field array -> bool =
-    fun fields ->
-      Array.for_all
-        ( function Xtypes.Field field -> loop field.typ )
-        fields
+    and loop_fields: type a. a Xtypes.field list -> bool =
+      fun fields ->
+        List.for_all
+          ( function Xtypes.Field field -> loop field.typ )
+          fields
 
-  and loop: type a . a Xtypes.t -> bool =
-    fun t -> not (H.mem seen (stype_of_ttype (fst t))) && really_loop t
-  in
+    and loop: type a . a Xtypes.t -> bool =
+      fun t -> not (H.mem seen (stype_of_ttype t.t)) && really_loop t
+    in
 
-  loop (Xtypes.t_of_ttype tty)
+    loop (Xtypes.t_of_ttype tty)
 
 module Test: sig end = struct
   [@@@warning "-37"]
@@ -457,56 +457,57 @@ let of_type_gen_sized: type a. UGen.t list -> t: a ttype -> int -> a gen =
     let find_custom = of_list l in
     let rec of_type_default_sized: type a. t: a ttype -> int -> a gen =
       fun ~t sz ->
-      let szp = pred_size sz in
-      let fields: type a b. (a, b) mk -> a Xtypes.field array -> int -> b gen =
-        fun mk tup sz ->
-        let f (Xtypes.Field f) = of_type_sized ~t:(fst f.typ) sz >>=
-          fun x -> return (fun b -> Xtypes.Make.set b f x)
+        let szp = pred_size sz in
+        let fields: type a b. (a, b) mk -> a Xtypes.field list -> int -> b gen =
+          fun mk tup sz ->
+            let f (Xtypes.Field f) = of_type_sized ~t:(f.typ.t) sz >>=
+              fun x -> return (fun b -> Xtypes.Make.set b f x)
+            in
+            list_sequence (List.map f tup) >>= fun l ->
+            return (mk (fun b -> List.iter (fun f -> f b) l))
         in
-        array_sequence (Array.map f tup) >>= fun l ->
-        return (mk (fun b -> Array.iter (fun f -> f b) l))
-      in
-      match Xtypes.xtype_of_ttype t with
-      | Unit -> unit
-      | Bool -> bool
-      | Int -> int_of_size szp
-      | Float -> float_of_size szp
-      | String -> string_of_size (sz/2) (char_of_size (min_char, max_char) szp)
-      | Option (t, _) -> option (of_type_sized ~t szp)
-      | List (t, _) -> list_of_size (sz/2) (of_type_sized ~t szp)
-      | Array (t, _) -> array_of_size (sz/2) (of_type_sized ~t szp)
-      | Function a -> arrow (of_type_sized ~t:(fst a.res_t) szp)
-      | Tuple flds -> fields (Xtypes.Make.tuple flds) flds szp
-      | Record r -> fields (Xtypes.Make.record r) (fields_of_record r) szp
-      | Sum sum ->
-        let open Xtypes in
-        let f (type a) (c : a constructor) : a gen Lazy.t option =
-          if sz > 0 || is_leaf t
-          then Some (lazy (match c with
-              (* TODO: SEGV by removing return *)
-              | Constant c -> return (Builder.constant_constructor c)
-              | Regular (_,flds,_ as c) ->
-                fields (Make.regular_constructor c) flds (sz/2)
-              | Inlined (_,flds,_ as c) ->
-                fields (Make.inlined_constructor c)
-                  (fields_of_record_fields flds) (sz/2)))
-          else None
-        in
-        oneof_lazy (Ext.List.choose f (Array.to_list sum))
-      | Lazy (t, _) -> lazy_ (of_type_sized ~t szp)
-      | Prop (_, (t,_)) -> of_type_sized ~t szp
-      | Object _ ->
-        failwith "Check.f: reached Object"
-      | Abstract _ ->
-        failwith "Check.f: reached Abstract"
-      | Char ->
-        failwith "Check.f: reached Char"
-      | Int32 ->
-        failwith "Check.f: reached Int32"
-      | Int64 ->
-        failwith "Check.f: reached Int64"
-      | Nativeint ->
-        failwith "Check.f: reached Nativeint"
+        match Xtypes.xtype_of_ttype t with
+        | Unit -> unit
+        | Bool -> bool
+        | Int -> int_of_size szp
+        | Float -> float_of_size szp
+        | String -> string_of_size (sz/2) (char_of_size (min_char, max_char) szp)
+        | Option {t;_} -> option (of_type_sized ~t szp)
+        | List {t;_} -> list_of_size (sz/2) (of_type_sized ~t szp)
+        | Array {t;_} -> array_of_size (sz/2) (of_type_sized ~t szp)
+        | Function a -> arrow (of_type_sized ~t:a.res_t.t szp)
+        | Tuple t -> fields (Xtypes.Make.tuple t) t.t_flds szp
+        | Record r -> fields (Xtypes.Make.record r)
+                        (fields_of_record_fields r.r_flds) szp
+        | Sum sum ->
+          let open Xtypes in
+          let f (type a) (c : a constructor) : a gen Lazy.t option =
+            if sz > 0 || is_leaf t
+            then Some (lazy (match c with
+                (* TODO: SEGV by removing return *)
+                | Constant c -> return (Builder.constant_constructor c)
+                | Regular c ->
+                  fields (Make.regular_constructor c) c.rc_flds (sz/2)
+                | Inlined c ->
+                  fields (Make.inlined_constructor c)
+                    (fields_of_record_fields c.ic_flds) (sz/2)))
+            else None
+          in
+          oneof_lazy (Ext.List.choose f sum.cstrs)
+        | Lazy {t;_} -> lazy_ (of_type_sized ~t szp)
+        | Prop (_, {t;_}) -> of_type_sized ~t szp
+        | Object _ ->
+          failwith "Check.f: reached Object"
+        | Abstract _ ->
+          failwith "Check.f: reached Abstract"
+        | Char ->
+          failwith "Check.f: reached Char"
+        | Int32 ->
+          failwith "Check.f: reached Int32"
+        | Int64 ->
+          failwith "Check.f: reached Int64"
+        | Nativeint ->
+          failwith "Check.f: reached Nativeint"
     and of_type_sized: type a. t:a ttype -> int -> a gen = fun ~t sz ->
       match find_custom # apply t with
       | None -> of_type_default_sized ~t sz
@@ -535,23 +536,23 @@ and dt_constructor const_type =
   string_lowercase >>= fun name ->
   match const_type with
   | `C_tuple ->
-      all_different (fun x -> x) uident >>= fun names ->
-      list_copy (List.length names) (list (stype ())) >>= fun types ->
-      return
-        (Internal.create_variant_type name []
-           (fun _ ->
-              List.map2 (fun name types -> name, [], C_tuple types)
-                names types,
-              Variant_regular
-           )
-        )
+    all_different (fun x -> x) uident >>= fun names ->
+    list_copy (List.length names) (list (stype ())) >>= fun types ->
+    return
+      (Internal.create_variant_type name []
+         (fun _ ->
+            List.map2 (fun name types -> name, [], C_tuple types)
+              names types,
+            Variant_regular
+         )
+      )
   | `C_inline ->
-      uident >>= fun c_name ->
-      dt_record ~inline:true () >>= fun inline_type ->
-      return
-        (Internal.create_variant_type name []
-           (fun _ -> [c_name, [], C_inline inline_type], Variant_regular )
-        )
+    uident >>= fun c_name ->
+    dt_record ~inline:true () >>= fun inline_type ->
+    return
+      (Internal.create_variant_type name []
+         (fun _ -> [c_name, [], C_inline inline_type], Variant_regular )
+      )
 
 and dt_record ?(inline=false) () =
   let field = tuple3 lident (return []) (stype ()) in
@@ -583,9 +584,9 @@ let stype = stype ()
 
 let dynamic ?size l =
   stype >>= fun s ->
-    let Ttype t = ttype_of_stype s in
-    let valgen = of_type_gen ?size l ~t in
-    map (fun v -> Dyn (t, v)) valgen
+  let Ttype t = ttype_of_stype s in
+  let valgen = of_type_gen ?size l ~t in
+  map (fun v -> Dyn (t, v)) valgen
 
 (* Shrinkers *)
 
@@ -641,8 +642,8 @@ module Shrink = struct
   let rec shrink_one shrink = function
     | [] -> []
     | x :: xs ->
-        List.map (fun x' -> x'::xs) (shrink x) @
-        List.map (fun xs' -> x::xs') (shrink_one shrink xs)
+      List.map (fun x' -> x'::xs) (shrink x) @
+      List.map (fun xs' -> x::xs') (shrink_one shrink xs)
 
   let list shrink l =
     let n = List.length l in
@@ -692,11 +693,11 @@ module Shrink = struct
   let rec shrink_one2 shrink = function
     | [] | [_] -> assert false
     | [x1; x2] ->
-        List.map (fun x1' -> [x1'; x2]) (shrink x1) @
-        List.map (fun x2' -> [x1; x2']) (shrink x2)
+      List.map (fun x1' -> [x1'; x2]) (shrink x1) @
+      List.map (fun x2' -> [x1; x2']) (shrink x2)
     | x :: xs ->
-        List.map (fun x' -> x'::xs) (shrink x) @
-        List.map (fun xs' -> x::xs') (shrink_one2 shrink xs)
+      List.map (fun x' -> x'::xs) (shrink x) @
+      List.map (fun xs' -> x::xs') (shrink_one2 shrink xs)
 
   let list2 shrink l =
     let n = List.length l in
@@ -707,38 +708,38 @@ module Shrink = struct
 
   (* module T = Xtypes
 
-  type 's elem = E : 'a list * ('s T.record_builder -> 'a -> unit) -> 's elem
+     type 's elem = E : 'a list * ('s T.record_builder -> 'a -> unit) -> 's elem
 
-  let rec shrink_record: type a. a T.Record.t -> a shrink = fun record x ->
-    let fields = Xtypes.Record.fields record in
-    let make = Xtypes.Record.make record in
-    let elems =
+     let rec shrink_record: type a. a T.Record.t -> a shrink = fun record x ->
+     let fields = Xtypes.Record.fields record in
+     let make = Xtypes.Record.make record in
+     let elems =
       List.map
         (fun (T.Field field) ->
            E (of_type ~t:(T.RecordField.ttype field) (T.RecordField.get field x), T.RecordField.set field)
         )
         fields
-    in
-    let rec loop = function
+     in
+     let rec loop = function
       | [] ->
           [fun _ -> ()]
       | E (shrinks, set) :: elems ->
           Ext.List.flatten_map (fun x -> List.map (fun f b -> set b x; f b) (loop elems)) shrinks
-    in
-    List.map make (loop elems)
+     in
+     List.map make (loop elems)
 
-  and of_type: type a. t:a ttype -> a shrink = fun ~t ->
-    match T.xtype_of_ttype t with
-    | T.Unit -> fun () -> []
-    | T.Bool -> bool
-    | T.Int -> int
-    | T.Float -> float
-    | T.String -> string
-    | T.Option (t, _) -> option (of_type ~t)
-    | T.List (t, _) -> list (of_type ~t)
-    | T.Array (t, _) -> array (of_type ~t)
-    | T.Function _ -> fun _ -> []
-    | T.Sum sum ->
+     and of_type: type a. t:a ttype -> a shrink = fun ~t ->
+     match T.xtype_of_ttype t with
+     | T.Unit -> fun () -> []
+     | T.Bool -> bool
+     | T.Int -> int
+     | T.Float -> float
+     | T.String -> string
+     | T.Option (t, _) -> option (of_type ~t)
+     | T.List (t, _) -> list (of_type ~t)
+     | T.Array (t, _) -> array (of_type ~t)
+     | T.Function _ -> fun _ -> []
+     | T.Sum sum ->
         fun x ->
           let T.Constructor c = T.Sum.constructor sum x in
           begin match T.Constructor.project c x with
@@ -746,25 +747,25 @@ module Shrink = struct
           | Some y ->
               List.map (T.Constructor.inject c) (of_type ~t:(T.Constructor.ttype c) y)
           end
-    | T.Tuple r ->
+     | T.Tuple r ->
         shrink_record r
-    | T.Record r ->
+     | T.Record r ->
         shrink_record r
-    | T.Lazy (t, _) ->
+     | T.Lazy (t, _) ->
         lazy_ (of_type ~t)
-    | T.Prop (_, t, _) ->
+     | T.Prop (_, t, _) ->
         of_type ~t
-    | T.Abstract _ ->
+     | T.Abstract _ ->
         (fun _ -> [])
-    | T.Object _ ->
+     | T.Object _ ->
         (fun _ -> [])
-    | T.Char ->
+     | T.Char ->
         (fun _ -> [])
-    | T.Nativeint ->
+     | T.Nativeint ->
         (fun _ -> [])
-    | T.Int32 ->
+     | T.Int32 ->
         (fun _ -> [])
-    | T.Int64 ->
+     | T.Int64 ->
         (fun _ -> []) *)
 end
 
@@ -794,31 +795,31 @@ let test num ~seed ?name ~generator ?(depthmax=depthmax) ?shrink prop =
     else
       let state, x = run len state generator in
       let prop_holds, backtrace_opt, prop =
-         try
-           let r = prop x in
-           r, None, prop
-         with e ->
-           let backtrace = Printf.sprintf "%s\n%s" (Printexc.to_string e) (Printexc.get_backtrace ()) in
-           false, Some backtrace, fun x -> try prop x with _ -> false
+        try
+          let r = prop x in
+          r, None, prop
+        with e ->
+          let backtrace = Printf.sprintf "%s\n%s" (Printexc.to_string e) (Printexc.get_backtrace ()) in
+          false, Some backtrace, fun x -> try prop x with _ -> false
       in
       if prop_holds then
         go (n-1) state
-       else begin
-         let test_case, shrink_count =
-           match shrink with
-           | Some f ->
-               let x', n = minimize prop f x 0 in
-               x', Some n
-           | None ->
-               x, None
-         in
-         let _ = prop test_case in (* To print debug output a last time. *)
-         match backtrace_opt with
-         | Some backtrace ->
-             Throw {name; test_run = num-n+1; seed; test_case; shrink_count; backtrace}
-         | None ->
-             Fail {name; test_run = num-n+1; seed; test_case; shrink_count}
-       end
+      else begin
+        let test_case, shrink_count =
+          match shrink with
+          | Some f ->
+            let x', n = minimize prop f x 0 in
+            x', Some n
+          | None ->
+            x, None
+        in
+        let _ = prop test_case in (* To print debug output a last time. *)
+        match backtrace_opt with
+        | Some backtrace ->
+          Throw {name; test_run = num-n+1; seed; test_case; shrink_count; backtrace}
+        | None ->
+          Fail {name; test_run = num-n+1; seed; test_case; shrink_count}
+      end
   in
   go num state
 
