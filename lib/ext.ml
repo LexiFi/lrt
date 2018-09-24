@@ -177,5 +177,16 @@ module String = struct
   end
 end
 
+module Option_ = struct
+  let map f = function
+    | None -> None
+    | Some x -> Some (f x)
+
+  let value_exn = function
+    | None -> raise (Invalid_argument "Expected Some, got None")
+    | Some x -> x
+end
+
 module List = List_
 module Array = Array_
+module Option = Option_

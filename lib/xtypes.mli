@@ -111,6 +111,13 @@ module Read : sig
     ('a, 'b) regular_constructor -> ('b, 'c) element -> 'a -> 'c option
   val inlined_constructor :
     ('a, 'b) inlined_constructor -> ('b, 'c) element -> 'a -> 'c option
+
+  val map_tuple : 'a tuple -> (dynamic -> 'b) -> 'a -> 'b list
+  val map_record : 'a record -> (name:string -> dynamic -> 'b) -> 'a -> 'b list
+  val map_regular : ('a, 'b) regular_constructor ->
+    (dynamic -> 'c) -> 'a -> 'c list
+  val map_inlined : ('a, 'b) inlined_constructor ->
+    (name:string -> dynamic -> 'c) -> 'a -> 'c list
 end
 (** Read values from tuples, records and constructors. *)
 

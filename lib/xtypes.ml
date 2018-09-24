@@ -359,6 +359,25 @@ module Read = struct
     fun c el -> cast (match c.ic_repr with
       | Tag tag -> checked tag el.nth
       | Unboxed -> fun o -> Some (Obj.repr o))
+
+  let map_tuple tup f x =
+    let mapf (Field e) = f (Dyn (e.typ.t, tuple tup e x)) in
+    List.map mapf tup.t_flds
+
+  let map_record r f x =
+    let mapf ((name,_), Field e) = f ~name (Dyn (e.typ.t, record r e x)) in
+    List.map mapf r.r_flds
+
+  let map_regular c f x =
+    let mapf (Field e) =
+      f (Dyn (e.typ.t, Ext.Option.value_exn (regular_constructor c e x))) in
+    List.map mapf c.rc_flds
+
+  let map_inlined c f x =
+    let mapf ((name,_), Field e) =
+      f ~name (Dyn (e.typ.t, Ext.Option.value_exn (inlined_constructor c e x)))
+    in
+    List.map mapf c.ic_flds
 end
 
 (* fast lookup for named elements *)
