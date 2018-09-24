@@ -41,23 +41,35 @@ let%expect_test _ =
   f [%path? [A b; ([],_); [1]]];
   f [%path? [A b; ([],_); [1]; [|2|]]];
   [%expect {|
+    [%path? []]
     (t =
        | A of
         (t.A =
            {
              b: (int array list * string);
            }))
-    A{b = ([[|0; 1|]; [|0; 1; 2|]; [|0|]], "string")}
-    .A
-    {b = ([[|0; 1|]; [|0; 1; 2|]; [|0|]], "string")}
-    .A.b
+    A {b = ([[|0; 1|]; [|0; 1; 2|]; [|0|]], "string")}
+    ----------------
+    [%path? [A b]]
+    (int array list * string)
     ([[|0; 1|]; [|0; 1; 2|]; [|0|]], "string")
-    .A.b.(0)
+    ----------------
+    [%path? [A b; ([],_)]]
+    int array list
     [[|0; 1|]; [|0; 1; 2|]; [|0|]]
-    .A.b.(0).[1]
+    ----------------
+    [%path? [A b; (_,[])]]
+    string
+    "string"
+    ----------------
+    [%path? [A b; ([],_); [1]]]
+    int array
     [|0; 1; 2|]
-    .A.b.(0).[1].[|2|]
-    2 |}]
+    ----------------
+    [%path? [A b; ([],_); [1]; [|2|]]]
+    int
+    2
+    ---------------- |}]
 
 type y = Int of int | Bool of bool | Pair of int * string
 type z = Y of {y1: y; y2: y; y3: y}
@@ -226,4 +238,4 @@ let%expect_test _ =
     41
     "types"
     false
-    .e.[|2|] |}]
+    Valid path |}]

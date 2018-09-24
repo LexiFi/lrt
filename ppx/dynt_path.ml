@@ -124,7 +124,7 @@ let rec expand_step ~loc x =
     [%expr
       let get x = begin [@ocaml.warning "-11"]
           match x with [%p  c] -> Some [%e get] | _ -> None end
-      and set x y = begin [@ocaml.warning "-11"]
+      and set x y = begin [@ocaml.warning "-11"][@ocaml.warning "-23"]
           match x with [%p  c] -> Some [%e set] | _ -> None end
       in
       ({ get ; set }, constructor_inline

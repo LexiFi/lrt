@@ -127,145 +127,147 @@ let pp_may_right_paren ppf parens =
 let pp_par_when_neg ppf abs print x =
   let open Format in
   if abs x <> x then begin
-    pp_print_char ppf '('; print x; pp_print_char ppf ')'
+    pp_print_char ppf '('; print ppf x; pp_print_char ppf ')'
   end else
-    print x
+    print ppf x
+
+let pp_print_int32 ppf x = Format.pp_print_string ppf (Int32.to_string x)
+let pp_print_int64 ppf x = Format.pp_print_string ppf (Int64.to_string x)
+let pp_print_nativeint ppf x =
+  Format.pp_print_string ppf (Nativeint.to_string x)
 
 let assert_some = function Some x -> x | None -> assert false
 
-let print_dynamic ppf (t, x) =
+let print_dynamic fmt (t, x) =
   let open Format in
   let open Xtypes in
-  let rec print_dynamic : type t. t ttype -> bool -> t -> unit =
+  let rec print_list : type a. pre:_ -> pst:_ -> sep:_ ->
+    (a -> unit) -> a list -> unit =
+    fun ~pre ~pst ~sep print_el lst ->
+      let rec f = function
+        | [] -> ()
+        | [e] -> print_el e
+        | e :: rest ->
+          print_el e;
+          pp_print_string fmt sep;
+          pp_print_space fmt ();
+          f rest
+      in
+      pp_print_string fmt pre; f lst; pp_print_string fmt pst;
+  and print_dynamic : type t. t ttype -> bool -> t -> unit =
     fun t parens x ->
       match xtype_of_ttype t with
-      | Unit -> pp_print_string ppf "()"
-      | Bool -> pp_print_bool ppf x
-      | Char -> pp_print_char ppf x
-      | Int -> pp_par_when_neg ppf abs (pp_print_int ppf) x
-      | Int32 -> pp_par_when_neg ppf Int32.abs (fun x ->
-          pp_print_string ppf (Int32.to_string x)) x
-      | Int64 -> pp_par_when_neg ppf Int64.abs (fun x ->
-          pp_print_string ppf (Int64.to_string x)) x
-      | Nativeint -> pp_par_when_neg ppf Nativeint.abs (fun x ->
-          pp_print_string ppf (Nativeint.to_string x)) x
-      | Float -> pp_par_when_neg ppf Float.abs (fun x ->
-          pp_print_string ppf (Float.to_string x)) x
-      | String -> pp_print_char ppf '\"';
-        pp_print_string ppf (String.escaped x); pp_print_char ppf '\"'
-      (* | Date -> pp_print_string ppf (string_of_date x) *)
+      | Unit -> pp_print_string fmt "()"
+      | Bool -> pp_print_bool fmt x
+      | Char -> pp_print_char fmt x
+      | Int -> pp_par_when_neg fmt abs pp_print_int x
+      | Int32 -> pp_par_when_neg fmt Int32.abs pp_print_int32 x
+      | Int64 -> pp_par_when_neg fmt Int64.abs pp_print_int64 x
+      | Nativeint -> pp_par_when_neg fmt Nativeint.abs pp_print_nativeint x
+      | Float -> pp_par_when_neg fmt Float.abs pp_print_float x
+      | String ->
+        pp_print_char fmt '\"';
+        pp_print_string fmt (String.escaped x);
+        pp_print_char fmt '\"'
       | Option {t;_} -> begin
           match x with
-          | None -> pp_print_string ppf "None"
+          | None -> pp_print_string fmt "None"
           | Some next_x ->
-            pp_may_left_paren ppf parens;
-            pp_print_string ppf "Some"; pp_print_space ppf ();
+            pp_may_left_paren fmt parens;
+            pp_print_string fmt "Some";
+            pp_print_space fmt ();
             print_dynamic t true next_x ;
-            pp_may_right_paren ppf parens
+            pp_may_right_paren fmt parens
         end
-      | List _ when x = [] -> pp_print_string ppf "[]"
+      | List _ when x = [] -> pp_print_string fmt "[]"
       | List {t;_} ->
-        let rec p_list = function
-          | [] -> ()
-          | [e] -> print_dynamic t false e
-          | e :: rest ->
-            print_dynamic t false e; pp_print_char ppf ';';
-            pp_print_space ppf (); p_list rest
-        in
-        pp_open_box ppf 1; pp_print_char ppf '['; p_list x;
-        pp_print_char ppf ']'; pp_close_box ppf ()
+        pp_open_box fmt 2;
+        print_list ~pre:"[" ~sep:";" ~pst:"]" (print_dynamic t false) x;
+        pp_close_box fmt ()
       | Array {t;_} ->
-        pp_open_box ppf 2; pp_print_string ppf "[|";
+        pp_open_box fmt 2; pp_print_string fmt "[|";
         for i = 0 to Array.length x - 1 do
-          if i > 0 then begin pp_print_char ppf ';'; pp_print_space ppf () end;
+          if i > 0 then begin pp_print_char fmt ';'; pp_print_space fmt () end;
           print_dynamic t false x.(i)
         done;
-        pp_print_string ppf "|]"; pp_close_box ppf ()
+        pp_print_string fmt "|]"; pp_close_box fmt ()
       | Tuple tup ->
-        let rec pr i = function
-          | [] -> ()
-          | Field hd :: tl ->
-            if i > 0 then
-              begin pp_print_char ppf ','; pp_print_space ppf () end;
-            print_dynamic hd.typ.t false (Read.tuple tup hd x) ;
-            pr (i+1) tl
+        let print_el (Field e) =
+          print_dynamic e.typ.t false (Read.tuple tup e x)
         in
-        pp_open_box ppf 1; pp_print_char ppf '('; pr 0 tup.t_flds;
-        pp_print_char ppf ')'; pp_close_box ppf ()
+        pp_open_box fmt 1;
+        print_list ~pre:"(" ~sep:"," ~pst:")" print_el tup.t_flds;
+        pp_close_box fmt ()
       | Record r->
-        let rec pr i = function
-          | [] -> ()
-          | ((name,_), Field f) :: tl ->
-            if i > 0 then
-              begin pp_print_char ppf ';'; pp_print_space ppf () end;
-            pp_open_box ppf 1;
-            pp_print_string ppf name; pp_print_string ppf " =";
-            pp_print_space ppf ();
-            print_dynamic f.typ.t false (Read.record r f x);
-            pp_close_box ppf ();
-            pr (i+1) tl
+        let print_el ((name,_), Field e) =
+          pp_open_box fmt 1;
+          pp_print_string fmt name; pp_print_string fmt " =";
+          pp_print_space fmt ();
+          print_dynamic e.typ.t false (Read.record r e x);
+          pp_close_box fmt ();
         in
-        pp_open_hvbox ppf 1; pp_print_char ppf '{'; pr 0 r.r_flds;
-        pp_print_char ppf '}'; pp_close_box ppf ()
+        pp_open_hvbox fmt 1;
+        print_list ~pre:"{" ~sep:";" ~pst:"}" print_el r.r_flds;
+        pp_close_box fmt ()
       | Sum s ->
-        pp_may_left_paren ppf parens;
+        pp_may_left_paren fmt parens;
         ( match constructor_by_value s x with
-          (* TODO: share code with tuple/record *)
-          | Constant c -> pp_print_string ppf (fst c.cc_label);
-          | Inlined c ->
-            pp_print_cut ppf () ;
-            pp_print_string ppf (fst c.ic_label) ;
-            let rec pr i = function
-              | [] -> ()
-              | ((name,_), Field f) :: tl ->
-                if i > 0 then
-                  begin pp_print_char ppf ';'; pp_print_space ppf () end;
-                pp_open_box ppf 1;
-                pp_print_string ppf name; pp_print_string ppf " =";
-                pp_print_space ppf ();
-                print_dynamic f.typ.t false (
-                  Read.inlined_constructor c f x |> assert_some );
-                pp_close_box ppf ();
-                pr (i+1) tl
-            in
-            pp_open_hvbox ppf 1; pp_print_char ppf '{'; pr 0 c.ic_flds;
-            pp_print_char ppf '}'; pp_close_box ppf ()
+          | Constant c -> pp_print_string fmt (fst c.cc_label);
+          | Regular ({rc_flds=[Field e];_} as c)->
+            pp_open_box fmt 1;
+            pp_print_string fmt (fst c.rc_label);
+            pp_print_space fmt () ;
+            print_dynamic e.typ.t true (
+              Read.regular_constructor c e x |> assert_some );
+            pp_close_box fmt ()
           | Regular c ->
-            pp_print_cut ppf () ;
-            pp_print_string ppf (fst c.rc_label);
-            let rec pr i = function
-              | [] -> ()
-              | Field hd :: tl ->
-                if i > 0 then
-                  begin pp_print_char ppf ','; pp_print_space ppf () end;
-                print_dynamic hd.typ.t false (
-                  Read.regular_constructor c hd x |> assert_some ) ;
-                pr (i+1) tl
+            let print_el (Field e) =
+              pp_open_box fmt 1;
+              print_dynamic e.typ.t false (
+                Read.regular_constructor c e x |> assert_some );
+              pp_close_box fmt ();
             in
-            pp_open_box ppf 1; pp_print_char ppf '('; pr 0 c.rc_flds;
-            pp_print_char ppf ')'; pp_close_box ppf ()
+            pp_open_box fmt 1;
+            pp_print_string fmt (fst c.rc_label);
+            pp_print_space fmt () ;
+            print_list ~pre:"(" ~sep:"," ~pst:")" print_el c.rc_flds;
+            pp_close_box fmt ()
+          | Inlined c ->
+            let print_el ((name,_), Field e) =
+              pp_open_box fmt 1;
+              pp_print_string fmt name; pp_print_string fmt " =";
+              pp_print_space fmt ();
+              print_dynamic e.typ.t false (
+                Read.inlined_constructor c e x |> assert_some );
+              pp_close_box fmt ();
+            in
+            pp_open_hvbox fmt 1;
+            pp_print_string fmt (fst c.ic_label) ;
+            pp_print_space fmt () ;
+            print_list ~pre:"{" ~sep:";" ~pst:"}" print_el c.ic_flds;
+            pp_close_box fmt ()
         ) ;
-        pp_may_right_paren ppf parens
+        pp_may_right_paren fmt parens
       | Lazy {t;_} ->
-        pp_may_left_paren ppf parens;
-        pp_print_string ppf "lazy ";
+        pp_may_left_paren fmt parens;
+        pp_print_string fmt "lazy ";
         begin match (Lazy.force x) with
           | exception exn ->
-            pp_print_string ppf "(raise ";
-            pp_print_string ppf (Printexc.to_string exn);
-            pp_print_char ppf ')'
+            pp_print_string fmt "(raise ";
+            pp_print_string fmt (Printexc.to_string exn);
+            pp_print_char fmt ')'
           | x -> print_dynamic t true x
         end;
-        pp_may_right_paren ppf parens
-      | Function _ -> pp_print_string ppf "<fun>"
-      | Object _ -> pp_print_string ppf "<object>"
+        pp_may_right_paren fmt parens
+      | Function _ -> pp_print_string fmt "<fun>"
+      | Object _ -> pp_print_string fmt "<object>"
       | Prop (_, {t;_}) -> print_dynamic t parens x
       | Abstract (name, _) ->
         let rec use_first = function
           | [] ->
-            pp_print_string ppf "<abstract: ";
-            pp_print_string ppf name;
-            pp_print_string ppf ">";
+            pp_print_string fmt "<abstract: ";
+            pp_print_string fmt name;
+            pp_print_string fmt ">";
           | hd :: tl -> begin
               match hd with
               | Zero m -> begin
@@ -273,7 +275,7 @@ let print_dynamic ppf (t, x) =
                   match T.is_t t with
                   | None -> use_first tl
                   | Some (T.Is TypEq.Eq) ->
-                    T.printer ppf x
+                    T.printer fmt x
                 end
               | One m -> begin
                   let module T = (val m) in
@@ -281,7 +283,7 @@ let print_dynamic ppf (t, x) =
                   | None -> use_first tl
                   | Some (T.Is (t, TypEq.Eq)) ->
                     let pr x = print_dynamic t false x in
-                    let printer = T.printer ppf pr in
+                    let printer = T.printer fmt pr in
                     printer x
                 end
               | Two m -> begin
@@ -291,14 +293,14 @@ let print_dynamic ppf (t, x) =
                   | Some (T.Is (t1, t2, TypEq.Eq)) ->
                     let pr1 x = print_dynamic t1 false x in
                     let pr2 x = print_dynamic t2 false x in
-                    let printer = T.printer ppf pr1 pr2 in
+                    let printer = T.printer fmt pr1 pr2 in
                     printer x
                 end
             end
         in
-        pp_open_box ppf 0;
+        pp_open_box fmt 0;
         use_first (Hashtbl.find_all abstract_printers name) ;
-        pp_close_box ppf ()
+        pp_close_box fmt ()
   in
   print_dynamic t false x
 
@@ -384,7 +386,7 @@ module Test = struct
     [1; 2; 3]
     [|"a"; "b"; "c"|]
     [("a", 5); ("b", 7); ("c", 13)]
-    (Tpl(0, 0), Atm 0)
+    (Tpl (0, 0), Atm 0)
     42
     43 |}]
 

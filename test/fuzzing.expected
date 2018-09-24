@@ -132,7 +132,7 @@ Type: (string
                 });
            })))
 Value: ("TRO", ([(-4); 1; 2; (-1)], true, Some 4), (-8),
-        ((-6), ((-1), [OLLLLLL(0.372465454042, false)], false, "Q"),
+        ((-6), ((-1), [OLLLLLL (0.372465454042, false)], false, "Q"),
          {m5555 = "NJ";
           k11111 = "MO";
           ljjj = 1.80609724671;
@@ -148,7 +148,7 @@ Type: (m =
              {
                r5: bool;
              })) option array
-Value: [|Some (Oqq{r5 = false})|]
+Value: [|Some (Oqq {r5 = false})|]
 Type: string
 Value: "JF"
 Type: (hooqnjp =
@@ -167,7 +167,7 @@ Type: (j =
          | Ollllll of (int * int)
          | Rqqqqqq of (bool * float)
          | Jmm of (int array * float * int * bool))
-Value: Jmm([|(-2)|], (-3.21997129172), (-2), false)
+Value: Jmm ([|(-2)|], (-3.21997129172), (-2), false)
 Type: float
 Value: 3.49551822245
 Type: bool
@@ -211,8 +211,8 @@ Type: (u =
                i___: string;
              }))
 Value: P______
-        {m_ = K______(0.862855944782, (Some true, ""), "", 0.0678518041968);
-         i___ = "P"}
+        {m_ = K______ (0.862855944782, (Some true, ""), "", 0.0678518041968);
+        i___ = "P"}
 Type: int
 Value: 5
 Type: bool option
@@ -269,9 +269,8 @@ Type: bool option
 Value: None
 Type: (idffpywivr =
          | H000000 of (bool * string * bool * float array * int * bool * float * string * unit))
-Value: H000000
-        (true, "PS", true, [|1.76102723368; 2.58578483574|], (-1), false,
-         3.64284520596, "R", ())
+Value: H000000 (true, "PS", true, [|1.76102723368; 2.58578483574|], (-1),
+        false, 3.64284520596, "R", ())
 Type: string
 Value: ""
 Type: int
