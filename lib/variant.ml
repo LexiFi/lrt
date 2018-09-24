@@ -1,5 +1,5 @@
 open Dynt_core.Ttype
-open Xtypes
+open Xtype
 
 type t =
   | Unit

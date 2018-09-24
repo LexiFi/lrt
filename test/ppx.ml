@@ -670,7 +670,7 @@ module FloatRecord = struct
 
   let test ttype gx gy =
     let _ = Random.self_init () in
-    let fpaths = Xtypes.all_paths ttype float_t in
+    let fpaths = Xtype.all_paths ttype float_t in
     let geti i t =
       let lens = Path.lens (List.nth fpaths i) in
       match lens.get t with
@@ -708,7 +708,7 @@ module Unboxed = struct
 
   let test root target gf eq =
     let _ = Random.self_init () in
-    let fpaths = Xtypes.all_paths root target in
+    let fpaths = Xtype.all_paths root target in
     let geti i t =
       let lens = Path.lens (List.nth fpaths i) in
       match lens.get t with

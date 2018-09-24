@@ -28,7 +28,7 @@ let assert_some = function
 let%expect_test _ =
   let f p =
     let Path.{get;_} = Path.lens p in
-    let t = Xtypes.project_path t p in
+    let t = Xtype.project_path t p in
     pprint p;
     tprint t;
     get value |> assert_some |> vprint t;
@@ -101,7 +101,7 @@ let%expect_test _ =
 module B1 = struct
   open Dynpath
   open Ttype
-  module Xtypes = Xtypes_depr
+  module Xtype = Xtype_depr
 
   type steps = Internal.step list
   type 'a t = Path : {steps: steps; root: 'a ttype; target: 'b ttype} -> 'a t
@@ -110,49 +110,49 @@ module B1 = struct
     Path {steps=[];root=t;target=t}
 
   let constr name (Path p: 'a t) : 'a t option =
-    match Xtypes.xtype_of_ttype p.target with
+    match Xtype.xtype_of_ttype p.target with
     | Sum s ->
-      let i = Xtypes.Sum.lookup_constructor s name in
+      let i = Xtype.Sum.lookup_constructor s name in
       if i < 0 then None else
-        let Xtypes.Constructor c =
-          Array.get (Xtypes.Sum.constructors s) i
+        let Xtype.Constructor c =
+          Array.get (Xtype.Sum.constructors s) i
         in Some (
-          Path { p with target = Xtypes.Constructor.ttype c
+          Path { p with target = Xtype.Constructor.ttype c
                       ; steps = Internal.Constructor (name, -1) :: p.steps })
     | _ -> None
 
   let field name (Path p: 'a t) : 'a t option =
-    match Xtypes.xtype_of_ttype p.target with
+    match Xtype.xtype_of_ttype p.target with
     | Record r -> begin
-      match Xtypes.Record.find_field r name with
-      | Some (Xtypes.Field f) -> Some (
-          Path { p with target = Xtypes.RecordField.ttype f
+      match Xtype.Record.find_field r name with
+      | Some (Xtype.Field f) -> Some (
+          Path { p with target = Xtype.RecordField.ttype f
                       ; steps = Internal.Field name :: p.steps })
       | None -> None
     end
     | _ -> None
 
   let tuple n (Path p: 'a t) : 'a t option =
-    match Xtypes.xtype_of_ttype p.target with
+    match Xtype.xtype_of_ttype p.target with
     | Tuple r -> begin
-      let fields = Xtypes.Record.fields r in
+      let fields = Xtype.Record.fields r in
       if List.length fields > n then
-        let Xtypes.Field f = List.nth fields n in
-        Some ( Path { p with target = Xtypes.RecordField.ttype f
+        let Xtype.Field f = List.nth fields n in
+        Some ( Path { p with target = Xtype.RecordField.ttype f
                            ; steps = Internal.Tuple_nth n :: p.steps })
       else None
     end
     | _ -> None
 
   let list nth (Path p: 'a t) : 'a t option =
-    match Xtypes.xtype_of_ttype p.target with
+    match Xtype.xtype_of_ttype p.target with
     | List (t,_) -> Some (
           Path { p with target = t
                       ; steps = Internal.List_nth nth :: p.steps })
     | _ -> None
 
   let array nth (Path p: 'a t) : 'a t option =
-    match Xtypes.xtype_of_ttype p.target with
+    match Xtype.xtype_of_ttype p.target with
     | Array (t,_) -> Some (
           Path { p with target = t
                       ; steps = Internal.Array_nth nth :: p.steps })

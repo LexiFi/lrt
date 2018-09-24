@@ -375,10 +375,10 @@ let fields_of_record_fields flds = List.map (function _, f -> f) flds
 
 let is_leaf: type a . a ttype -> bool =
   fun tty ->
-    let open Xtypes in
+    let open Xtype in
     let seen = H.create 12 in
     let replace t = H.replace seen (stype_of_ttype t.t) () in
-    let rec really_loop: type a. a Xtypes.t -> bool =
+    let rec really_loop: type a. a Xtype.t -> bool =
       fun t -> match Lazy.force t.xt with
         | Unit -> true
         | Bool -> true
@@ -397,7 +397,7 @@ let is_leaf: type a . a ttype -> bool =
 
         | Sum sum ->
           replace t;
-          List.for_all Xtypes.(function
+          List.for_all Xtype.(function
               | Constant _ -> true
               | Regular c -> loop_fields c.rc_flds
               | Inlined c -> loop_fields (fields_of_record_fields c.ic_flds)
@@ -411,17 +411,17 @@ let is_leaf: type a . a ttype -> bool =
         | Object _ -> false
         | Abstract _ -> true
 
-    and loop_fields: type a. a Xtypes.field list -> bool =
+    and loop_fields: type a. a Xtype.field list -> bool =
       fun fields ->
         List.for_all
-          ( function Xtypes.Field field -> loop field.typ )
+          ( function Xtype.Field field -> loop field.typ )
           fields
 
-    and loop: type a . a Xtypes.t -> bool =
+    and loop: type a . a Xtype.t -> bool =
       fun t -> not (H.mem seen (stype_of_ttype t.t)) && really_loop t
     in
 
-    loop (Xtypes.t_of_ttype tty)
+    loop (Xtype.t_of_ttype tty)
 
 module Test: sig end = struct
   [@@@warning "-37"]
@@ -450,7 +450,7 @@ module Test: sig end = struct
   let%test _ = is_leaf point_t
 end
 
-type ('a, 'b) mk = ('a Xtypes.Make.t -> unit) -> 'b
+type ('a, 'b) mk = ('a Xtype.Make.t -> unit) -> 'b
 
 let of_type_gen_sized: type a. UGen.t list -> t: a ttype -> int -> a gen =
   fun l ~t sz ->
@@ -458,15 +458,15 @@ let of_type_gen_sized: type a. UGen.t list -> t: a ttype -> int -> a gen =
     let rec of_type_default_sized: type a. t: a ttype -> int -> a gen =
       fun ~t sz ->
         let szp = pred_size sz in
-        let fields: type a b. (a, b) mk -> a Xtypes.field list -> int -> b gen =
+        let fields: type a b. (a, b) mk -> a Xtype.field list -> int -> b gen =
           fun mk tup sz ->
-            let f (Xtypes.Field f) = of_type_sized ~t:(f.typ.t) sz >>=
-              fun x -> return (fun b -> Xtypes.Make.set b f x)
+            let f (Xtype.Field f) = of_type_sized ~t:(f.typ.t) sz >>=
+              fun x -> return (fun b -> Xtype.Make.set b f x)
             in
             list_sequence (List.map f tup) >>= fun l ->
             return (mk (fun b -> List.iter (fun f -> f b) l))
         in
-        match Xtypes.xtype_of_ttype t with
+        match Xtype.xtype_of_ttype t with
         | Unit -> unit
         | Bool -> bool
         | Int -> int_of_size szp
@@ -476,11 +476,11 @@ let of_type_gen_sized: type a. UGen.t list -> t: a ttype -> int -> a gen =
         | List {t;_} -> list_of_size (sz/2) (of_type_sized ~t szp)
         | Array {t;_} -> array_of_size (sz/2) (of_type_sized ~t szp)
         | Function a -> arrow (of_type_sized ~t:a.res_t.t szp)
-        | Tuple t -> fields (Xtypes.Make.tuple t) t.t_flds szp
-        | Record r -> fields (Xtypes.Make.record r)
+        | Tuple t -> fields (Xtype.Make.tuple t) t.t_flds szp
+        | Record r -> fields (Xtype.Make.record r)
                         (fields_of_record_fields r.r_flds) szp
         | Sum sum ->
-          let open Xtypes in
+          let open Xtype in
           let f (type a) (c : a constructor) : a gen Lazy.t option =
             if sz > 0 || is_leaf t
             then Some (lazy (match c with
@@ -706,13 +706,13 @@ module Shrink = struct
 
   (* Shrinking MLFi-specific types. *)
 
-  (* module T = Xtypes
+  (* module T = Xtype
 
      type 's elem = E : 'a list * ('s T.record_builder -> 'a -> unit) -> 's elem
 
      let rec shrink_record: type a. a T.Record.t -> a shrink = fun record x ->
-     let fields = Xtypes.Record.fields record in
-     let make = Xtypes.Record.make record in
+     let fields = Xtype.Record.fields record in
+     let make = Xtype.Record.make record in
      let elems =
       List.map
         (fun (T.Field field) ->

@@ -5,32 +5,32 @@ open Dynt_core.Std
 type 'a printer = 'a -> unit
 
 module type ABSTRACT_PRINTABLE_0 = sig
-  include Xtypes.TYPE_0
+  include Xtype.TYPE_0
   val printer: Format.formatter -> t printer
 end
 
 module type ABSTRACT_PRINTABLE_1 = sig
-  include Xtypes.TYPE_1
+  include Xtype.TYPE_1
   val printer: Format.formatter -> 'a printer -> 'a t printer
 end
 
 module type ABSTRACT_PRINTABLE_2 = sig
-  include Xtypes.TYPE_2
+  include Xtype.TYPE_2
   val printer: Format.formatter -> 'a printer -> 'b printer -> ('a, 'b) t printer
 end
 
 module type PRINTABLE_MATCHER_0 = sig
-  include Xtypes.MATCHER_0
+  include Xtype.MATCHER_0
   val printer: Format.formatter -> t printer
 end
 
 module type PRINTABLE_MATCHER_1 = sig
-  include Xtypes.MATCHER_1
+  include Xtype.MATCHER_1
   val printer: Format.formatter -> 'a printer -> 'a t printer
 end
 
 module type PRINTABLE_MATCHER_2 = sig
-  include Xtypes.MATCHER_2
+  include Xtype.MATCHER_2
   val printer: Format.formatter -> 'a printer -> 'b printer -> ('a, 'b) t printer
 end
 
@@ -43,7 +43,7 @@ let abstract_printers : (string, printable) Hashtbl.t = Hashtbl.create 17
 
 let add_abstract_type_dynamic_print_0 (module P : ABSTRACT_PRINTABLE_0) =
   let module T = struct
-    include Xtypes.Matcher_0(P)
+    include Xtype.Matcher_0(P)
     let printer = P.printer
   end in
   match T.is_abstract with
@@ -54,7 +54,7 @@ let add_abstract_type_dynamic_print_0 (module P : ABSTRACT_PRINTABLE_0) =
 
 let add_abstract_type_dynamic_print_1 (module P : ABSTRACT_PRINTABLE_1) =
   let module T = struct
-    include Xtypes.Matcher_1(P)
+    include Xtype.Matcher_1(P)
     let printer = P.printer
   end in
   match T.is_abstract with
@@ -70,7 +70,7 @@ let add_abstract_type_dynamic_print_1 (module P : ABSTRACT_PRINTABLE_1) =
 
 let add_abstract_type_dynamic_print_2 (module P : ABSTRACT_PRINTABLE_2) =
   let module T = struct
-    include Xtypes.Matcher_2(P)
+    include Xtype.Matcher_2(P)
     let printer = P.printer
   end in
   match T.is_abstract with
@@ -136,11 +136,9 @@ let pp_print_int64 ppf x = Format.pp_print_string ppf (Int64.to_string x)
 let pp_print_nativeint ppf x =
   Format.pp_print_string ppf (Nativeint.to_string x)
 
-let assert_some = function Some x -> x | None -> assert false
-
 let print_dynamic fmt (t, x) =
   let open Format in
-  let open Xtypes in
+  let open Xtype in
   let rec print_list : type a. pre:_ -> pst:_ -> sep:_ ->
     (a -> unit) -> a list -> unit =
     fun ~pre ~pst ~sep print_el lst ->
@@ -218,13 +216,13 @@ let print_dynamic fmt (t, x) =
             pp_print_string fmt (fst c.rc_label);
             pp_print_space fmt () ;
             print_dynamic e.typ.t true (
-              Fields.regular_constructor c e x |> assert_some );
+              Fields.regular_constructor c e x |> Ext.Option.value_exn );
             pp_close_box fmt ()
           | Regular c ->
             let print_el (Field e) =
               pp_open_box fmt 1;
               print_dynamic e.typ.t false (
-                Fields.regular_constructor c e x |> assert_some );
+                Fields.regular_constructor c e x |> Ext.Option.value_exn );
               pp_close_box fmt ();
             in
             pp_open_box fmt 1;
@@ -238,7 +236,7 @@ let print_dynamic fmt (t, x) =
               pp_print_string fmt name; pp_print_string fmt " =";
               pp_print_space fmt ();
               print_dynamic e.typ.t false (
-                Fields.inlined_constructor c e x |> assert_some );
+                Fields.inlined_constructor c e x |> Ext.Option.value_exn );
               pp_close_box fmt ();
             in
             pp_open_hvbox fmt 1;

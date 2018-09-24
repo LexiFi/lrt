@@ -1,12 +1,12 @@
 include Dynt_core
 
-module Xtypes = Xtypes
+module Xtype = Xtype
 module Print = Print
 module Check = Check
 module Variant = Variant
 
 (** deprecated *)
-module Xtypes_depr = Xtypes_depr
+module Xtype_depr = Xtype_depr
 
 (** deprecated *)
 module Dynpath = Dynpath
