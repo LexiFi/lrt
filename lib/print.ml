@@ -193,7 +193,7 @@ let print_dynamic fmt (t, x) =
         pp_print_string fmt "|]"; pp_close_box fmt ()
       | Tuple tup ->
         let print_el (Field e) =
-          print_dynamic e.typ.t false (Read.tuple tup e x)
+          print_dynamic e.typ.t false (Fields.tuple tup e x)
         in
         pp_open_box fmt 1;
         print_list ~pre:"(" ~sep:"," ~pst:")" print_el tup.t_flds;
@@ -203,7 +203,7 @@ let print_dynamic fmt (t, x) =
           pp_open_box fmt 1;
           pp_print_string fmt name; pp_print_string fmt " =";
           pp_print_space fmt ();
-          print_dynamic e.typ.t false (Read.record r e x);
+          print_dynamic e.typ.t false (Fields.record r e x);
           pp_close_box fmt ();
         in
         pp_open_hvbox fmt 1;
@@ -218,13 +218,13 @@ let print_dynamic fmt (t, x) =
             pp_print_string fmt (fst c.rc_label);
             pp_print_space fmt () ;
             print_dynamic e.typ.t true (
-              Read.regular_constructor c e x |> assert_some );
+              Fields.regular_constructor c e x |> assert_some );
             pp_close_box fmt ()
           | Regular c ->
             let print_el (Field e) =
               pp_open_box fmt 1;
               print_dynamic e.typ.t false (
-                Read.regular_constructor c e x |> assert_some );
+                Fields.regular_constructor c e x |> assert_some );
               pp_close_box fmt ();
             in
             pp_open_box fmt 1;
@@ -238,7 +238,7 @@ let print_dynamic fmt (t, x) =
               pp_print_string fmt name; pp_print_string fmt " =";
               pp_print_space fmt ();
               print_dynamic e.typ.t false (
-                Read.inlined_constructor c e x |> assert_some );
+                Fields.inlined_constructor c e x |> assert_some );
               pp_close_box fmt ();
             in
             pp_open_hvbox fmt 1;

@@ -36,16 +36,16 @@ let rec variant: type a. t: a ttype -> a -> t = fun ~t x ->
   | Option {t;_} -> Option (Ext.Option.map (variant ~t) x)
   | Lazy {t;_} -> Lazy (lazy (variant ~t (Lazy.force x)))
   | Tuple tup ->
-    Tuple (Read.map_tuple tup dyn x)
+    Tuple (Fields.map_tuple tup dyn x)
   | Record r ->
-    Record (Read.map_record r dyn_named x)
+    Record (Fields.map_record r dyn_named x)
   | Sum s -> begin match constructor_by_value s x with
       | Constant c -> Constructor (fst c.cc_label, None)
       | Regular c ->
-        let l = Read.map_regular c dyn x in
+        let l = Fields.map_regular c dyn x in
         Constructor (fst c.rc_label, Some (Tuple l))
       | Inlined c ->
-        let l = Read.map_inlined c dyn_named x in
+        let l = Fields.map_inlined c dyn_named x in
         Constructor (fst c.ic_label, Some (Record l))
     end
   | Prop (_, {t;_}) -> variant ~t x

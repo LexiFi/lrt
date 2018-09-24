@@ -104,7 +104,7 @@ val t_of_ttype: 'a ttype -> 'a t
 val get_first_props_xtype: 'a xtype -> stype_properties
 val remove_first_props_xtype: 'a xtype -> 'a xtype
 
-module Read : sig
+module Fields : sig
   val tuple : 'a tuple -> ('a, 'b) element -> 'a -> 'b
   val record : 'a record -> ('a, 'b) element -> 'a -> 'b
   val regular_constructor :

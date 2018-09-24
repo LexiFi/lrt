@@ -330,7 +330,7 @@ let rec remove_first_props_xtype : type t. t xtype -> t xtype = function
   | Prop (_, {xt=lazy xt;_}) -> remove_first_props_xtype xt
   | xt -> xt
 
-module Read = struct
+module Fields = struct
   let check tag o = Obj.is_block o && Obj.tag o = tag
 
   let cast: (Obj.t -> Obj.t) -> 'a -> 'b = Obj.magic
