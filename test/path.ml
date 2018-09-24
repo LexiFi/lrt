@@ -1,5 +1,4 @@
 open Dynt
-module Path = Dynpath
 
 let pprint p =
   Format.(printf "%a\n%!" Path.print p)
@@ -22,18 +21,25 @@ type t =
 
 let value = A { b = [[|0;1|];[|0;1;2|];[|0|]], "string" }
 
+let assert_some = function
+  | Some x -> x
+  | None -> assert false
+
 let%expect_test _ =
-  tprint t; vprint t value;
-  let p1 = Path.Internal.([Constructor ("A",1)]) |> Obj.magic in pprint p1;
-  let t', value' = Path.extract ~t:t p1 value in vprint t' value';
-  let p2 = Path.Internal.(p1 @ [Field "b"]) |> Obj.magic in pprint p2;
-  let t', value' = Path.extract ~t p2 value in vprint t' value';
-  let p3 = Path.Internal.(p2 @ [Tuple_nth 0]) |> Obj.magic in pprint p3;
-  let t', value' = Path.extract ~t p3 value in vprint t' value';
-  let p4 = Path.Internal.(p3 @ [List_nth 1]) |> Obj.magic in pprint p4;
-  let t', value' = Path.extract ~t p4 value in vprint t' value';
-  let p5 = Path.Internal.(p4 @ [Array_nth 2]) |> Obj.magic in pprint p5;
-  let t', value' = Path.extract ~t p5 value in vprint t' value';
+  let f p =
+    let Path.{get;_} = Path.lens p in
+    let t = Xtypes.project_path t p in
+    pprint p;
+    tprint t;
+    get value |> assert_some |> vprint t;
+    print_endline "----------------"
+  in
+  f Path.[];
+  f [%path? [A b]];
+  f [%path? [A b; ([],_)]];
+  f [%path? [A b; (_,[])]];
+  f [%path? [A b; ([],_); [1]]];
+  f [%path? [A b; ([],_); [1]; [|2|]]];
   [%expect {|
     (t =
        | A of
@@ -53,49 +59,35 @@ let%expect_test _ =
     .A.b.(0).[1].[|2|]
     2 |}]
 
-module B0 = struct
-  open Path
-  open Ttype
+type y = Int of int | Bool of bool | Pair of int * string
+type z = Y of {y1: y; y2: y; y3: y}
+type x = { x1 : z; x2 : z}
+type r = x * y
+type s = r list
+type f = s array
+type e = { e : f }
 
-  type ('a,'b) t =
-    { root : 'a ttype
-    ; target : 'b ttype
-    ; steps: Internal.step list}
-
-  let r t : ('a, 'a) t =
-    { root = t; target = t; steps = []}
-
-  let l nth (p : ('a,'b list) t) : ('a, 'b) t =
-    match stype_of_ttype p.target with
-    | DT_list s -> { root = p.root
-                   ; target = Obj.magic s
-                   ; steps = List_nth nth :: p.steps }
-    | _ -> assert false
-
-  let a nth (p : ('a,'b array) t) : ('a, 'b) t =
-    match stype_of_ttype p.target with
-    | DT_array s -> { root = p.root
-                    ; target = Obj.magic s
-                    ; steps = Array_nth nth :: p.steps }
-    | _ -> assert false
-
-  let e (p : ('a, 'b) t) : ('a,'b, _) Path.t =
-    Obj.magic (List.rev p.steps)
-
-end
-
-type ial = int array list [@@deriving t]
-let ial = [[||];[|1|];[|2;0;1|]]
+let p = [%path? [e; [|50|]; [1]; ([],_); x1; Y y2; Pair (_,[])]]
 
 let%expect_test _ =
-  let p = B0.(r ial_t |> l 2 |> a 0 |> e) in pprint p;
-  let t', value' = Path.extract ~t:ial_t p ial in vprint t' value';
+  pprint p;
+  [%expect {| [%path? [e; [|50|]; [1]; ([],_); x1; Y y2; Pair (_,[])]] |}]
+
+let value = [| ["hey"; "hi"] |]
+let p2 = [%path? [[|0|]; [1]]]
+let l2 = Dynt.Path.lens p2
+
+let%expect_test _ =
+  print_endline (l2.get value |> assert_some);
+  print_endline (l2.set value "salut" |> assert_some |> l2.get |> assert_some);
   [%expect {|
-    .[2].[|0|]
-    2 |}]
+    hi
+    salut |}]
+
+(* The following stuff was an experiment before implementing the path ppx *)
 
 module B1 = struct
-  open Path
+  open Dynpath
   open Ttype
   module Xtypes = Xtypes_depr
 
@@ -155,12 +147,12 @@ module B1 = struct
     | _ -> None
 
   let get (Path p : 'a t) (x : 'a) : dynamic option =
-    match Path.extract ~t:p.root (Obj.magic (List.rev p.steps)) x with
+    match extract ~t:p.root (Obj.magic (List.rev p.steps)) x with
     | _, value -> Some (Dyn (p.target, value))
     | exception (Failure _) -> None
 
   let close (target: 'b ttype) (Path p : 'a t)
-    : ('a, 'b, _) Path.t option =
+    : ('a, 'b, _) Dynpath.t option =
     match ttypes_equality_modulo_props target p.target with
     | Some _ -> Some (Obj.magic (List.rev p.steps))
     | None -> None
@@ -224,7 +216,7 @@ let%expect_test _ =
   xprint B1.(record_t >> field "e" |>> array 2) record ;
   let () =
     match B1.(record_t >> field "e" |>> array 2 ||> bool_t) with
-    | Some p -> pprint p
+    | Some _ -> print_endline "Valid path"
     | None -> print_endline "Invalid Path"
   in
   [%expect {|
@@ -235,32 +227,3 @@ let%expect_test _ =
     "types"
     false
     .e.[|2|] |}]
-
-type y = Int of int | Bool of bool | Pair of int * string
-type z = Y of {y1: y; y2: y; y3: y}
-type x = { x1 : z; x2 : z}
-type r = x * y
-type s = r list
-type f = s array
-type e = { e : f }
-
-let p = [%path? [e; [|50|]; [1]; ([],_); x1; Y y2; Pair (_,[])]]
-
-let%expect_test _ =
-  Format.printf "%a\n%!" Dynt.Path.print p;
-  [%expect {| [%path? [e; [|50|]; [1]; ([],_); x1; Y y2; Pair (_,[])]] |}]
-
-let value = [| ["hey"; "hi"] |]
-let p2 = [%path? [[|0|]; [1]]]
-let l2 = Dynt.Path.lens p2
-
-let assert_some = function
-  | Some x -> x
-  | None -> assert false
-
-let%expect_test _ =
-  print_endline (l2.get value |> assert_some);
-  print_endline (l2.set value "salut" |> assert_some |> l2.get |> assert_some);
-  [%expect {|
-    hi
-    salut |}]
