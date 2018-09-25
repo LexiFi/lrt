@@ -124,10 +124,9 @@ let pp_may_right_paren ppf parens =
   if parens then Format.pp_print_char ppf ')';
   Format.pp_close_box ppf ()
 
-let pp_par_when_neg ppf abs print x =
-  let open Format in
+let pp_par_when_neg ppf parens abs print x =
   if abs x <> x then begin
-    pp_print_char ppf '('; print ppf x; pp_print_char ppf ')'
+    pp_may_left_paren ppf parens; print ppf x; pp_may_right_paren ppf parens
   end else
     print ppf x
 
@@ -158,11 +157,12 @@ let print_dynamic fmt (t, x) =
       | Unit -> pp_print_string fmt "()"
       | Bool -> pp_print_bool fmt x
       | Char -> pp_print_char fmt x
-      | Int -> pp_par_when_neg fmt abs pp_print_int x
-      | Int32 -> pp_par_when_neg fmt Int32.abs pp_print_int32 x
-      | Int64 -> pp_par_when_neg fmt Int64.abs pp_print_int64 x
-      | Nativeint -> pp_par_when_neg fmt Nativeint.abs pp_print_nativeint x
-      | Float -> pp_par_when_neg fmt abs_float pp_print_float x
+      | Int -> pp_par_when_neg fmt parens abs pp_print_int x
+      | Int32 -> pp_par_when_neg fmt parens Int32.abs pp_print_int32 x
+      | Int64 -> pp_par_when_neg fmt parens Int64.abs pp_print_int64 x
+      | Float -> pp_par_when_neg fmt parens abs_float pp_print_float x
+      | Nativeint ->
+        pp_par_when_neg fmt parens Nativeint.abs pp_print_nativeint x
       | String ->
         pp_print_char fmt '\"';
         pp_print_string fmt (String.escaped x);
@@ -376,7 +376,7 @@ module Test = struct
     show nativeint_t (Nativeint.of_int 43);
     [%expect {|
     ()
-    (-2)
+    -2
     40
     41
     "a string"
