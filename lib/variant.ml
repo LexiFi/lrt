@@ -142,4 +142,3 @@ let rec of_variant: type a. t: a ttype -> t -> a = fun ~t v ->
     raise (Bad_type_for_variant (stype_of_ttype t, v, "type value mismatch"))
   | Sum _, _ ->
     raise (Bad_type_for_variant (stype_of_ttype t, v, "type value mismatch"))
-
