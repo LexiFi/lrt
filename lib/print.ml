@@ -162,7 +162,7 @@ let print_dynamic fmt (t, x) =
       | Int32 -> pp_par_when_neg fmt Int32.abs pp_print_int32 x
       | Int64 -> pp_par_when_neg fmt Int64.abs pp_print_int64 x
       | Nativeint -> pp_par_when_neg fmt Nativeint.abs pp_print_nativeint x
-      | Float -> pp_par_when_neg fmt Float.abs pp_print_float x
+      | Float -> pp_par_when_neg fmt abs_float pp_print_float x
       | String ->
         pp_print_char fmt '\"';
         pp_print_string fmt (String.escaped x);

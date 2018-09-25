@@ -22,8 +22,8 @@ and 'a xtype = private
   | Int32: int32 xtype
   | Int64: int64 xtype
   | Nativeint: nativeint xtype
-  | Option: 'b t -> 'b option xtype
   | List: 'b t -> 'b list xtype
+  | Option: 'b t -> 'b option xtype
   | Array: 'b t -> 'b array xtype
   | Lazy: 'b t -> 'b Lazy.t xtype
   | Tuple: 'a tuple -> 'a xtype

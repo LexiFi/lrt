@@ -466,6 +466,7 @@ let of_type_gen_sized: type a. UGen.t list -> t: a ttype -> int -> a gen =
             list_sequence (List.map f tup) >>= fun l ->
             return (mk (fun b -> List.iter (fun f -> f b) l))
         in
+        let open Xtype in
         match Xtype.xtype_of_ttype t with
         | Unit -> unit
         | Bool -> bool

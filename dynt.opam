@@ -6,6 +6,12 @@ homepage: ""
 bug-reports: ""
 dev-repo: ""
 license: "MIT"
+depends: [
+  "inspect" { with-test }
+  "ppx_expect" { build | with-test }
+  "dune"   { build }
+  "ppxlib" { build }
+]
 build: [
-  ["dune" "build" "-j" jobs "@install"]
+  ["dune" "build" "-p" name "-j" jobs]
 ]

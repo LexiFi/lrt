@@ -20,8 +20,8 @@ and 'a xtype =
   | Int32: int32 xtype
   | Int64: int64 xtype
   | Nativeint: nativeint xtype
-  | Option: 'b t -> 'b option xtype
   | List: 'b t -> 'b list xtype
+  | Option: 'b t -> 'b option xtype
   | Array: 'b t -> 'b array xtype
   | Lazy: 'b t -> 'b Lazy.t xtype
   | Tuple: 'a tuple -> 'a xtype
@@ -613,7 +613,7 @@ let assert_some = function
 let cast : type a b. a t -> b ttype = fun t -> Obj.magic t.t
 
 let rec project_path : type a b. a ttype -> (a,b) Path.t -> b ttype =
-  fun t -> function
+  fun t -> let open Path in function
     | [] -> t
     | (_, meta) :: tl ->
       let t = match meta, xtype_of_ttype t with

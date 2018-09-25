@@ -3,4 +3,4 @@
   (synopsis "Dynamic Types")
   (libraries dynt_core)
   (inline_tests)
-  (preprocess (pps ppx_expect ppx_inline_test dynt.deriving)))
+  (preprocess (pps ppx_expect dynt.deriving)))

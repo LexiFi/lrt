@@ -4,7 +4,7 @@ open Check
 (* Generate random ttypes with random witnesses and throw them at our
    printing function *)
 
-let f : Ttype.dynamic -> bool = function Dyn (t,x) ->
+let f : Ttype.dynamic -> bool = function Ttype.Dyn (t,x) ->
   let () =
     Format.printf "Type: %a\n%!"
       Stype.print_stype (Ttype.stype_of_ttype t) ;

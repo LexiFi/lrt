@@ -1,4 +1,10 @@
 open Dynt
+(*
+type id = int -> int [@@deriving t]
+let fn :id = fun x -> x
+let _ =
+  Format.printf "%a\n%!" Stype.print_stype (Ttype.stype_of_ttype id_t);
+  Print.show ~t:Variant.t (Variant.variant ~t:id_t fn) *)
 
 let pprint p =
   Format.(printf "%a\n%!" Path.print p)
@@ -111,7 +117,7 @@ module B1 = struct
 
   let constr name (Path p: 'a t) : 'a t option =
     match Xtype.xtype_of_ttype p.target with
-    | Sum s ->
+    | Xtype.Sum s ->
       let i = Xtype.Sum.lookup_constructor s name in
       if i < 0 then None else
         let Xtype.Constructor c =
@@ -123,7 +129,7 @@ module B1 = struct
 
   let field name (Path p: 'a t) : 'a t option =
     match Xtype.xtype_of_ttype p.target with
-    | Record r -> begin
+    | Xtype.Record r -> begin
       match Xtype.Record.find_field r name with
       | Some (Xtype.Field f) -> Some (
           Path { p with target = Xtype.RecordField.ttype f
@@ -134,7 +140,7 @@ module B1 = struct
 
   let tuple n (Path p: 'a t) : 'a t option =
     match Xtype.xtype_of_ttype p.target with
-    | Tuple r -> begin
+    | Xtype.Tuple r -> begin
       let fields = Xtype.Record.fields r in
       if List.length fields > n then
         let Xtype.Field f = List.nth fields n in
@@ -146,14 +152,14 @@ module B1 = struct
 
   let list nth (Path p: 'a t) : 'a t option =
     match Xtype.xtype_of_ttype p.target with
-    | List (t,_) -> Some (
+    | Xtype.List (t,_) -> Some (
           Path { p with target = t
                       ; steps = Internal.List_nth nth :: p.steps })
     | _ -> None
 
   let array nth (Path p: 'a t) : 'a t option =
     match Xtype.xtype_of_ttype p.target with
-    | Array (t,_) -> Some (
+    | Xtype.Array (t,_) -> Some (
           Path { p with target = t
                       ; steps = Internal.Array_nth nth :: p.steps })
     | _ -> None

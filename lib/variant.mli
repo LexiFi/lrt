@@ -23,6 +23,7 @@ type t =
   | Constructor of string * t option
   | Variant of t
   | Lazy of t Lazy.t
+[@@deriving t]
 
 val variant: t:'a ttype -> 'a -> t
 (**
@@ -39,9 +40,7 @@ val variant: t:'a ttype -> 'a -> t
    variantized.
 *)
 
-(* val check_variantizable: 'a ttype -> unit *)
-
-(* exception Bad_type_for_variant of stype * t * string *)
+exception Bad_type_for_variant of Dynt_core.Stype.stype * t * string
 
 (* val of_variant: t:'a ttype -> t -> 'a *)
 (** Rebuild a typed value from a variant. May raise [Bad_type_for_variant]
@@ -49,6 +48,8 @@ val variant: t:'a ttype -> 'a -> t
     of an abstract type needs to be rebuilt but there is no registered
     de-variantizer.
 *)
+
+(* val check_variantizable: 'a ttype -> unit *)
 
 (* val print_variant: Format.formatter -> t -> unit *)
 (** Print a variant with the syntax of MLFi constants. *)

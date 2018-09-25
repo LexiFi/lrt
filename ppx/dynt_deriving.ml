@@ -307,12 +307,15 @@ let rec core_type ~rec_ ~free ({ ptyp_loc = loc ; _ } as ct) : expression =
                                        [%e rcs r]))]
     | Ptyp_object (l, _closed_flag) ->
       let fields = List.map (function
-            (* TODO properties object fields.
+            (* TODO properties could read for object fields.
              * But where should they be placed?
              * DT_prop (ct)?
              *)
-            ({txt; loc}, _attr, ct) ->
-            pexp_tuple ~loc [estring ~loc txt; rcs ct]) l
+          | Otag ({txt; loc}, _attr, ct) ->
+            pexp_tuple ~loc [estring ~loc txt; rcs ct]
+          | Oinherit _ ->
+            raise_errorf "inheritance not yet supported" ~loc
+        ) l
       in
       [%expr ttype_of_stype (DT_object [%e elist ~loc fields])]
     | Ptyp_alias (ct, _label) -> rc ct

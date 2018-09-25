@@ -679,7 +679,7 @@ module FloatRecord = struct
     in
     let generator = Check.of_type_gen ~size:101 ~t:ttype [] in
     let check a b t =
-      if Float.equal (a t) (b t) then true else begin
+      if compare (a t) (b t) = 0 then true else begin
         Format.eprintf "screwed: a:%f b:%f\n%!" (a t) (b t) ;
         false
       end
@@ -691,7 +691,7 @@ module FloatRecord = struct
     match Check.test 42 ~seed:(Random.bits ()) ~generator property with
     | Succeed _ -> true
     | Fail _ -> Format.eprintf "fail\n%!"; false
-    | Throw _ -> Format.eprintf "throw\n%!"; false
+    | Throw {backtrace;_} -> Format.eprintf "throw\n%s%!" backtrace; false
 
 
   let%test _ = test regular_t (fun t -> t.rgx) (fun t -> t.rgy)
@@ -732,7 +732,7 @@ module Unboxed = struct
     | Throw {backtrace;_} -> Format.eprintf "throw:\n%s%!" backtrace; false
 
   (* nan = nan -> false *)
-  let tfloat t get = test t float_t get Float.equal
+  let tfloat t get = test t float_t get (fun a b -> compare a b = 0)
   let tint t get = test t int_t get (=)
 
   type r1 = { f1 : float } [@@deriving t]

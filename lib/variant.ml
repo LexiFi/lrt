@@ -1,6 +1,8 @@
 open Dynt_core.Ttype
 open Xtype
 
+open Dynt_core.Std
+
 type t =
   | Unit
   | Bool of bool
@@ -18,7 +20,8 @@ type t =
   | Record of (string * t) list
   | Constructor of string * t option
   | Variant of t
-  | Lazy of t Lazy.t
+  | Lazy of (t Lazy.t [@patch lazy_t])
+[@@deriving t]
 
 let rec variant: type a. t: a ttype -> a -> t = fun ~t x ->
   match xtype_of_ttype t with
@@ -51,5 +54,8 @@ let rec variant: type a. t: a ttype -> a -> t = fun ~t x ->
   | Prop (_, {t;_}) -> variant ~t x
   | Object _ -> failwith "Objects cannot be variantized"
   | Abstract _ -> failwith "Abstract values cannot be variantized"
+  | Function _ -> failwith "Functions cannot be variantized"
 and dyn = fun (Dyn (t,x)) -> variant ~t x
 and dyn_named = fun ~name (Dyn (t,x)) -> name, variant ~t x
+
+exception Bad_type_for_variant of Dynt_core.Stype.stype * t * string
