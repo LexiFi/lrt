@@ -4,3 +4,5 @@
   (libraries dynt_core)
   (inline_tests)
   (preprocess (pps ppx_expect dynt.ppx)))
+
+(ocamllex variant_lexer)

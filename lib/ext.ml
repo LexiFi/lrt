@@ -93,6 +93,16 @@ end
 
 module String = struct
 
+  let cut_start i s =
+    let l = String.length s in
+    if l <= i then ""
+    else String.sub s i (l - i)
+
+  let cut_end i s =
+    let l = String.length s in
+    if l <= i then ""
+    else String.sub s 0 (l - i)
+
   module Tbl = struct
     (* TODO: heuristic to delay building the dispatch table until N lookups occured
        (use simple list search before)? *)
