@@ -34,7 +34,7 @@ let f : Ttype.dynamic -> bool =
     let v = Variant.variant ~t x in
     let () =
       Format.printf "Value: %a\n%!" (Print.print ~t) x;
-      Format.printf "Variant: %a\n%!" (Print.print ~t:Variant.t) v
+      Format.printf "Variant: %a\n%!" Variant.print_variant v
     in
     Variant.of_variant ~t v = x
 
