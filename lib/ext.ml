@@ -1,5 +1,17 @@
 module List_ = struct
 
+  let pp_list sep pp ppf = function
+    | [] -> ()
+    | [e] -> pp ppf e
+    | e :: es ->
+      pp ppf e;
+      (* Must be efficient, code specialization. *)
+      match sep with
+      | "" -> List.iter (fun e -> Format.pp_print_space ppf (); pp ppf e) es
+      | "," -> List.iter (fun e -> Format.pp_print_char ppf ','; Format.pp_print_space ppf (); pp ppf e) es
+      | ";" -> List.iter (fun e -> Format.pp_print_char ppf ';'; Format.pp_print_space ppf (); pp ppf e) es
+      | _ -> List.iter (fun e -> Format.pp_print_string ppf sep; Format.pp_print_space ppf (); pp ppf e) es
+
   let rec fst_n acc n = function
     | [] -> List.rev acc, []
     | l when n = 0 -> List.rev acc, l
@@ -52,6 +64,20 @@ module List_ = struct
 end
 
 module Array_ = struct
+
+  let pp_array sep pp ppf es =
+    let open Format in
+    let n = Array.length es in
+    if n > 0 then begin
+      let e = Array.unsafe_get es 0 in
+      pp ppf e;
+      for i = 1 to n - 1 do
+        let e = Array.unsafe_get es i in
+        pp_print_char ppf sep;
+        pp_print_space ppf ();
+        pp ppf e;
+      done
+    end
 
   let map_to_list f t =
     Array.fold_right (fun el acc -> f el :: acc) t []

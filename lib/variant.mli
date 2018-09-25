@@ -51,5 +51,5 @@ val of_variant: t:'a ttype -> t -> 'a
 
 (* val check_variantizable: 'a ttype -> unit *)
 
-(* val print_variant: Format.formatter -> t -> unit *)
+val print_variant: Format.formatter -> t -> unit
 (** Print a variant with the syntax of MLFi constants. *)

@@ -142,3 +142,65 @@ let rec of_variant: type a. t: a ttype -> t -> a = fun ~t v ->
     raise (Bad_type_for_variant (stype_of_ttype t, v, "type value mismatch"))
   | Sum _, _ ->
     raise (Bad_type_for_variant (stype_of_ttype t, v, "type value mismatch"))
+
+let pp_may_left_paren ppf parens = if parens then begin Format.pp_open_box ppf 1; Format.pp_print_char ppf '(' end else Format.pp_open_box ppf 1
+let pp_may_right_paren ppf parens = if parens then Format.pp_print_char ppf ')'; Format.pp_close_box ppf ()
+
+let pp_may_paren ppf parens abs pp x =
+  if abs x <> x then begin
+    pp_may_right_paren ppf parens; pp ppf x; pp_may_right_paren ppf parens
+  end else
+    pp ppf x
+
+let pp_print_int32 ppf x = Format.pp_print_string ppf (Int32.to_string x)
+let pp_print_int64 ppf x = Format.pp_print_string ppf (Int64.to_string x)
+let pp_print_nativeint ppf x =
+  Format.pp_print_string ppf (Nativeint.to_string x)
+
+let rec print_variant parens ppf =
+  let open Format in
+  function
+  | Unit -> pp_print_string ppf "()"
+  | Bool false -> pp_print_string ppf "false"
+  | Bool true -> pp_print_string ppf "true"
+  | Char c -> pp_print_char ppf c
+  | Int x -> pp_may_paren ppf parens abs pp_print_int x
+  | Float x -> pp_may_paren ppf parens abs_float pp_print_float x
+  | Int32 x -> pp_may_paren ppf parens Int32.abs pp_print_int32 x
+  | Int64 x -> pp_may_paren ppf parens Int64.abs pp_print_int64 x
+  | Nativeint x -> pp_may_paren ppf parens Nativeint.abs pp_print_nativeint x
+  | String s ->  pp_print_char ppf '\"'; pp_print_string ppf (String.escaped s); pp_print_char ppf '\"'
+  | Option None -> pp_print_string ppf "None"
+  | Option(Some v) -> print_application_like parens ppf "Some" v
+  | Tuple l -> pp_open_box ppf 1; pp_print_char ppf '('; Ext.List.pp_list "," (print_variant false) ppf l; pp_print_char ppf ')'; pp_close_box ppf ()
+  | List l -> pp_open_box ppf 1; pp_print_char ppf '['; Ext.List.pp_list ";" (print_variant false) ppf l; pp_print_char ppf ']'; pp_close_box ppf ()
+  | Array l -> pp_open_box ppf 2; pp_print_string ppf "[|"; Ext.Array.pp_array ';' (print_variant false) ppf l; pp_print_string ppf "|]"; pp_close_box ppf ()
+  | Record n_v ->
+    let print_field ppf (name, v) = pp_open_box ppf 1; pp_print_string ppf name; pp_print_string ppf " ="; pp_print_space ppf (); print_variant false ppf v; pp_close_box ppf () in
+    pp_open_hvbox ppf 1; pp_print_char ppf '{'; Ext.List.pp_list ";" print_field ppf n_v; pp_print_char ppf '}'; pp_close_box ppf ()
+  | Constructor (s, None) -> pp_print_string ppf s
+  | Constructor (s, Some v) -> print_application_like parens ppf s v
+  | Variant v -> print_application_like parens ppf "variant" v
+  | Lazy v ->
+      try
+        let v = Lazy.force v in
+        print_application_like parens ppf "lazy" v
+      with exn ->
+        pp_may_left_paren ppf parens;
+        pp_print_string ppf "lazy(raise \""; pp_print_string ppf (Printexc.to_string exn); pp_print_string ppf "\")";
+        pp_may_right_paren ppf parens
+and print_application_like parens ppf name v =
+  let open Format in
+  pp_may_left_paren ppf parens;
+  pp_print_string ppf name;
+  begin match v with
+  | Tuple _ | List _ | Array _ | Record _ ->
+    pp_print_cut ppf (); print_variant false ppf v;
+  | Unit | Bool _ | Int _ | Float _ | String _
+  | Option None | Constructor (_, None) ->
+    pp_print_space ppf (); print_variant true ppf v
+  | _ -> pp_print_cut ppf (); print_variant true ppf v;
+  end;
+  pp_may_right_paren ppf parens
+
+let print_variant = print_variant false
