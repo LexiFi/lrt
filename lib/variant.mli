@@ -42,7 +42,7 @@ val variant: t:'a ttype -> 'a -> t
 
 exception Bad_type_for_variant of Dynt_core.Stype.stype * t * string
 
-(* val of_variant: t:'a ttype -> t -> 'a *)
+val of_variant: t:'a ttype -> t -> 'a
 (** Rebuild a typed value from a variant. May raise [Bad_type_for_variant]
     if [t] does not match the type of the variant or [Failure] if e.g. a value
     of an abstract type needs to be rebuilt but there is no registered
