@@ -36,8 +36,21 @@ let f : Ttype.dynamic -> bool =
       Format.printf "Value: %a\n%!" (Print.print ~t) x;
       Format.printf "Variant: %a\n%!" Variant.print_variant v
     in
-    Variant.of_variant ~t v = x
+    let x' = Variant.of_variant ~t v in
+    let s = Format.asprintf "%a%!" Variant.print_variant v in
+    let v' = Variant_lexer.variant_of_string s in
+    let x'' = Variant.of_variant ~t v' in
+    let r = x = x' && x' = x'' && v = v' in
+    if not r then
+      Format.printf "Screwed:\nv': %a\nx'': %a\n%!"
+        Variant.print_variant v'
+        (Print.print ~t) x''
+    ; r
+
 
 let () =
   let seed = 2 * seed in
-  ignore (test n ~seed ~generator:(dynamic ~size:22 []) f)
+  match test n ~seed ~generator:(dynamic ~size:22 []) f with
+  | Succeed _ -> ()
+  | Throw {backtrace;_} -> failwith backtrace
+  | Fail _ -> print_endline "test failed"
