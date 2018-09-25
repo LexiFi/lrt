@@ -325,308 +325,269 @@ Value: (-2.18654659577)
 Type: string
 Value: "VJ"
 Value: 8.33330764621
-Variant: Float 8.33330764621
+Variant: 8.33330764621
 Value: ">V"
-Variant: String ">V"
+Variant: ">V"
 Value: [16.1689127982; (-5.42874649167); (-inf); (-17.3690857366);
          (-9.07264258713); 8.35078120232; (-9.31772340089); (-4.61550354958);
          (-14.7783637047)]
-Variant: List
-          [Float 16.1689127982; Float (-5.42874649167); Float (-inf);
-            Float (-17.3690857366); Float (-9.07264258713);
-            Float 8.35078120232; Float (-9.31772340089);
-            Float (-4.61550354958); Float (-14.7783637047)]
+Variant: [16.1689127982; -5.42874649167; -inf; -17.3690857366;
+-9.07264258713; 8.35078120232; -9.31772340089; -4.61550354958;
+-14.7783637047]
 Value: false
-Variant: Bool false
+Variant: false
 Value: ()
-Variant: Unit
+Variant: ()
 Value: {m = false; mmm = 13.1407660618}
-Variant: Record [("m", Bool false); ("mmm", Float 13.1407660618)]
+Variant: {m = false; mmm = 13.1407660618}
 Value: ()
-Variant: Unit
+Variant: ()
 Value: "@;K`^PE"
-Variant: String "@;K`^PE"
+Variant: "@;K`^PE"
 Value: (-13.2358297203)
-Variant: Float (-13.2358297203)
+Variant: -13.2358297203
 Value: false
-Variant: Bool false
+Variant: false
 Value: ()
-Variant: Unit
+Variant: ()
 Value: false
-Variant: Bool false
+Variant: false
 Value: 18.4264543913
-Variant: Float 18.4264543913
+Variant: 18.4264543913
 Value: "U]"
-Variant: String "U]"
+Variant: "U]"
 Value: Some
         [|(-6.50351943262); 9.83174077421; 8.71562299505; (-15.1220885385)|]
-Variant: Option
-          (Some
-           (Array
-             [|Float (-6.50351943262); Float 9.83174077421;
-               Float 8.71562299505; Float (-15.1220885385)|]))
+Variant: Some[|-6.50351943262; 9.83174077421; 8.71562299505;
+-15.1220885385|]
 Value: [true; false]
-Variant: List [Bool true; Bool false]
+Variant: [true; false]
 Value: "GbTXDK"
-Variant: String "GbTXDK"
+Variant: "GbTXDK"
 Value: Some
         [(17, true, "BJaEJGWJ>"); ((-3), true, "`IOM\\W>");
           ((-14), true, "WQ\\_TM?FH"); (2, false, "IJMX"); (4, true, "STW=");
           (9, true, "CZG\\EHXH")]
-Variant: Option
-          (Some
-           (List
-             [Tuple [Int 17; Bool true; String "BJaEJGWJ>"];
-               Tuple [Int (-3); Bool true; String "`IOM\\W>"];
-               Tuple [Int (-14); Bool true; String "WQ\\_TM?FH"];
-               Tuple [Int 2; Bool false; String "IJMX"];
-               Tuple [Int 4; Bool true; String "STW="];
-               Tuple [Int 9; Bool true; String "CZG\\EHXH"]]))
+Variant: Some[(17, true, "BJaEJGWJ>"); (-3, true, "`IOM\\W>"); (-14, true,
+"WQ\\_TM?FH"); (2, false, "IJMX"); (4, true, "STW=");
+(9, true, "CZG\\EHXH")]
 Value: false
-Variant: Bool false
+Variant: false
 Value: "V"
-Variant: String "V"
+Variant: "V"
 Value: Some (-19)
-Variant: Option (Some (Int (-19)))
+Variant: Some )-19)
 Value: "b[FRdV\\_"
-Variant: String "b[FRdV\\_"
+Variant: "b[FRdV\\_"
 Value: (O55555 ((-6.74854681268), (-0.885871360078), 9), (-12.9982126132),
         J______ {nJJJJ = "MM"; lNNNNNN = "U"; onnnnn = 1; pjjj = "PUI"},
         true)
-Variant: Tuple
-          [Constructor ("O55555",
-            Some
-             (Tuple [Float (-6.74854681268); Float (-0.885871360078); Int 9]));
-            Float (-12.9982126132);
-            Constructor ("J______",
-             Some
-              (Record
-                [("nJJJJ", String "MM"); ("lNNNNNN", String "U");
-                  ("onnnnn", Int 1); ("pjjj", String "PUI")]));
-            Bool true]
+Variant: (O55555(-6.74854681268, -0.885871360078, 9), -12.9982126132,
+J______{nJJJJ = "MM"; lNNNNNN = "U"; onnnnn = 1; pjjj = "PUI"},
+true)
 Value: "`\\"
-Variant: String "`\\"
+Variant: "`\\"
 Value: "[bb"
-Variant: String "[bb"
+Variant: "[bb"
 Value: false
-Variant: Bool false
+Variant: false
 Value: PPPPP {l7 = true; jnnnnn = (-3); j_ = 0.588774252683; jMM = (-9)}
-Variant: Constructor ("PPPPP",
-          Some
-           (Record
-             [("l7", Bool true); ("jnnnnn", Int (-3));
-               ("j_", Float 0.588774252683); ("jMM", Int (-9))]))
+Variant: PPPPP{l7 = true; jnnnnn = -3; j_ = 0.588774252683;
+jMM = -9}
 Value: false
-Variant: Bool false
+Variant: false
 Value: (-9)
-Variant: Int (-9)
+Variant: -9
 Value: "AXIR\\FHc"
-Variant: String "AXIR\\FHc"
+Variant: "AXIR\\FHc"
 Value: (-13)
-Variant: Int (-13)
+Variant: -13
 Value: ""
-Variant: String ""
+Variant: ""
 Value: (-7)
-Variant: Int (-7)
+Variant: -7
 Value: [|(-16.2004753947); 4.59838315845|]
-Variant: Array [|Float (-16.2004753947); Float 4.59838315845|]
+Variant: [|-16.2004753947;
+4.59838315845|]
 Value: M44444
-Variant: Constructor ("M44444", None)
+Variant: M44444
 Value: 5.63804747723
-Variant: Float 5.63804747723
+Variant: 5.63804747723
 Value: 17
-Variant: Int 17
+Variant: 17
 Value: ()
-Variant: Unit
+Variant: ()
 Value: (-10)
-Variant: Int (-10)
+Variant: -10
 Value: 20.1014637966
-Variant: Float 20.1014637966
+Variant: 20.1014637966
 Value: (-15)
-Variant: Int (-15)
+Variant: -15
 Value: (-12.0711640399)
-Variant: Float (-12.0711640399)
+Variant: -12.0711640399
 Value: {mQ = [|None; None|]; ik = (-8); o = 4.1271963343}
-Variant: Record
-          [("mQ", Array [|Option None; Option None|]); ("ik", Int (-8));
-            ("o", Float 4.1271963343)]
+Variant: {mQ = [|None; None|]; ik = -8;
+o = 4.1271963343}
 Value: false
-Variant: Bool false
+Variant: false
 Value: (-3)
-Variant: Int (-3)
+Variant: -3
 Value: true
-Variant: Bool true
+Variant: true
 Value: (-12.6130282078)
-Variant: Float (-12.6130282078)
+Variant: -12.6130282078
 Value: ["bD@_Y"; "KGJ`a"; ">\\HU]U?[>"; "?@HCXR@"; "A@E"; "aPbEaPE";
          "=DGESGP"; "VD"; "UTFOLJR"; "@FQ"]
-Variant: List
-          [String "bD@_Y"; String "KGJ`a"; String ">\\HU]U?[>";
-            String "?@HCXR@"; String "A@E"; String "aPbEaPE";
-            String "=DGESGP"; String "VD"; String "UTFOLJR"; String "@FQ"]
+Variant: ["bD@_Y"; "KGJ`a"; ">\\HU]U?[>"; "?@HCXR@"; "A@E"; "aPbEaPE";
+          "=DGESGP"; "VD"; "UTFOLJR"; "@FQ"]
 Value: ()
-Variant: Unit
+Variant: ()
 Value: None
-Variant: Option None
+Variant: None
 Value: 0
-Variant: Int 0
+Variant: 0
 Value: (-6.28919109888)
-Variant: Float (-6.28919109888)
+Variant: -6.28919109888
 Value: 9
-Variant: Int 9
+Variant: 9
 Value: 0.951435405761
-Variant: Float 0.951435405761
+Variant: 0.951435405761
 Value: (-10.6850178726)
-Variant: Float (-10.6850178726)
+Variant: -10.6850178726
 Value: (-8)
-Variant: Int (-8)
+Variant: -8
 Value: false
-Variant: Bool false
+Variant: false
 Value: {g____ = "F>SIaQBcR";
         m__ = (-1);
         f___ = None;
         lGGGG = (-19.6905034035);
         tHHHHHH = 18}
-Variant: Record
-          [("g____", String "F>SIaQBcR"); ("m__", Int (-1));
-            ("f___", Option None); ("lGGGG", Float (-19.6905034035));
-            ("tHHHHHH", Int 18)]
+Variant: {g____ = "F>SIaQBcR"; m__ = -1; f___ = None; lGGGG = -19.6905034035;
+tHHHHHH = 18}
 Value: (-20.4371208083)
-Variant: Float (-20.4371208083)
+Variant: -20.4371208083
 Value: (-12)
-Variant: Int (-12)
+Variant: -12
 Value: 20.7989972848
-Variant: Float 20.7989972848
+Variant: 20.7989972848
 Value: false
-Variant: Bool false
+Variant: false
 Value: (-17)
-Variant: Int (-17)
+Variant: -17
 Value: false
-Variant: Bool false
+Variant: false
 Value: (-4)
-Variant: Int (-4)
+Variant: -4
 Value: 3.23514262587
-Variant: Float 3.23514262587
+Variant: 3.23514262587
 Value: (-3)
-Variant: Int (-3)
+Variant: -3
 Value: 3.65978926979
-Variant: Float 3.65978926979
+Variant: 3.65978926979
 Value: 21
-Variant: Int 21
+Variant: 21
 Value: (-18.275598865)
-Variant: Float (-18.275598865)
+Variant: -18.275598865
 Value: None
-Variant: Option None
+Variant: None
 Value: [|3; 3; (-6); (-7); 1; 12|]
-Variant: Array [|Int 3; Int 3; Int (-6); Int (-7); Int 1; Int 12|]
+Variant: [|3; 3; -6; -7; 1;
+12|]
 Value: {lGGGG = (-11.7468768731);
         c_____ = "^[MC_S_BGW";
         feeeeee = "TCG_AO?F"}
-Variant: Record
-          [("lGGGG", Float (-11.7468768731));
-            ("c_____", String "^[MC_S_BGW"); ("feeeeee", String "TCG_AO?F")]
+Variant: {lGGGG = -11.7468768731; c_____ = "^[MC_S_BGW";
+feeeeee = "TCG_AO?F"}
 Value: {c_ = 5}
-Variant: Record [("c_", Int 5)]
+Variant: {c_ = 5}
 Value: [|5; 14; (-18)|]
-Variant: Array [|Int 5; Int 14; Int (-18)|]
+Variant: [|5; 14; -18|]
 Value: 2.4673295673
-Variant: Float 2.4673295673
+Variant: 2.4673295673
 Value: 9
-Variant: Int 9
+Variant: 9
 Value: ""
-Variant: String ""
+Variant: ""
 Value: [|9.19765368104; 0.436078570783; (-17.9861693084); 13.877467066;
          10.8773171902; (-9.69149067998); 3.30138877034; (-1.75930771977);
          inf|]
-Variant: Array
-          [|Float 9.19765368104; Float 0.436078570783;
-            Float (-17.9861693084); Float 13.877467066; Float 10.8773171902;
-            Float (-9.69149067998); Float 3.30138877034;
-            Float (-1.75930771977); Float inf|]
+Variant: [|9.19765368104; 0.436078570783; -17.9861693084; 13.877467066;
+10.8773171902; -9.69149067998; 3.30138877034; -1.75930771977;
+inf|]
 Value: "NbFV"
-Variant: String "NbFV"
+Variant: "NbFV"
 Value: "CLMC^AWZI="
-Variant: String "CLMC^AWZI="
+Variant: "CLMC^AWZI="
 Value: JLLLL
         {kEEEEE = 5.3033185564;
         pffff = ();
         i___ = false;
         n______ = (-2);
         wU = (-9)}
-Variant: Constructor ("JLLLL",
-          Some
-           (Record
-             [("kEEEEE", Float 5.3033185564); ("pffff", Unit);
-               ("i___", Bool false); ("n______", Int (-2)); ("wU", Int (-9))]))
+Variant: JLLLL{kEEEEE = 5.3033185564; pffff = (); i___ = false; n______ = -2;
+wU = -9}
 Value: 3.16619642638
-Variant: Float 3.16619642638
+Variant: 3.16619642638
 Value: true
-Variant: Bool true
+Variant: true
 Value: "GI_MJ;^"
-Variant: String "GI_MJ;^"
+Variant: "GI_MJ;^"
 Value: "V;"
-Variant: String "V;"
+Variant: "V;"
 Value: ["WO>P"; ""; "HJ;CHZ"; ""; "HI`"]
-Variant: List
-          [String "WO>P"; String ""; String "HJ;CHZ"; String "";
-            String "HI`"]
+Variant: ["WO>P"; ""; "HJ;CHZ"; ""; "HI`"]
 Value: 20.8725081906
-Variant: Float 20.8725081906
+Variant: 20.8725081906
 Value: (-13)
-Variant: Int (-13)
+Variant: -13
 Value: (-12.4323925283)
-Variant: Float (-12.4323925283)
+Variant: -12.4323925283
 Value: false
-Variant: Bool false
+Variant: false
 Value: (-3.02509850822)
-Variant: Float (-3.02509850822)
+Variant: -3.02509850822
 Value: 6.26284079254
-Variant: Float 6.26284079254
+Variant: 6.26284079254
 Value: ()
-Variant: Unit
+Variant: ()
 Value: false
-Variant: Bool false
+Variant: false
 Value: false
-Variant: Bool false
+Variant: false
 Value: (-20.3047492951)
-Variant: Float (-20.3047492951)
+Variant: -20.3047492951
 Value: [(-9.61243759841); (-0.140938833356); 3.2201346755; 8.04645750672;
          0.858969539404; 19.5585103706; 15.0926241279; 13.6114919931]
-Variant: List
-          [Float (-9.61243759841); Float (-0.140938833356);
-            Float 3.2201346755; Float 8.04645750672; Float 0.858969539404;
-            Float 19.5585103706; Float 15.0926241279; Float 13.6114919931]
+Variant: [-9.61243759841; -0.140938833356; 3.2201346755; 8.04645750672;
+0.858969539404; 19.5585103706; 15.0926241279;
+13.6114919931]
 Value: true
-Variant: Bool true
+Variant: true
 Value: false
-Variant: Bool false
+Variant: false
 Value: 20.3505949862
-Variant: Float 20.3505949862
+Variant: 20.3505949862
 Value: O______
         {m____ = "HRTQE";
         t_ = "";
         ebbbbb = Naaaa {gyyy = (-1.55866821855)};
         zHHH = (-5.46629844233);
         oOOOOO = [true; true; true]}
-Variant: Constructor ("O______",
-          Some
-           (Record
-             [("m____", String "HRTQE"); ("t_", String "");
-               ("ebbbbb",
-                Constructor ("Naaaa",
-                 Some (Record [("gyyy", Float (-1.55866821855))])));
-               ("zHHH", Float (-5.46629844233));
-               ("oOOOOO", List [Bool true; Bool true; Bool true])]))
+Variant: O______
+          {m____ = "HRTQE"; t_ = ""; ebbbbb = Naaaa{gyyy = -1.55866821855};
+zHHH = -5.46629844233;
+oOOOOO = [true; true; true]}
 Value: true
-Variant: Bool true
+Variant: true
 Value: 0
-Variant: Int 0
+Variant: 0
 Value: (-2.72491875105)
-Variant: Float (-2.72491875105)
+Variant: -2.72491875105
 Value: "aUHR:LcC^"
-Variant: String "aUHR:LcC^"
+Variant: "aUHR:LcC^"
 Value: "PMXG;@NOF"
-Variant: String "PMXG;@NOF"
+Variant: "PMXG;@NOF"
 Value: [[|(-15.1143200938); (-11.5815073177); (-14.6751835123);
           (-13.7972129006); 5.35589084029; (-4.39458201081);
           (-15.5715362485); (-17.3144841865); 9.43891131878|];
@@ -635,26 +596,15 @@ Value: [[|(-15.1143200938); (-11.5815073177); (-14.6751835123);
          [|(-18.0315821171); (-10.7100811787); (-4.90605787188);
            2.37356212921|];
          [|1.8894089628; 8.56656149402; 12.9392622393; (-18.9878020752)|]]
-Variant: List
-          [Array
-            [|Float (-15.1143200938); Float (-11.5815073177);
-              Float (-14.6751835123); Float (-13.7972129006);
-              Float 5.35589084029; Float (-4.39458201081);
-              Float (-15.5715362485); Float (-17.3144841865);
-              Float 9.43891131878|];
-            Array
-             [|Float 15.3645509817; Float (-10.8036041819);
-               Float (-18.8303350694); Float 11.9732911326;
-               Float (-4.95779446512)|];
-            Array
-             [|Float (-18.0315821171); Float (-10.7100811787);
-               Float (-4.90605787188); Float 2.37356212921|];
-            Array
-             [|Float 1.8894089628; Float 8.56656149402; Float 12.9392622393;
-               Float (-18.9878020752)|]]
+Variant: [[|-15.1143200938; -11.5815073177; -14.6751835123; -13.7972129006;
+5.35589084029; -4.39458201081; -15.5715362485; -17.3144841865;
+9.43891131878|]; [|15.3645509817; -10.8036041819; -18.8303350694;
+11.9732911326; -4.95779446512|]; [|-18.0315821171; -10.7100811787;
+-4.90605787188; 2.37356212921|];
+[|1.8894089628; 8.56656149402; 12.9392622393; -18.9878020752|]]
 Value: true
-Variant: Bool true
+Variant: true
 Value: 3.31908103265
-Variant: Float 3.31908103265
+Variant: 3.31908103265
 Value: 1
-Variant: Int 1
+Variant: 1
