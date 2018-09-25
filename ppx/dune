@@ -6,16 +6,16 @@
  (libraries dynt_core))
 
 (library
- (public_name dynt.deriving)
- (name dynt_deriving)
+ (name dynt_ppx)
+ (public_name dynt.ppx)
  (synopsis "[@@deriving t]")
  (libraries ppxlib)
  (preprocess (pps ppxlib.metaquot))
  (modules dynt_deriving dynt_path)
  (ppx_runtime_libraries dynt_runtime)
- (kind ppx_deriver))
+ (kind ppx_rewriter))
 
 (executable
  (name standalone)
- (libraries dynt_deriving ppxlib)
+ (libraries dynt_ppx ppxlib)
  (modules standalone))
