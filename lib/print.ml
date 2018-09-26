@@ -261,31 +261,26 @@ let print_dynamic fmt (t, x) =
             pp_print_string fmt ">";
           | hd :: tl -> begin
               match hd with
-              | Zero m -> begin
-                  let module T = (val m) in
+              | Zero (module T) -> begin
                   match T.is_t t with
                   | None -> use_first tl
                   | Some (T.Is TypEq.Eq) ->
                     T.printer fmt x
                 end
-              | One m -> begin
-                  let module T = (val m) in
+              | One (module T) -> begin
                   match T.is_t t with
                   | None -> use_first tl
                   | Some (T.Is (t, TypEq.Eq)) ->
                     let pr _fmt x = print_dynamic t false x in
-                    let printer = T.printer pr in
-                    printer fmt x
+                    T.printer pr fmt x
                 end
-              | Two m -> begin
-                  let module T = (val m) in
+              | Two (module T) -> begin
                   match T.is_t t with
                   | None -> use_first tl
                   | Some (T.Is (t1, t2, TypEq.Eq)) ->
                     let pr1 _fmt x = print_dynamic t1 false x in
                     let pr2 _fmt x = print_dynamic t2 false x in
-                    let printer = T.printer pr1 pr2 in
-                    printer fmt x
+                    T.printer pr1 pr2 fmt x
                 end
             end
         in

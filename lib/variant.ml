@@ -31,14 +31,14 @@ end
 
 module type VARIANTIZABLE_1 = sig
   include Xtype.TYPE_1
-  val to_variant: 'a to_variant -> 'a t to_variant
-  val of_variant: 'a of_variant -> 'a t of_variant
+  val to_variant: 'a t to_variant
+  val of_variant: 'a t of_variant
 end
 
 module type VARIANTIZABLE_2 = sig
   include Xtype.TYPE_2
-  val to_variant: 'a to_variant -> 'b to_variant -> ('a, 'b) t to_variant
-  val of_variant: 'a of_variant -> 'b of_variant -> ('a, 'b) t of_variant
+  val to_variant: ('a, 'b) t to_variant
+  val of_variant: ('a, 'b) t of_variant
 end
 
 module type VMATCHER_0 = sig
@@ -127,8 +127,35 @@ let rec to_variant: type a. a to_variant = fun ~t x ->
     end
   | Prop (_, {t;_}) -> to_variant ~t x
   | Object _ -> failwith "Objects cannot be variantized"
-  | Abstract _ -> failwith "Abstract values cannot be variantized"
   | Function _ -> failwith "Functions cannot be variantized"
+  | Abstract (name, _) ->
+    let rec use_first = function
+      | [] ->
+        failwith ("no variantizer registered for abstract type " ^ name)
+      | hd :: tl -> begin
+          match hd with
+          | T0 (module T) -> begin
+              match T.is_t t with
+              | None -> use_first tl
+              | Some (T.Is TypEq.Eq) ->
+                T.to_variant ~t x
+            end
+          | T1 (module T) -> begin
+              match T.is_t t with
+              | None -> use_first tl
+              | Some (T.Is (_, TypEq.Eq)) ->
+                T.to_variant ~t x
+            end
+          | T2 (module T) -> begin
+              match T.is_t t with
+              | None -> use_first tl
+              | Some (T.Is (_, _, TypEq.Eq)) ->
+                T.to_variant ~t x
+            end
+        end
+    in
+    use_first (Hashtbl.find_all abstract_variantizers name) ;
+
 and dyn = fun (Dyn (t,x)) -> to_variant ~t x
 and dyn_named = fun ~name (Dyn (t,x)) -> name, to_variant ~t x
 
