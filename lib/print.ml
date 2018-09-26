@@ -160,7 +160,7 @@ let print_dynamic fmt (t, x) =
       | Int -> pp_par_when_neg fmt parens abs pp_print_int x
       | Int32 -> pp_par_when_neg fmt parens Int32.abs pp_print_int32 x
       | Int64 -> pp_par_when_neg fmt parens Int64.abs pp_print_int64 x
-      | Float -> pp_par_when_neg fmt parens abs_float pp_print_float x
+      | Float -> pp_par_when_neg fmt parens abs_float Ext.Float.pp_repres x
       | Nativeint ->
         pp_par_when_neg fmt parens Nativeint.abs pp_print_nativeint x
       | String ->

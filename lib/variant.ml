@@ -165,7 +165,7 @@ let rec print_variant parens ppf =
   | Bool true -> pp_print_string ppf "true"
   | Char c -> pp_print_char ppf c
   | Int x -> pp_may_paren ppf parens abs pp_print_int x
-  | Float x -> pp_may_paren ppf parens abs_float pp_print_float x
+  | Float x -> pp_may_paren ppf parens abs_float Ext.Float.pp_repres x
   | Int32 x -> pp_may_paren ppf parens Int32.abs pp_print_int32 x
   | Int64 x -> pp_may_paren ppf parens Int64.abs pp_print_int64 x
   | Nativeint x -> pp_may_paren ppf parens Nativeint.abs pp_print_nativeint x
