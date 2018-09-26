@@ -4,44 +4,44 @@ open Dynt_core.Std
 
 type 'a printer = Format.formatter -> 'a -> unit
 
-module type ABSTRACT_PRINTABLE_0 = sig
+module type PRINTABLE_0 = sig
   include Xtype.TYPE_0
   val printer: t printer
 end
 
-module type ABSTRACT_PRINTABLE_1 = sig
+module type PRINTABLE_1 = sig
   include Xtype.TYPE_1
   val printer: 'a printer -> 'a t printer
 end
 
-module type ABSTRACT_PRINTABLE_2 = sig
+module type PRINTABLE_2 = sig
   include Xtype.TYPE_2
   val printer: 'a printer -> 'b printer -> ('a, 'b) t printer
 end
 
-module type PRINTABLE_MATCHER_0 = sig
-  include Xtype.MATCHER_0
-  val printer: t printer
+module type PMATCHER_0 = sig
+  include PRINTABLE_0
+  include Xtype.MATCHER_0 with type t := t
 end
 
-module type PRINTABLE_MATCHER_1 = sig
-  include Xtype.MATCHER_1
-  val printer: 'a printer -> 'a t printer
+module type PMATCHER_1 = sig
+  include PRINTABLE_1
+  include Xtype.MATCHER_1 with type 'a t := 'a t
 end
 
-module type PRINTABLE_MATCHER_2 = sig
-  include Xtype.MATCHER_2
-  val printer: 'a printer -> 'b printer -> ('a, 'b) t printer
+module type PMATCHER_2 = sig
+  include PRINTABLE_2
+  include Xtype.MATCHER_2 with type ('a,'b) t := ('a,'b) t
 end
 
 type printable =
-  | Zero of (module PRINTABLE_MATCHER_0)
-  | One  of (module PRINTABLE_MATCHER_1)
-  | Two  of (module PRINTABLE_MATCHER_2)
+  | Zero of (module PMATCHER_0)
+  | One  of (module PMATCHER_1)
+  | Two  of (module PMATCHER_2)
 
 let abstract_printers : (string, printable) Hashtbl.t = Hashtbl.create 17
 
-let add_abstract_type_dynamic_print_0 (module P : ABSTRACT_PRINTABLE_0) =
+let add_abstract_0 (module P : PRINTABLE_0) =
   let module T = struct
     include Xtype.Matcher_0(P)
     let printer = P.printer
@@ -49,10 +49,9 @@ let add_abstract_type_dynamic_print_0 (module P : ABSTRACT_PRINTABLE_0) =
   match T.is_abstract with
   | Some name ->
       Hashtbl.add abstract_printers name (Zero (module T))
-  | None ->
-      raise (Invalid_argument "add_abstract_type_dynamic_print: received non abstract type")
+  | _ -> raise (Invalid_argument "add_abstract: received non abstract type")
 
-let add_abstract_type_dynamic_print_1 (module P : ABSTRACT_PRINTABLE_1) =
+let add_abstract_1 (module P : PRINTABLE_1) =
   let module T = struct
     include Xtype.Matcher_1(P)
     let printer = P.printer
@@ -60,15 +59,9 @@ let add_abstract_type_dynamic_print_1 (module P : ABSTRACT_PRINTABLE_1) =
   match T.is_abstract with
   | Some name ->
       Hashtbl.add abstract_printers name (One (module T))
-  | _ ->
-      let stype =
-        stype_of_ttype (T.t (Obj.magic (DT_var 0)))
-      in
-      Format.printf "%a\n%!" print_stype stype;
-      Printexc.print_raw_backtrace stdout (Printexc.get_callstack 10);
-      raise (Invalid_argument "add_abstract_type_dynamic_print: received non abstract type")
+  | _ -> raise (Invalid_argument "add_abstract: received non abstract type")
 
-let add_abstract_type_dynamic_print_2 (module P : ABSTRACT_PRINTABLE_2) =
+let add_abstract_2 (module P : PRINTABLE_2) =
   let module T = struct
     include Xtype.Matcher_2(P)
     let printer = P.printer
@@ -76,7 +69,7 @@ let add_abstract_type_dynamic_print_2 (module P : ABSTRACT_PRINTABLE_2) =
   match T.is_abstract with
   | Some name ->
       Hashtbl.add abstract_printers name (Two (module T))
-  | _ -> raise (Invalid_argument "add_abstract_type_dynamic_print: received non abstract type")
+  | _ -> raise (Invalid_argument "add_abstract: received non abstract type")
 
 module type UNSAFE_ABSTRACT_PRINTABLE_1 = sig
   type 'a t
@@ -90,26 +83,26 @@ module type UNSAFE_ABSTRACT_PRINTABLE_2 = sig
   val printer: 'a printer -> 'b printer-> ('a, 'b) t printer
 end
 
-let add_unsafe_abstract_type_dynamic_print_0 ~name
+let add_unsafe_abstract_0 ~name
     (printer: Format.formatter -> 'a printer ) =
-  add_abstract_type_dynamic_print_0 ( module struct
+  add_abstract_0 ( module struct
     type t = Obj.t
     let t : t ttype = Obj.magic (DT_abstract (name, []))
     let printer = Obj.magic printer
   end )
 
-let add_unsafe_abstract_type_dynamic_print_1
+let add_unsafe_abstract_1
     (module P : UNSAFE_ABSTRACT_PRINTABLE_1) =
-  add_abstract_type_dynamic_print_1 ( module struct
+  add_abstract_1 ( module struct
     type 'a t = Obj.t
     let t (a : 'a ttype) : 'a t ttype =
       Obj.magic (DT_abstract (P.name, [stype_of_ttype a]))
     let printer = Obj.magic P.printer
   end )
 
-let add_unsafe_abstract_type_dynamic_print_2
+let add_unsafe_abstract_2
     (module P : UNSAFE_ABSTRACT_PRINTABLE_2) =
-  add_abstract_type_dynamic_print_2 ( module struct
+  add_abstract_2 ( module struct
     type ('a, 'b) t = Obj.t
     let t (a : 'a ttype) (b : 'b ttype)  : ('a, 'b) t ttype =
       Obj.magic (DT_abstract (P.name, [stype_of_ttype a; stype_of_ttype b]))
@@ -331,15 +324,15 @@ module Hashtbl_printer = struct
       pp_print_char ppf ']'; pp_close_box ppf ()
     end
 end
-let () = add_abstract_type_dynamic_print_2 (module Hashtbl_printer)
+let () = add_abstract_2 (module Hashtbl_printer)
 
 let () =
-  add_abstract_type_dynamic_print_0 (module struct
+  add_abstract_0 (module struct
     type t = unit
     let t = unit_t
     let printer ppf () =  Format.pp_print_string ppf "()"
   end) ;
-  add_abstract_type_dynamic_print_1 (module struct
+  add_abstract_1 (module struct
     type 'a t = 'a ttype
     let t (type a) (a: a ttype) = ttype_t a
     let printer _pp_a ppf t = print_stype ppf (stype_of_ttype t)
