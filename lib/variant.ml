@@ -148,7 +148,7 @@ let pp_may_right_paren ppf parens = if parens then Format.pp_print_char ppf ')';
 
 let pp_may_paren ppf parens abs pp x =
   if abs x <> x then begin
-    pp_may_right_paren ppf parens; pp ppf x; pp_may_right_paren ppf parens
+    pp_may_left_paren ppf parens; pp ppf x; pp_may_right_paren ppf parens
   end else
     pp ppf x
 
