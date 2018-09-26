@@ -702,9 +702,9 @@ let variant_constrs_iter2 (f: stype -> stype -> unit)
 
 (* iterate over all stypes in a node *)
 let node_iter2 (f: stype -> stype -> unit)
-    ({rec_descr = descr1; rec_uid = uid1; rec_name = name1; rec_args = args1; rec_has_var = _; _}: node)
-    ({rec_descr = descr2; rec_uid = uid2; rec_name = name2; rec_args = args2; _}: node) =
-  if uid1 <> uid2 || name1 <> name2 then raise Not_unifiable;
+    ({rec_descr = descr1; rec_name = name1; rec_args = args1; _}: node)
+    ({rec_descr = descr2; rec_name = name2; rec_args = args2; _}: node) =
+  if name1 <> name2 then raise Not_unifiable;
   unifier_list_iter2 f args1 args2;
   match descr1, descr2 with
   | DT_variant {variant_constrs = c1; variant_repr = r1},
@@ -755,9 +755,9 @@ let unifier ~(modulo_props : bool) ~(subs : stype option array) (s1 : stype) (s2
     | DT_abstract (n1, l1), DT_abstract (n2, l2) ->
       if n1 <> n2 then raise Not_unifiable;
       unifier_list_iter2 unifier l1 l2
-    | DT_prop (p1, t1), DT_prop (p2, t2) when p1 = p2 -> unifier t1 t2
     | DT_prop (_, t1), t2 when modulo_props -> unifier t1 t2
     | t1, DT_prop (_, t2) when modulo_props -> unifier t1 t2
+    | DT_prop (p1, t1), DT_prop (p2, t2) when p1 = p2 -> unifier t1 t2
     | DT_prop _, _
     | DT_int, _
     | DT_float, _
