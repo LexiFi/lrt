@@ -20,7 +20,84 @@ type t =
   | Lazy of (t Lazy.t [@patch lazy_t])
 [@@deriving t]
 
-let rec variant: type a. t: a ttype -> a -> t = fun ~t x ->
+type 'a to_variant = t: 'a ttype -> 'a -> t
+type 'a of_variant = t: 'a ttype -> t -> 'a
+
+module type VARIANTIZABLE_0 = sig
+  include Xtype.TYPE_0
+  val to_variant: t to_variant
+  val of_variant: t of_variant
+end
+
+module type VARIANTIZABLE_1 = sig
+  include Xtype.TYPE_1
+  val to_variant: 'a to_variant -> 'a t to_variant
+  val of_variant: 'a of_variant -> 'a t of_variant
+end
+
+module type VARIANTIZABLE_2 = sig
+  include Xtype.TYPE_2
+  val to_variant: 'a to_variant -> 'b to_variant -> ('a, 'b) t to_variant
+  val of_variant: 'a of_variant -> 'b of_variant -> ('a, 'b) t of_variant
+end
+
+module type VMATCHER_0 = sig
+  include VARIANTIZABLE_0
+  include Xtype.MATCHER_0 with type t := t
+end
+
+module type VMATCHER_1 = sig
+  include VARIANTIZABLE_1
+  include Xtype.MATCHER_1 with type 'a t := 'a t
+end
+
+module type VMATCHER_2 = sig
+  include VARIANTIZABLE_2
+  include Xtype.MATCHER_2 with type ('a,'b) t := ('a,'b) t
+end
+
+type variantizable =
+  | T0 of (module VMATCHER_0)
+  | T1 of (module VMATCHER_1)
+  | T2 of (module VMATCHER_2)
+
+let abstract_variantizers : (string, variantizable) Hashtbl.t =
+  Hashtbl.create 17
+
+let add_abstract_0 (module M : VARIANTIZABLE_0) =
+  let module T = struct
+    include Xtype.Matcher_0(M)
+    let to_variant = M.to_variant
+    let of_variant = M.of_variant
+  end in
+  match T.is_abstract with
+  | Some name ->
+      Hashtbl.add abstract_variantizers name (T0 (module T))
+  | None -> raise (Invalid_argument "add_abstract: received non abstract type")
+
+let add_abstract_1 (module M : VARIANTIZABLE_1) =
+  let module T = struct
+    include Xtype.Matcher_1(M)
+    let to_variant = M.to_variant
+    let of_variant = M.of_variant
+  end in
+  match T.is_abstract with
+  | Some name ->
+      Hashtbl.add abstract_variantizers name (T1 (module T))
+  | _ -> raise (Invalid_argument "add_abstract: received non abstract type")
+
+let add_abstract_2 (module M : VARIANTIZABLE_2) =
+  let module T = struct
+    include Xtype.Matcher_2(M)
+    let to_variant = M.to_variant
+    let of_variant = M.of_variant
+  end in
+  match T.is_abstract with
+  | Some name ->
+      Hashtbl.add abstract_variantizers name (T2 (module T))
+  | _ -> raise (Invalid_argument "add_abstract: received non abstract type")
+
+let rec to_variant: type a. a to_variant = fun ~t x ->
   match xtype_of_ttype t with
   | Unit -> Unit
   | Bool -> Bool x
@@ -31,10 +108,10 @@ let rec variant: type a. t: a ttype -> a -> t = fun ~t x ->
   | Float -> Float x
   | String -> String x
   | Char -> Char x
-  | List {t;_} -> List (List.map (variant ~t) x)
-  | Array {t;_} -> Array (Array.map (variant ~t) x)
-  | Option {t;_} -> Option (Ext.Option.map (variant ~t) x)
-  | Lazy {t;_} -> Lazy (lazy (variant ~t (Lazy.force x)))
+  | List {t;_} -> List (List.map (to_variant ~t) x)
+  | Array {t;_} -> Array (Array.map (to_variant ~t) x)
+  | Option {t;_} -> Option (Ext.Option.map (to_variant ~t) x)
+  | Lazy {t;_} -> Lazy (lazy (to_variant ~t (Lazy.force x)))
   | Tuple tup ->
     Tuple (Fields.map_tuple tup dyn x)
   | Record r ->
@@ -48,12 +125,12 @@ let rec variant: type a. t: a ttype -> a -> t = fun ~t x ->
         let l = Fields.map_inlined c dyn_named x in
         Constructor (fst c.ic_label, Some (Record l))
     end
-  | Prop (_, {t;_}) -> variant ~t x
+  | Prop (_, {t;_}) -> to_variant ~t x
   | Object _ -> failwith "Objects cannot be variantized"
   | Abstract _ -> failwith "Abstract values cannot be variantized"
   | Function _ -> failwith "Functions cannot be variantized"
-and dyn = fun (Dyn (t,x)) -> variant ~t x
-and dyn_named = fun ~name (Dyn (t,x)) -> name, variant ~t x
+and dyn = fun (Dyn (t,x)) -> to_variant ~t x
+and dyn_named = fun ~name (Dyn (t,x)) -> name, to_variant ~t x
 
 exception Bad_type_for_variant of Dynt_core.Stype.stype * t * string
 
@@ -63,7 +140,7 @@ let conv: type a. a ttype -> (string -> a) -> string -> a =
     | exception (Failure _) -> raise
       (Bad_type_for_variant (stype_of_ttype t, String s, "conversion error"))
 
-let rec of_variant: type a. t: a ttype -> t -> a = fun ~t v ->
+let rec of_variant: type a. a of_variant = fun ~t v ->
   match xtype_of_ttype t, v with
   | Unit, Unit -> ()
   | Bool, Bool x -> x

@@ -22,7 +22,7 @@ type t =
   | Lazy of t Lazy.t
 [@@deriving t]
 
-val variant: t:'a ttype -> 'a -> t
+val to_variant: t:'a ttype -> 'a -> t
 (**
    Transform a typed value into a variant.
 
@@ -46,7 +46,34 @@ val of_variant: t:'a ttype -> t -> 'a
     de-variantizer.
 *)
 
-(* val check_variantizable: 'a ttype -> unit *)
-
 val print_variant: Format.formatter -> t -> unit
 (** Print a variant with the syntax of MLFi constants. *)
+
+(** {Handle abstract types} *)
+
+(** This does only support abstract types *)
+
+type 'a to_variant = t: 'a ttype -> 'a -> t
+type 'a of_variant = t: 'a ttype -> t -> 'a
+
+module type VARIANTIZABLE_0 = sig
+  include Xtype.TYPE_0
+  val to_variant: t to_variant
+  val of_variant: t of_variant
+end
+
+module type VARIANTIZABLE_1 = sig
+  include Xtype.TYPE_1
+  val to_variant: 'a to_variant -> 'a t to_variant
+  val of_variant: 'a of_variant -> 'a t of_variant
+end
+
+module type VARIANTIZABLE_2 = sig
+  include Xtype.TYPE_2
+  val to_variant: 'a to_variant -> 'b to_variant -> ('a, 'b) t to_variant
+  val of_variant: 'a of_variant -> 'b of_variant -> ('a, 'b) t of_variant
+end
+
+val add_abstract_0: (module VARIANTIZABLE_0) -> unit
+val add_abstract_1: (module VARIANTIZABLE_1) -> unit
+val add_abstract_2: (module VARIANTIZABLE_2) -> unit
