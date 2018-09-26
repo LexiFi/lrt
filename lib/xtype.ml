@@ -784,7 +784,7 @@ module Matcher_0 (T : TYPE_0) = struct
 
   let key =
     let () =
-      (* Check for free trype variables and fail early *)
+      (* Check for free type variables and fail early *)
       if Internal.has_var s
       then failwith (Format.asprintf "Xtype: invalid MATCHER_0 witness: %a" print_stype s)
     in
@@ -810,7 +810,7 @@ module Matcher_1 (T : TYPE_1) = struct
 
   let key =
     let () =
-      (* Check for free trype variables and fail early *)
+      (* Check for free type variables and fail early *)
       if Internal.has_var s
       then failwith (Format.asprintf "Xtype: invalid MATCHER_1 witness: %a" print_stype s)
     in
@@ -839,7 +839,7 @@ module Matcher_2 (T : TYPE_2) = struct
 
   let key =
     let () =
-      (* Check for free trype variables and fail early *)
+      (* Check for free type variables and fail early *)
       if Internal.has_var s
       then failwith (Format.asprintf "Xtype: invalid MATCHER_2 witness: %a" print_stype s)
     in
