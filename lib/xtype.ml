@@ -822,7 +822,9 @@ module Matcher_1 (T : TYPE_1) = struct
       unifier ~modulo_props ~subs key (stype_of_ttype t);
       match subs with
       | [|Some s|] -> Some (Is (cast_ttype s, Obj.magic (TypEq.refl)))
-      | _ -> None
+      (* unification success, but unused type args *)
+      | [|None|] -> Some (Is (Std.unit_t, Obj.magic (TypEq.refl)))
+      | _ -> assert false
     with
       Not_unifiable -> None
 end
@@ -849,7 +851,11 @@ module Matcher_2 (T : TYPE_2) = struct
       unifier ~modulo_props ~subs key (stype_of_ttype t);
       match subs with
       | [|Some s1; Some s2|] -> Some (Is (cast_ttype s1, cast_ttype s2, Obj.magic (TypEq.refl)))
-      | _ -> None
+      (* unification success, but unused type args *)
+      | [|Some s1; None|] -> Some (Is (cast_ttype s1, Std.unit_t, Obj.magic (TypEq.refl)))
+      | [|None; Some s2|] -> Some (Is (Std.unit_t, cast_ttype s2, Obj.magic (TypEq.refl)))
+      | [|None; None|] -> Some (Is (Std.unit_t, Std.unit_t, Obj.magic (TypEq.refl)))
+      | _ -> assert false
     with
       Not_unifiable -> None
 end
