@@ -263,7 +263,8 @@ let digit = sized (char_of_size (48, 57))
 let float_of_size n =
   oneof_freq
     [
-      100, choose_float n (-n, n);
+      (* 95% regular float *) 
+      57, choose_float n (-n, n);
       1, return nan;
       1, return infinity;
       1, return neg_infinity;
