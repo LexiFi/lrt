@@ -14,7 +14,6 @@ open Dynt_core.Std
 (* Random number generator. *)
 
 let int_max_bound = 0x3FFFFFFF (* 2^30 - 1 *)
-let float_max_bound = float_of_int int_max_bound
 
 module State: sig
   type t
@@ -22,7 +21,7 @@ module State: sig
   val create: int -> t
 
   val int: t -> int * int -> int * t
-  val float: t -> float * float -> float * t
+  val float: t -> int -> int * int -> float * t
 
   (* makes two independent generators from one. *)
   val split: t -> t * t
@@ -81,24 +80,27 @@ end = struct
 
   let int s bound =
     if bound > int_max_bound || bound <= 0
-    then failwith "Mlfi_check.int used with invalid range"
+    then failwith "Check.int used with invalid range"
     else intaux s bound
 
-  let float_max_bound_p1 = 1. +. float_max_bound
-
-  let float s bound =
+  let float s =
     let s1, s2 = split s in
-    float_of_int (succ (bits s1)) /. float_max_bound_p1 *. bound, s2
+    float_of_int (bits s1) /. (float_of_int (succ int_max_bound)), s2
 
   let int st (lo, hi) =
-    if hi < lo then invalid_arg "Mlfi_check.State.int";
+    if hi < lo then invalid_arg "Check.State.int";
     let n, stp = int st (hi - lo + 1) in
     n + lo, stp
 
-  let float st (lo, hi) =
-    if hi < lo then invalid_arg "Mlfi_check.State.float";
-    let n, stp = float st (hi -. lo) in
-    n +. lo, stp
+  let floor digits f =
+    let shift = 10. ** (float_of_int digits) in
+    floor (f *. shift) /. shift
+
+  let float st digits (lo, hi) =
+    if hi < lo then invalid_arg "Check.State.float";
+    let m, stp = float st in
+    let e, stp = int stp (lo, hi) in
+    floor (digits- e) (m *. (10. ** (float_of_int e))), stp
 end
 
 (* Generators. *)
@@ -127,7 +129,7 @@ module Gen: sig
   val sized: (int -> 'a t) -> 'a t
 
   val choose_int: int * int -> int t
-  val choose_float: float * float -> float t
+  val choose_float: int -> int * int -> float t
 end = struct
   type 'a t = int -> State.t -> 'a
 
@@ -180,7 +182,7 @@ end = struct
     gg len len state
 
   let choose_int range _len st = fst (State.int st range)
-  let choose_float range _len st = fst (State.float st range)
+  let choose_float digits range _len st = fst (State.float st digits range)
 
 end
 
@@ -259,10 +261,9 @@ let uppercase_letter = sized (char_of_size (Char.code 'A', Char.code 'Z'))
 let digit = sized (char_of_size (48, 57))
 
 let float_of_size n =
-  let n = float_of_int n in
   oneof_freq
     [
-      100, choose_float (-.n, n);
+      100, choose_float n (-n, n);
       1, return nan;
       1, return infinity;
       1, return neg_infinity;

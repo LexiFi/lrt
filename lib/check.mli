@@ -53,8 +53,9 @@ val list_sequence: 'a gen list -> 'a list gen
 val choose_int: int * int -> int gen
 (** Generate a random integer in the given inclusive range. *)
 
-val choose_float: float * float -> float gen
-(** Generate a random float in the given inclusive range. *)
+val choose_float: int -> int * int -> float gen
+(** Generate a random float with given number of digits and exponent in the
+    given inclusive range. *)
 
 val choose_char: int * int -> char gen
 (** Generate a random char in the given inclusive range. *)

@@ -43,7 +43,7 @@ let f : Ttype.dynamic -> bool =
       with r -> Printf.eprintf "Could not parse string:\n%s\n%!" s; raise r
     in
     let x'' = Variant.of_variant ~t v' in
-    let r = x = x' && x' = x'' && v = v' in
+    let r = compare x x' = 0 && compare x' x'' = 0 && compare v v' = 0 in
     if not r then
       Format.printf "Screwed:\nv': %a\nx'': %a\n%!"
         Variant.print_variant v'
