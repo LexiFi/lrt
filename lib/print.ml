@@ -2,36 +2,36 @@ open Dynt_core.Stype
 open Dynt_core.Ttype
 open Dynt_core.Std
 
-type 'a printer = 'a -> unit
+type 'a printer = Format.formatter -> 'a -> unit
 
 module type ABSTRACT_PRINTABLE_0 = sig
   include Xtype.TYPE_0
-  val printer: Format.formatter -> t printer
+  val printer: t printer
 end
 
 module type ABSTRACT_PRINTABLE_1 = sig
   include Xtype.TYPE_1
-  val printer: Format.formatter -> 'a printer -> 'a t printer
+  val printer: 'a printer -> 'a t printer
 end
 
 module type ABSTRACT_PRINTABLE_2 = sig
   include Xtype.TYPE_2
-  val printer: Format.formatter -> 'a printer -> 'b printer -> ('a, 'b) t printer
+  val printer: 'a printer -> 'b printer -> ('a, 'b) t printer
 end
 
 module type PRINTABLE_MATCHER_0 = sig
   include Xtype.MATCHER_0
-  val printer: Format.formatter -> t printer
+  val printer: t printer
 end
 
 module type PRINTABLE_MATCHER_1 = sig
   include Xtype.MATCHER_1
-  val printer: Format.formatter -> 'a printer -> 'a t printer
+  val printer: 'a printer -> 'a t printer
 end
 
 module type PRINTABLE_MATCHER_2 = sig
   include Xtype.MATCHER_2
-  val printer: Format.formatter -> 'a printer -> 'b printer -> ('a, 'b) t printer
+  val printer: 'a printer -> 'b printer -> ('a, 'b) t printer
 end
 
 type printable =
@@ -81,13 +81,13 @@ let add_abstract_type_dynamic_print_2 (module P : ABSTRACT_PRINTABLE_2) =
 module type UNSAFE_ABSTRACT_PRINTABLE_1 = sig
   type 'a t
   val name: string
-  val printer: Format.formatter -> 'a printer -> 'a t printer
+  val printer: 'a printer -> 'a t printer
 end
 
 module type UNSAFE_ABSTRACT_PRINTABLE_2 = sig
   type ('a, 'b) t
   val name: string
-  val printer: Format.formatter -> 'a printer -> 'b printer-> ('a, 'b) t printer
+  val printer: 'a printer -> 'b printer-> ('a, 'b) t printer
 end
 
 let add_unsafe_abstract_type_dynamic_print_0 ~name
@@ -280,19 +280,19 @@ let print_dynamic fmt (t, x) =
                   match T.is_t t with
                   | None -> use_first tl
                   | Some (T.Is (t, TypEq.Eq)) ->
-                    let pr x = print_dynamic t false x in
-                    let printer = T.printer fmt pr in
-                    printer x
+                    let pr _fmt x = print_dynamic t false x in
+                    let printer = T.printer pr in
+                    printer fmt x
                 end
               | Two m -> begin
                   let module T = (val m) in
                   match T.is_t t with
                   | None -> use_first tl
                   | Some (T.Is (t1, t2, TypEq.Eq)) ->
-                    let pr1 x = print_dynamic t1 false x in
-                    let pr2 x = print_dynamic t2 false x in
-                    let printer = T.printer fmt pr1 pr2 in
-                    printer x
+                    let pr1 _fmt x = print_dynamic t1 false x in
+                    let pr2 _fmt x = print_dynamic t2 false x in
+                    let printer = T.printer pr1 pr2 in
+                    printer fmt x
                 end
             end
         in
@@ -311,16 +311,16 @@ module Hashtbl_printer = struct
   type ('a, 'b) t = ('a, 'b) Hashtbl.t
   let t (type a) (type b) (a: a ttype) (b: b ttype) = hashtbl_t a b
 
-  let printer ppf (print1 : 'a printer) (print2 : 'b printer)
+  let printer (print1 : 'a printer) (print2 : 'b printer) ppf
       (h : ('a, 'b) Hashtbl.t) =
     let first = ref true in
     let print_el key value =
       if !first then first := false
       else (pp_print_char ppf ';'; pp_print_space ppf ());
       pp_open_box ppf 1; pp_print_char ppf '(';
-      print1 key;
+      print1 ppf key;
       pp_print_char ppf ','; pp_print_space ppf ();
-      print2 value;
+      print2 ppf value;
       pp_print_char ppf ')'; pp_close_box ppf ()
     in
     if Hashtbl.length h = 0 then
@@ -337,12 +337,12 @@ let () =
   add_abstract_type_dynamic_print_0 (module struct
     type t = unit
     let t = unit_t
-    let printer ppf _t =  Format.fprintf ppf "()"
+    let printer ppf () =  Format.pp_print_string ppf "()"
   end) ;
   add_abstract_type_dynamic_print_1 (module struct
     type 'a t = 'a ttype
     let t (type a) (a: a ttype) = ttype_t a
-    let printer ppf _ t = print_stype ppf (stype_of_ttype t)
+    let printer _pp_a ppf t = print_stype ppf (stype_of_ttype t)
   end)
 
 module Test = struct
