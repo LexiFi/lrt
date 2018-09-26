@@ -9,9 +9,6 @@ type t =
   | Unit
   | Bool of bool
   | Int of int
-  | Int32 of int32
-  | Int64 of int64
-  | Nativeint of nativeint
   | Float of float
   | String of string
   | Char of char

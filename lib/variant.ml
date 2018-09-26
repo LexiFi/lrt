@@ -7,9 +7,6 @@ type t =
   | Unit
   | Bool of bool
   | Int of int
-  | Int32 of int32
-  | Int64 of int64
-  | Nativeint of nativeint
   | Float of float
   | String of string
   | Char of char
@@ -28,9 +25,9 @@ let rec variant: type a. t: a ttype -> a -> t = fun ~t x ->
   | Unit -> Unit
   | Bool -> Bool x
   | Int -> Int x
-  | Int32 -> Int32 x
-  | Int64 -> Int64 x
-  | Nativeint -> Nativeint x
+  | Int32 -> String (Int32.to_string x)
+  | Int64 -> String (Int64.to_string x)
+  | Nativeint -> String (Nativeint.to_string x)
   | Float -> Float x
   | String -> String x
   | Char -> Char x
@@ -60,15 +57,21 @@ and dyn_named = fun ~name (Dyn (t,x)) -> name, variant ~t x
 
 exception Bad_type_for_variant of Dynt_core.Stype.stype * t * string
 
+let conv: type a. a ttype -> (string -> a) -> string -> a =
+  fun t conv s -> match conv s with
+    | v -> v
+    | exception (Failure _) -> raise
+      (Bad_type_for_variant (stype_of_ttype t, String s, "conversion error"))
+
 let rec of_variant: type a. t: a ttype -> t -> a = fun ~t v ->
   match xtype_of_ttype t, v with
   | Unit, Unit -> ()
   | Bool, Bool x -> x
   | Float, Float x -> x
   | Int, Int x -> x
-  | Int32, Int32 x -> x
-  | Int64, Int64 x -> x
-  | Nativeint, Nativeint x -> x
+  | Int32, String x -> conv t Int32.of_string x
+  | Int64, String x -> conv t Int64.of_string x
+  | Nativeint, String x -> conv t Nativeint.of_string x
   | String, String x -> x
   | Char, Char x -> x
   | List {t;_}, List x -> List.map (of_variant ~t) x
@@ -152,11 +155,6 @@ let pp_may_paren ppf parens abs pp x =
   end else
     pp ppf x
 
-let pp_print_int32 ppf x = Format.pp_print_string ppf (Int32.to_string x)
-let pp_print_int64 ppf x = Format.pp_print_string ppf (Int64.to_string x)
-let pp_print_nativeint ppf x =
-  Format.pp_print_string ppf (Nativeint.to_string x)
-
 let rec print_variant parens ppf =
   let open Format in
   function
@@ -166,9 +164,6 @@ let rec print_variant parens ppf =
   | Char c -> pp_print_char ppf c
   | Int x -> pp_may_paren ppf parens abs pp_print_int x
   | Float x -> pp_may_paren ppf parens abs_float Ext.Float.pp_repres x
-  | Int32 x -> pp_may_paren ppf parens Int32.abs pp_print_int32 x
-  | Int64 x -> pp_may_paren ppf parens Int64.abs pp_print_int64 x
-  | Nativeint x -> pp_may_paren ppf parens Nativeint.abs pp_print_nativeint x
   | String s ->  pp_print_char ppf '\"'; pp_print_string ppf (String.escaped s); pp_print_char ppf '\"'
   | Option None -> pp_print_string ppf "None"
   | Option(Some v) -> print_application_like parens ppf "Some" v
