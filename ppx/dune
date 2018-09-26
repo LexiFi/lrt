@@ -13,7 +13,7 @@
  (preprocess (pps ppxlib.metaquot))
  (modules dynt_deriving dynt_path)
  (ppx_runtime_libraries dynt_runtime)
- (kind ppx_rewriter))
+ (kind ppx_deriver))
 
 (executable
  (name standalone)
