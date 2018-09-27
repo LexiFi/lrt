@@ -192,8 +192,11 @@ let rec of_variant: type a. t: a ttype -> a of_variant = fun ~t v ->
     let mk = fun {nth; typ} -> of_variant ~t:typ.t arr.(nth) in
     Builder.tuple tup {mk}
   | Record r, Record l ->
-    let arr = Array.of_list l in
-    let mk = fun {nth; typ} -> of_variant ~t:typ.t (snd arr.(nth)) in
+    let mk name {typ;_} =
+      match List.assoc_opt name l with
+      | Some v -> of_variant ~t:typ.t v
+      | None -> bad_variant ("missing field in variant: " ^ name)
+    in
     Builder.record r {mk}
   | Sum s, Constructor (name, args) -> begin
       match Lookup.constructor s name with
@@ -205,8 +208,11 @@ let rec of_variant: type a. t: a ttype -> a of_variant = fun ~t v ->
             let mk = fun {nth; typ} -> of_variant ~t:typ.t arr.(nth) in
             Builder.regular_constructor c {mk}
           | Inlined c, Some (Record l) ->
-            let arr = Array.of_list l in
-            let mk = fun {nth; typ} -> of_variant ~t:typ.t (snd arr.(nth)) in
+            let mk name {typ;_} =
+              match List.assoc_opt name l with
+              | Some v -> of_variant ~t:typ.t v
+              | None -> bad_variant ("missing field in variant: " ^ name)
+            in
             Builder.inlined_constructor c {mk}
           | _ -> bad_variant "constructor argument mismatch"
         end

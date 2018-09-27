@@ -56,3 +56,10 @@ let%expect_test _ = shows ht_t ht;
   [%expect {|
     [("c", None); ("b", Some{d1 = 4611686018427387903; d2 = 1e+42});
      ("a", Some{d1 = 1; d2 = nan})] |}]
+
+
+(* Test whether record fields can be reordered *)
+let%test _ =
+  of_variant ~t:d_t (Record ["d1", Int 0; "d2", Float 0.]) = {d2=0.; d1=0}
+let%test _ =
+  of_variant ~t:d_t (Record ["d2", Float 0.; "d1", Int 0]) = {d2=0.; d1=0}
