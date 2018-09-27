@@ -2,7 +2,7 @@
  (name ppx_test)
  (libraries dynt inspect)
  (inline_tests)
- (modules path ppx)
+ (modules path ppx variantizer)
  (preprocess (pps ppx_expect dynt.ppx)))
 
 (tests

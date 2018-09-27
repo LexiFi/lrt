@@ -129,7 +129,7 @@ let rec xtype_of_ttype : type a. a ttype -> a xtype = fun t ->
   | DT_option t -> cast_xtype (Option (bundle t))
   | DT_list t -> cast_xtype (List (bundle t))
   | DT_array t -> cast_xtype (Array (bundle t))
-  | DT_abstract ("lazy_t", [t]) -> cast_xtype (Lazy (bundle t))
+  | DT_abstract ("Lazy.t", [t]) -> cast_xtype (Lazy (bundle t))
   | DT_arrow (l, t1, t2) ->
     let arg_label = match l with
       | "" -> None

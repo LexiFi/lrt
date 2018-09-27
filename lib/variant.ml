@@ -337,3 +337,24 @@ and print_application_like parens ppf name v =
 
 let print_variant = print_variant false
 
+(* register hashtable variantizer *)
+
+let () = add_abstract_2 (module struct
+    type ('a,'b) t = ('a,'b) Hashtbl.t
+    let t = hashtbl_t
+    let to_variant t1 t2 ht =
+      Hashtbl.fold (fun key value acc ->
+          Tuple [t1 key; t2 value] :: acc) ht []
+      |> fun x -> List x
+    let of_variant o1 o2 v =
+      let ht = Hashtbl.create 5 in
+      let f = function
+        | Tuple [key; value] -> Hashtbl.add ht (o1 key) (o2 value)
+        | _ -> failwith "not a hashtable"
+      in
+      let () = match v with
+      | List l -> List.iter f l
+      | _ -> failwith "not a hashtable"
+      in ht
+  end)
+
