@@ -49,12 +49,13 @@ val of_variant: t:'a ttype -> t -> 'a
 val print_variant: Format.formatter -> t -> unit
 (** Print a variant with the syntax of MLFi constants. *)
 
-(** {Handle abstract types} *)
-
-(** This does only support abstract types *)
+(** {2 Handle abstract types} *)
 
 type 'a to_variant = 'a -> t
 type 'a of_variant = t -> 'a
+
+(** [failwith s] raises [Bad_type_for_variant (., ., s)] with the
+    corresponding stype and variant inserted. *)
 type failwith = {failwith: 'a. string -> 'a} [@@unboxed]
 
 module type VARIANTIZABLE_0 = sig
@@ -74,6 +75,8 @@ module type VARIANTIZABLE_2 = sig
   val to_variant: 'a to_variant -> 'b to_variant -> ('a, 'b) t to_variant
   val of_variant: failwith -> 'a of_variant -> 'b of_variant -> ('a, 'b) t of_variant
 end
+
+(** The following raise [Failure] on non-abstract types. *)
 
 val add_abstract_0: (module VARIANTIZABLE_0) -> unit
 val add_abstract_1: (module VARIANTIZABLE_1) -> unit

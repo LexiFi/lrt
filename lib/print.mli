@@ -3,7 +3,10 @@
 open Dynt_core.Ttype
 
 val print: t:'a ttype -> Format.formatter -> 'a -> unit
+(** Print a value to the given formatter. *)
+
 val show: t:'a ttype -> 'a -> unit
+(** Print a value to stdout. *)
 
 (** {2 Handling abstract types} *)
 
@@ -24,7 +27,7 @@ module type PRINTABLE_2 = sig
   val printer: 'a printer -> 'b printer -> ('a, 'b) t printer
 end
 
-(** The following fail on non-abstract types *)
+(** The following raise [Failure] on non-abstract types. *)
 
 val add_abstract_0: (module PRINTABLE_0) -> unit
 val add_abstract_1: (module PRINTABLE_1) -> unit
