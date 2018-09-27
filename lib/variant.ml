@@ -22,23 +22,24 @@ type t =
 
 type 'a to_variant = 'a -> t
 type 'a of_variant = t -> 'a
+type failwith = {failwith: 'a. string -> 'a} [@@unboxed]
 
 module type VARIANTIZABLE_0 = sig
   include Xtype.TYPE_0
   val to_variant: t to_variant
-  val of_variant: t of_variant
+  val of_variant: failwith -> t of_variant
 end
 
 module type VARIANTIZABLE_1 = sig
   include Xtype.TYPE_1
   val to_variant: 'a to_variant -> 'a t to_variant
-  val of_variant: 'a of_variant -> 'a t of_variant
+  val of_variant: failwith -> 'a of_variant -> 'a t of_variant
 end
 
 module type VARIANTIZABLE_2 = sig
   include Xtype.TYPE_2
   val to_variant: 'a to_variant -> 'b to_variant -> ('a, 'b) t to_variant
-  val of_variant: 'a of_variant -> 'b of_variant -> ('a, 'b) t of_variant
+  val of_variant: failwith -> 'a of_variant -> 'b of_variant -> ('a, 'b) t of_variant
 end
 
 module type VMATCHER_0 = sig
@@ -165,21 +166,21 @@ and dyn_named = fun ~name (Dyn (t,x)) -> name, to_variant ~t x
 
 exception Bad_type_for_variant of Dynt_core.Stype.stype * t * string
 
-let conv: type a. a ttype -> (string -> a) -> string -> a =
-  fun t conv s -> match conv s with
+let conv: type a. (string -> a) -> (string -> a) -> string -> a =
+  fun failwith conv s -> match conv s with
     | v -> v
-    | exception (Failure _) -> raise
-      (Bad_type_for_variant (stype_of_ttype t, String s, "conversion error"))
+    | exception (Failure _) -> failwith "conversion error"
 
 let rec of_variant: type a. t: a ttype -> a of_variant = fun ~t v ->
+  let bad_variant s = raise (Bad_type_for_variant(stype_of_ttype t, v, s)) in
   match xtype_of_ttype t, v with
   | Unit, Unit -> ()
   | Bool, Bool x -> x
   | Float, Float x -> x
   | Int, Int x -> x
-  | Int32, String x -> conv t Int32.of_string x
-  | Int64, String x -> conv t Int64.of_string x
-  | Nativeint, String x -> conv t Nativeint.of_string x
+  | Int32, String x -> conv bad_variant Int32.of_string x
+  | Int64, String x -> conv bad_variant Int64.of_string x
+  | Nativeint, String x -> conv bad_variant Nativeint.of_string x
   | String, String x -> x
   | Char, Char x -> x
   | List {t;_}, List x -> List.map (of_variant ~t) x
@@ -196,9 +197,7 @@ let rec of_variant: type a. t: a ttype -> a of_variant = fun ~t v ->
     Builder.record r {mk}
   | Sum s, Constructor (name, args) -> begin
       match Lookup.constructor s name with
-      | None ->
-        raise (Bad_type_for_variant (stype_of_ttype t, v,
-                                     "non-existing constructor"))
+      | None -> bad_variant "non-existing constructor"
       | Some c -> begin match c, args with
           | Constant c, None -> Builder.constant_constructor c
           | Regular c, Some (Tuple l) ->
@@ -209,31 +208,29 @@ let rec of_variant: type a. t: a ttype -> a of_variant = fun ~t v ->
             let arr = Array.of_list l in
             let mk = fun {nth; typ} -> of_variant ~t:typ.t (snd arr.(nth)) in
             Builder.inlined_constructor c {mk}
-          | _ ->
-            raise (Bad_type_for_variant (stype_of_ttype t, v,
-                                         "constructor argument mismatch"))
+          | _ -> bad_variant "constructor argument mismatch"
         end
     end
   | Prop _, v -> of_variant ~t v
   | Abstract (name, _), v ->
     let rec use_first : variantizable list -> a = function
-      | [] ->
-        failwith ("no suitable variantizer registered for abstract type "
-                  ^ name)
+      | [] -> failwith (
+          "no suitable variantizer registered for abstract type " ^ name)
       | hd :: tl -> begin
+          let bad_variant = { failwith = bad_variant } in
           match hd with
           | T0 (module T) -> begin
               match T.is_t t with
               | None -> use_first tl
               | Some (T.Is TypEq.Eq) ->
-                T.of_variant v
+                T.of_variant bad_variant v
             end
           | T1 (module T) -> begin
               match T.is_t t with
               | None -> use_first tl
               | Some (T.Is (t1, TypEq.Eq)) ->
                 let t1 = of_variant ~t:t1 in
-                T.of_variant t1 v
+                T.of_variant bad_variant t1 v
             end
           | T2 (module T) -> begin
               match T.is_t t with
@@ -241,47 +238,29 @@ let rec of_variant: type a. t: a ttype -> a of_variant = fun ~t v ->
               | Some (T.Is (t1, t2, TypEq.Eq)) ->
                 let t1 = of_variant ~t:t1
                 and t2 = of_variant ~t:t2 in
-                T.of_variant t1 t2 v
+                T.of_variant bad_variant t1 t2 v
             end
         end
     in
     use_first (Hashtbl.find_all abstract_variantizers name) ;
-  | Function _, _ ->
-    raise (Bad_type_for_variant (stype_of_ttype t, v, "function"))
-  | Object _, _ ->
-    raise (Bad_type_for_variant (stype_of_ttype t, v, "object"))
-  | Unit, _ ->
-    raise (Bad_type_for_variant (stype_of_ttype t, v, "type value mismatch"))
-  | Bool, _ ->
-    raise (Bad_type_for_variant (stype_of_ttype t, v, "type value mismatch"))
-  | Float, _ ->
-    raise (Bad_type_for_variant (stype_of_ttype t, v, "type value mismatch"))
-  | Int, _ ->
-    raise (Bad_type_for_variant (stype_of_ttype t, v, "type value mismatch"))
-  | Int32, _ ->
-    raise (Bad_type_for_variant (stype_of_ttype t, v, "type value mismatch"))
-  | Int64, _ ->
-    raise (Bad_type_for_variant (stype_of_ttype t, v, "type value mismatch"))
-  | Nativeint, _ ->
-    raise (Bad_type_for_variant (stype_of_ttype t, v, "type value mismatch"))
-  | String, _ ->
-    raise (Bad_type_for_variant (stype_of_ttype t, v, "type value mismatch"))
-  | Char, _ ->
-    raise (Bad_type_for_variant (stype_of_ttype t, v, "type value mismatch"))
-  | List _, _ ->
-    raise (Bad_type_for_variant (stype_of_ttype t, v, "type value mismatch"))
-  | Array _, _ ->
-    raise (Bad_type_for_variant (stype_of_ttype t, v, "type value mismatch"))
-  | Option _, _ ->
-    raise (Bad_type_for_variant (stype_of_ttype t, v, "type value mismatch"))
-  | Lazy _, _ ->
-    raise (Bad_type_for_variant (stype_of_ttype t, v, "type value mismatch"))
-  | Tuple _, _ ->
-    raise (Bad_type_for_variant (stype_of_ttype t, v, "type value mismatch"))
-  | Record _, _ ->
-    raise (Bad_type_for_variant (stype_of_ttype t, v, "type value mismatch"))
-  | Sum _, _ ->
-    raise (Bad_type_for_variant (stype_of_ttype t, v, "type value mismatch"))
+  | Function _, _ -> bad_variant "function"
+  | Object _, _ -> bad_variant "object"
+  | Unit, _ -> bad_variant "type mismatch"
+  | Bool, _ -> bad_variant "type mismatch"
+  | Float, _ -> bad_variant "type mismatch"
+  | Int, _ -> bad_variant "type mismatch"
+  | Int32, _ -> bad_variant "type mismatch"
+  | Int64, _ -> bad_variant "type mismatch"
+  | Nativeint, _ -> bad_variant "type mismatch"
+  | String, _ -> bad_variant "type mismatch"
+  | Char, _ -> bad_variant "type mismatch"
+  | List _, _ -> bad_variant "type mismatch"
+  | Array _, _ -> bad_variant "type mismatch"
+  | Option _, _ -> bad_variant "type mismatch"
+  | Lazy _, _ -> bad_variant "type mismatch"
+  | Tuple _, _
+  | Record _, _
+  | Sum _, _ -> bad_variant "type mismatch"
 
 let pp_may_left_paren ppf parens = if parens then begin Format.pp_open_box ppf 1; Format.pp_print_char ppf '(' end else Format.pp_open_box ppf 1
 let pp_may_right_paren ppf parens = if parens then Format.pp_print_char ppf ')'; Format.pp_close_box ppf ()
@@ -342,19 +321,19 @@ let print_variant = print_variant false
 let () = add_abstract_2 (module struct
     type ('a,'b) t = ('a,'b) Hashtbl.t
     let t = hashtbl_t
+
     let to_variant t1 t2 ht =
       Hashtbl.fold (fun key value acc ->
           Tuple [t1 key; t2 value] :: acc) ht []
       |> fun x -> List x
-    let of_variant o1 o2 v =
+
+    let of_variant {failwith} o1 o2 v =
       let ht = Hashtbl.create 5 in
       let f = function
         | Tuple [key; value] -> Hashtbl.add ht (o1 key) (o2 value)
-        | _ -> failwith "not a hashtable"
-      in
-      let () = match v with
-      | List l -> List.iter f l
-      | _ -> failwith "not a hashtable"
-      in ht
+        | _ -> failwith "expected tuple (key,value)"
+      in match v with
+      | List l -> (List.iter f l); ht
+      | _ -> failwith "expected list of (key,value)"
   end)
 
