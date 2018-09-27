@@ -20,8 +20,8 @@ type t =
   | Lazy of (t Lazy.t [@patch lazy_t])
 [@@deriving t]
 
-type 'a to_variant = t: 'a ttype -> 'a -> t
-type 'a of_variant = t: 'a ttype -> t -> 'a
+type 'a to_variant = 'a -> t
+type 'a of_variant = t -> 'a
 
 module type VARIANTIZABLE_0 = sig
   include Xtype.TYPE_0
@@ -31,14 +31,14 @@ end
 
 module type VARIANTIZABLE_1 = sig
   include Xtype.TYPE_1
-  val to_variant: 'a t to_variant
-  val of_variant: 'a t of_variant
+  val to_variant: 'a to_variant -> 'a t to_variant
+  val of_variant: 'a of_variant -> 'a t of_variant
 end
 
 module type VARIANTIZABLE_2 = sig
   include Xtype.TYPE_2
-  val to_variant: ('a, 'b) t to_variant
-  val of_variant: ('a, 'b) t of_variant
+  val to_variant: 'a to_variant -> 'b to_variant -> ('a, 'b) t to_variant
+  val of_variant: 'a of_variant -> 'b of_variant -> ('a, 'b) t of_variant
 end
 
 module type VMATCHER_0 = sig
@@ -97,7 +97,7 @@ let add_abstract_2 (module M : VARIANTIZABLE_2) =
       Hashtbl.add abstract_variantizers name (T2 (module T))
   | _ -> raise (Invalid_argument "add_abstract: received non abstract type")
 
-let rec to_variant: type a. a to_variant = fun ~t x ->
+let rec to_variant: type a. t: a ttype -> a to_variant = fun ~t x ->
   match xtype_of_ttype t with
   | Unit -> Unit
   | Bool -> Bool x
@@ -139,19 +139,22 @@ let rec to_variant: type a. a to_variant = fun ~t x ->
               match T.is_t t with
               | None -> use_first tl
               | Some (T.Is TypEq.Eq) ->
-                T.to_variant ~t x
+                T.to_variant x
             end
           | T1 (module T) -> begin
               match T.is_t t with
               | None -> use_first tl
-              | Some (T.Is (_, TypEq.Eq)) ->
-                T.to_variant ~t x
+              | Some (T.Is (t1, TypEq.Eq)) ->
+                let t1 = to_variant ~t:t1 in
+                T.to_variant t1 x
             end
           | T2 (module T) -> begin
               match T.is_t t with
               | None -> use_first tl
-              | Some (T.Is (_, _, TypEq.Eq)) ->
-                T.to_variant ~t x
+              | Some (T.Is (t1, t2, TypEq.Eq)) ->
+                let t1 = to_variant ~t:t1
+                and t2 = to_variant ~t:t2 in
+                T.to_variant t1 t2 x
             end
         end
     in
@@ -168,7 +171,7 @@ let conv: type a. a ttype -> (string -> a) -> string -> a =
     | exception (Failure _) -> raise
       (Bad_type_for_variant (stype_of_ttype t, String s, "conversion error"))
 
-let rec of_variant: type a. a of_variant = fun ~t v ->
+let rec of_variant: type a. t: a ttype -> a of_variant = fun ~t v ->
   match xtype_of_ttype t, v with
   | Unit, Unit -> ()
   | Bool, Bool x -> x
@@ -223,19 +226,22 @@ let rec of_variant: type a. a of_variant = fun ~t v ->
               match T.is_t t with
               | None -> use_first tl
               | Some (T.Is TypEq.Eq) ->
-                T.of_variant ~t v
+                T.of_variant v
             end
           | T1 (module T) -> begin
               match T.is_t t with
               | None -> use_first tl
-              | Some (T.Is (_, TypEq.Eq)) ->
-                T.of_variant ~t v
+              | Some (T.Is (t1, TypEq.Eq)) ->
+                let t1 = of_variant ~t:t1 in
+                T.of_variant t1 v
             end
           | T2 (module T) -> begin
               match T.is_t t with
               | None -> use_first tl
-              | Some (T.Is (_, _, TypEq.Eq)) ->
-                T.of_variant ~t v
+              | Some (T.Is (t1, t2, TypEq.Eq)) ->
+                let t1 = of_variant ~t:t1
+                and t2 = of_variant ~t:t2 in
+                T.of_variant t1 t2 v
             end
         end
     in
