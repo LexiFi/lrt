@@ -192,7 +192,7 @@ let rec of_variant: type a. t: a ttype -> a of_variant = fun ~t v ->
     let mk = fun {nth; typ} -> of_variant ~t:typ.t arr.(nth) in
     Builder.tuple tup {mk}
   | Record r, Record l ->
-    let mk name {typ;_} =
+    let mk (name,_) {typ;_} =
       match List.assoc_opt name l with
       | Some v -> of_variant ~t:typ.t v
       | None -> bad_variant ("missing field in variant: " ^ name)
@@ -208,7 +208,7 @@ let rec of_variant: type a. t: a ttype -> a of_variant = fun ~t v ->
             let mk = fun {nth; typ} -> of_variant ~t:typ.t arr.(nth) in
             Builder.regular_constructor c {mk}
           | Inlined c, Some (Record l) ->
-            let mk name {typ;_} =
+            let mk (name,_) {typ;_} =
               match List.assoc_opt name l with
               | Some v -> of_variant ~t:typ.t v
               | None -> bad_variant ("missing field in variant: " ^ name)
