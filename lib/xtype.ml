@@ -214,6 +214,7 @@ let t_of_ttype t = {t;xt = lazy (xtype_of_ttype t)}
 module Builder = struct
 
   type 'a t = { mk: 't. ('a, 't) element -> 't } [@@unboxed]
+  type 's named = { mk: 't. string -> ('s, 't) element -> 't } [@@unboxed]
 
   let fields : type a. a field list -> a t -> a =
     fun flds b ->
@@ -224,25 +225,29 @@ module Builder = struct
         ) flds;
       Obj.magic o
 
+  let record_fields : type a. a record_field list -> a named -> a =
+    fun flds b ->
+      let arity = List.length flds in
+      let o = Obj.new_block 0 arity in
+      List.iteri (fun i -> function (name,_), Field f ->
+          Obj.set_field o i (Obj.repr (b.mk name f))
+        ) flds;
+      Obj.magic o
+
   let tuple t = fields t.t_flds
 
-  let record_fields : type a. a record_field list -> a t -> a =
-    fun flds b ->
-      let flds = List.map (fun (_, f) -> f) flds in
-      fields flds b
-
-  let record : type a. a record -> a t -> a =
+  let record : type a. a record -> a named -> a =
     fun {r_flds; r_repr} b -> match r_repr with
       | Regular -> record_fields r_flds b
       | Float ->
         let arity = List.length r_flds in
         let o = Obj.new_block Obj.double_array_tag arity in
-        List.iteri (fun i -> function _, Field f ->
-            Obj.set_double_field o i (Obj.magic (b.mk f))
+        List.iteri (fun i -> function (name,_), Field f ->
+            Obj.set_double_field o i (Obj.magic (b.mk name f))
           ) r_flds ;
         Obj.magic o
       | Unboxed -> begin match r_flds with
-          | [_, Field f] -> Obj.magic (b.mk f)
+          | [(name,_), Field f] -> Obj.magic (b.mk name f)
           | _ -> assert false
         end
 
@@ -258,13 +263,14 @@ module Builder = struct
       | Unboxed, [Field f] -> Obj.magic (b.mk f)
       | Unboxed, _ -> assert false
 
-  let inlined_constructor : type a b. (a, b) inlined_constructor -> b t -> a =
+  let inlined_constructor : type a b.
+    (a, b) inlined_constructor -> b named -> a =
     fun {ic_flds; ic_repr; _} b ->
       match ic_repr, ic_flds with
       | Tag tag, _ ->
         let o = Obj.repr (record_fields ic_flds b) in
         Obj.set_tag o tag; Obj.magic o
-      | Unboxed, [_, Field f] -> Obj.magic (b.mk f)
+      | Unboxed, [(name,_), Field f] -> Obj.magic (b.mk name f)
       | Unboxed, _ -> assert false
 
   type generic = { mk: 's 't. ('s, 't) element -> 't } [@@unboxed]
@@ -274,7 +280,7 @@ module Builder = struct
       match c with
       | Constant c -> constant_constructor c
       | Regular c -> regular_constructor c { mk = b.mk }
-      | Inlined c -> inlined_constructor c { mk = b.mk }
+      | Inlined c -> inlined_constructor c { mk = fun _ -> b.mk }
 end
 
 module Make = struct
@@ -295,13 +301,21 @@ module Make = struct
         | Some o -> Obj.magic o
       in init arr; {mk}
 
+  let named_builder : ('a t -> unit) -> int -> 'a Builder.named =
+    fun init n ->
+      let arr = Array.make n None in
+      let mk _ {nth; _} = match arr.(nth) with
+        | None -> raise (Missing_field (string_of_int nth))
+        | Some o -> Obj.magic o
+      in init arr; {mk}
+
   let tuple: 'a tuple -> ('a t -> unit) -> 'a =
     fun {t_flds} f ->
       Builder.fields t_flds (builder f (List.length t_flds))
 
   let record: 'a record -> ('a t -> unit) -> 'a =
     fun r f ->
-      Builder.record r (builder f (List.length r.r_flds))
+      Builder.record r (named_builder f (List.length r.r_flds))
 
   let regular_constructor: type a b.
     (a, b) regular_constructor -> (b t -> unit) -> a =
@@ -311,7 +325,7 @@ module Make = struct
   let inlined_constructor: type a b.
     (a, b) inlined_constructor -> (b t -> unit) -> a =
     fun c f ->
-      Builder.inlined_constructor c (builder f (List.length c.ic_flds))
+      Builder.inlined_constructor c (named_builder f (List.length c.ic_flds))
 end
 
 

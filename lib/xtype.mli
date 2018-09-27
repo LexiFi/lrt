@@ -147,12 +147,13 @@ module Builder : sig
   *)
 
   type 's t = { mk: 't. ('s, 't) element -> 't } [@@unboxed]
+  type 's named = { mk: 't. string -> ('s, 't) element -> 't } [@@unboxed]
 
   val tuple : 'a tuple -> 'a t -> 'a
-  val record : 'a record -> 'a t -> 'a
+  val record : 'a record -> 'a named -> 'a
   val constant_constructor : 'a constant_constructor -> 'a
   val regular_constructor : ('a, 'b) regular_constructor -> 'b t -> 'a
-  val inlined_constructor : ('a, 'b) inlined_constructor -> 'b t -> 'a
+  val inlined_constructor : ('a, 'b) inlined_constructor -> 'b named -> 'a
 
   type generic = { mk: 's 't. ('s, 't) element -> 't } [@@unboxed]
   val constructor : 'a constructor -> generic -> 'a
