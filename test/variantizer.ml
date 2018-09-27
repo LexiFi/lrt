@@ -41,7 +41,10 @@ type c = bool Lazy.t [@patch lazy_t] [@@deriving t]
 let%test _ =
   lazy_round c_t (lazy (Random.self_init (); Random.bool ()))
 
-type d = { d1 : int; d2 : float} [@@deriving t]
+type d =
+  { d1 : int [@prop {of_variant_old_name="d"}]
+  ; d2 : float
+  }[@@deriving t]
 
 let ht = Hashtbl.create 3
 let () = Hashtbl.add ht "a" (Some {d1=1;d2=nan});
@@ -63,3 +66,6 @@ let%test _ =
   of_variant ~t:d_t (Record ["d1", Int 0; "d2", Float 0.]) = {d2=0.; d1=0}
 let%test _ =
   of_variant ~t:d_t (Record ["d2", Float 0.; "d1", Int 0]) = {d2=0.; d1=0}
+(* of_variant_old_name *)
+let%test _ =
+  of_variant ~t:d_t (Record ["d2", Float 0.; "d", Int 0]) = {d2=0.; d1=0}

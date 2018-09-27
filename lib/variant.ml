@@ -173,7 +173,26 @@ let conv: type a. (string -> a) -> (string -> a) -> string -> a =
 
 let rec of_variant: type a. t: a ttype -> a of_variant = fun ~t v ->
   let bad_variant s = raise (Bad_type_for_variant(stype_of_ttype t, v, s)) in
-  match xtype_of_ttype t, v with
+  let field_builder: t list -> _ Builder.t = fun lst ->
+    let arr = Array.of_list lst in
+    let len = Array.length arr in
+    let mk {nth; typ} =
+      if nth < len then of_variant ~t:typ.t arr.(nth)
+      else bad_variant ("tuple length mismatch")
+    in {mk}
+  and record_field_builder: (string * t) list -> _ Builder.t' = fun assoc ->
+    let rec mk (name, props) el =
+      (* TODO: consume from the assoc list for speeding things up *)
+      match List.assoc_opt name assoc with
+      | Some v -> of_variant ~t:el.typ.t v
+      | None -> match List.assoc_opt "of_variant_old_name" props with
+        | Some name ->
+          (* TODO: prone to recursive infinite loop *)
+          mk (name, List.remove_assoc "of_variant_old_name" props) el
+        | None -> bad_variant ("missing field in variant: " ^ name)
+                    (* TODO: of_variant_default. Requires lexer *)
+    in {mk}
+  in match xtype_of_ttype t, v with
   | Unit, Unit -> ()
   | Bool, Bool x -> x
   | Float, Float x -> x
@@ -188,32 +207,18 @@ let rec of_variant: type a. t: a ttype -> a of_variant = fun ~t v ->
   | Option {t;_}, Option x -> Ext.Option.map (of_variant ~t) x
   | Lazy {t;_}, Lazy l -> lazy (of_variant ~t (Lazy.force l))
   | Tuple tup, Tuple l ->
-    let arr = Array.of_list l in
-    let mk = fun {nth; typ} -> of_variant ~t:typ.t arr.(nth) in
-    Builder.tuple tup {mk}
+    Builder.tuple tup (field_builder l)
   | Record r, Record l ->
-    let mk (name,_) {typ;_} =
-      match List.assoc_opt name l with
-      | Some v -> of_variant ~t:typ.t v
-      | None -> bad_variant ("missing field in variant: " ^ name)
-    in
-    Builder.record r {mk}
+    Builder.record r (record_field_builder l)
   | Sum s, Constructor (name, args) -> begin
       match Lookup.constructor s name with
       | None -> bad_variant "non-existing constructor"
       | Some c -> begin match c, args with
           | Constant c, None -> Builder.constant_constructor c
           | Regular c, Some (Tuple l) ->
-            let arr = Array.of_list l in
-            let mk = fun {nth; typ} -> of_variant ~t:typ.t arr.(nth) in
-            Builder.regular_constructor c {mk}
+            Builder.regular_constructor c (field_builder l)
           | Inlined c, Some (Record l) ->
-            let mk (name,_) {typ;_} =
-              match List.assoc_opt name l with
-              | Some v -> of_variant ~t:typ.t v
-              | None -> bad_variant ("missing field in variant: " ^ name)
-            in
-            Builder.inlined_constructor c {mk}
+            Builder.inlined_constructor c (record_field_builder l)
           | _ -> bad_variant "constructor argument mismatch"
         end
     end
