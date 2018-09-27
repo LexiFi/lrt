@@ -125,13 +125,14 @@ let rec to_variant: type a. a to_variant = fun ~t x ->
         let l = Fields.map_inlined c dyn_named x in
         Constructor (fst c.ic_label, Some (Record l))
     end
-  | Prop (_, {t;_}) -> to_variant ~t x
+  | Prop _ -> to_variant ~t x
   | Object _ -> failwith "Objects cannot be variantized"
   | Function _ -> failwith "Functions cannot be variantized"
   | Abstract (name, _) ->
     let rec use_first = function
       | [] ->
-        failwith ("no variantizer registered for abstract type " ^ name)
+        failwith ("no suitable variantizer registered for abstract type "
+                  ^ name)
       | hd :: tl -> begin
           match hd with
           | T0 (module T) -> begin
@@ -210,13 +211,39 @@ let rec of_variant: type a. a of_variant = fun ~t v ->
                                          "constructor argument mismatch"))
         end
     end
-  | Prop (_,{t;_}), v -> of_variant ~t v
+  | Prop _, v -> of_variant ~t v
+  | Abstract (name, _), v ->
+    let rec use_first : variantizable list -> a = function
+      | [] ->
+        failwith ("no suitable variantizer registered for abstract type "
+                  ^ name)
+      | hd :: tl -> begin
+          match hd with
+          | T0 (module T) -> begin
+              match T.is_t t with
+              | None -> use_first tl
+              | Some (T.Is TypEq.Eq) ->
+                T.of_variant ~t v
+            end
+          | T1 (module T) -> begin
+              match T.is_t t with
+              | None -> use_first tl
+              | Some (T.Is (_, TypEq.Eq)) ->
+                T.of_variant ~t v
+            end
+          | T2 (module T) -> begin
+              match T.is_t t with
+              | None -> use_first tl
+              | Some (T.Is (_, _, TypEq.Eq)) ->
+                T.of_variant ~t v
+            end
+        end
+    in
+    use_first (Hashtbl.find_all abstract_variantizers name) ;
   | Function _, _ ->
     raise (Bad_type_for_variant (stype_of_ttype t, v, "function"))
   | Object _, _ ->
     raise (Bad_type_for_variant (stype_of_ttype t, v, "object"))
-  | Abstract _, _ ->
-    raise (Bad_type_for_variant (stype_of_ttype t, v, "abstract"))
   | Unit, _ ->
     raise (Bad_type_for_variant (stype_of_ttype t, v, "type value mismatch"))
   | Bool, _ ->
