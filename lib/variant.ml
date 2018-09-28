@@ -204,56 +204,63 @@ let assoc_consume key lst =
 let variant_of_string = Variant_lexer.variant_of_string
 let variant_of_file = Variant_lexer.variant_of_file
 
-let rec of_variant: type a. t: a ttype -> a of_variant = fun ~t v ->
-  let bad_variant s = raise (Bad_type_for_variant(stype_of_ttype t, v, s)) in
-  let field_builder: t list -> _ Builder.t = fun lst ->
-    let arr = Array.of_list lst in
-    let len = Array.length arr in
-    let mk {nth; typ} =
-      if nth < len then of_variant ~t:typ.t arr.(nth)
-      else bad_variant ("tuple length mismatch")
-    in {mk}
-  and record_field_builder: (string * t) list -> _ Builder.t' = fun lst ->
-    let lref = ref lst in
-    let rec mk (name, props) el =
-      (* When lst is in the correct order, it is traversed only once. *)
-      match assoc_consume name !lref with
-      | Some (v, newlst) -> lref := newlst; of_variant ~t:el.typ.t v
-      | None -> match assoc_consume "of_variant_old_name" props with
-        | Some (old_name, reduced_props) ->
-          mk (old_name, reduced_props) el
-        | None -> match assoc_consume "of_variant_default" props with
-          | Some (default, _reduced_props) ->
-            begin try of_variant ~t:el.typ.t (variant_of_string default) with
-              | Variant_parser {msg; text; loc} ->
-                raise (Variant_parser {msg = "of_variant_default: " ^ msg
-                                      ; text; loc})
-              | Bad_type_for_variant (typ, v, msg) ->
-                raise (Bad_type_for_variant (typ, v,
-                                             "of_variant_default: " ^ msg))
-            end
-          | None -> bad_variant ("missing field in variant: " ^ name)
-    in {mk}
-  in match xtype_of_ttype t, v with
-  | Unit, Unit -> ()
-  | Bool, Bool x -> x
-  | Float, Float x -> x
-  | Int, Int x -> x
-  | Int32, String x -> conv bad_variant Int32.of_string x
-  | Int64, String x -> conv bad_variant Int64.of_string x
-  | Nativeint, String x -> conv bad_variant Nativeint.of_string x
-  | String, String x -> x
-  | Char, Int x -> char_of_int x
-  | List {t;_}, List x -> List.map (of_variant ~t) x
-  | Array {t;_}, Array x -> Array.map (of_variant ~t) x
-  | Option {t;_}, Option x -> Ext.Option.map (of_variant ~t) x
-  | Lazy {t;_}, Lazy l -> lazy (of_variant ~t (Lazy.force l))
-  | Tuple tup, Tuple l ->
-    Builder.tuple tup (field_builder l)
-  | Record r, Record l ->
-    Builder.record r (record_field_builder l)
-  | Sum s, Constructor (name, args) ->
-      let handle_constr c = match c, args with
+type properties = Dynt_core.Stype.stype_properties
+
+let rec of_variant: type a. t: a ttype -> properties -> a of_variant =
+  fun ~t properties v ->
+    try
+      let bad_variant s =
+        raise (Bad_type_for_variant(stype_of_ttype t, v, s)) in
+      let field_builder: t list -> _ Builder.t = fun lst ->
+        let arr = Array.of_list lst in
+        let len = Array.length arr in
+        let mk {nth; typ} =
+          if nth < len then of_variant ~t:typ.t [] arr.(nth)
+          else bad_variant ("tuple length mismatch")
+        in {mk}
+      and record_field_builder: (string * t) list -> _ Builder.t' = fun lst ->
+        let lref = ref lst in
+        let rec mk (name, props) el =
+          (* When lst is in the correct order, it is traversed only once. *)
+          match assoc_consume name !lref with
+          | Some (v, newlst) -> lref := newlst; of_variant [] ~t:el.typ.t v
+          | None -> match assoc_consume "of_variant_old_name" props with
+            | Some (old_name, reduced_props) ->
+              mk (old_name, reduced_props) el
+            | None -> match assoc_consume "of_variant_default" props with
+              | Some (default, _reduced_props) -> begin
+                  try
+                    of_variant [] ~t:el.typ.t (variant_of_string default)
+                  with
+                  | Variant_parser {msg; text; loc} ->
+                    raise (Variant_parser {msg = "of_variant_default: " ^ msg
+                                          ; text; loc})
+                  | Bad_type_for_variant (typ, v, msg) ->
+                    raise (Bad_type_for_variant (typ, v,
+                                                 "of_variant_default: " ^ msg))
+                end
+              | None -> bad_variant ("missing field in variant: " ^ name)
+        in {mk}
+      in match xtype_of_ttype t, v with
+      | Unit, Unit -> ()
+      | Bool, Bool x -> x
+      | Float, Float x -> x
+      | Int, Int x -> x
+      | Int32, String x -> conv bad_variant Int32.of_string x
+      | Int64, String x -> conv bad_variant Int64.of_string x
+      | Nativeint, String x -> conv bad_variant Nativeint.of_string x
+      | String, String x -> x
+      | Char, Int x -> char_of_int x
+      | List {t;_}, List x -> List.map (of_variant [] ~t) x
+      | Array {t;_}, Array x -> Array.map (of_variant [] ~t) x
+      | Option {t;_}, Option x -> Ext.Option.map (of_variant [] ~t) x
+      | Lazy {t;_}, Lazy l -> lazy (of_variant [] ~t (Lazy.force l))
+      | Tuple tup, Tuple l ->
+        Builder.tuple tup (field_builder l)
+      | Record r, Record l ->
+        Builder.record r (record_field_builder l)
+      | Sum s, Constructor (name, args) ->
+        let handle_constr c = match c, args with
           | Constant c, None -> Builder.constant_constructor c
           | Regular c, Some (Tuple l) ->
             Builder.regular_constructor c (field_builder l)
@@ -262,73 +269,90 @@ let rec of_variant: type a. t: a ttype -> a of_variant = fun ~t v ->
           | Inlined c, Some (Record l) ->
             Builder.inlined_constructor c (record_field_builder l)
           | _ -> bad_variant "constructor argument mismatch"
-      in let next_old old (_,props) constr =
-        match old, List.assoc_opt "of_variant_old_name" props with
-        | None, Some old_name when old_name = name -> Some constr
-        | Some _, Some old_name when old_name = name ->
-          assert false (* TODO: old_name given twice. Recover or fail? *)
-        | x, _ -> x
-      in let rec use_first old = function
-        | Constant c as hd :: _ when fst c.cc_label = name -> handle_constr hd
-        | Regular c as hd :: _ when fst c.rc_label = name -> handle_constr hd
-        | Inlined c as hd :: _ when fst c.ic_label = name -> handle_constr hd
-        | Constant c as hd :: tl -> use_first (next_old old c.cc_label hd) tl
-        | Regular c as hd :: tl -> use_first (next_old old c.rc_label hd) tl
-        | Inlined c as hd :: tl -> use_first (next_old old c.ic_label hd) tl
-        | [] -> match old with
-          | Some c -> handle_constr c
-          | None -> bad_variant "constructor does not exist"
-      in use_first None s.cstrs
-  | Prop (_,{t;_}), v -> of_variant ~t v
-  | Abstract (name, _), v ->
-    let rec use_first : variantizable list -> a = function
-      | [] -> failwith (
-          "no suitable variantizer registered for abstract type " ^ name)
-      | hd :: tl -> begin
-          let bad_variant = { failwith = bad_variant } in
-          match hd with
-          | T0 (module T) -> begin
-              match T.is_t t with
-              | None -> use_first tl
-              | Some (T.Is TypEq.Eq) ->
-                T.of_variant bad_variant v
+        in let next_old old (_,props) constr =
+             match old, List.assoc_opt "of_variant_old_name" props with
+             | None, Some old_name when old_name = name -> Some constr
+             | Some _, Some old_name when old_name = name ->
+               assert false (* TODO: old_name given twice. Recover or fail? *)
+             | x, _ -> x
+        in let rec use_first old = function
+            | Constant c as hd :: _ when fst c.cc_label = name -> handle_constr hd
+            | Regular c as hd :: _ when fst c.rc_label = name -> handle_constr hd
+            | Inlined c as hd :: _ when fst c.ic_label = name -> handle_constr hd
+            | Constant c as hd :: tl -> use_first (next_old old c.cc_label hd) tl
+            | Regular c as hd :: tl -> use_first (next_old old c.rc_label hd) tl
+            | Inlined c as hd :: tl -> use_first (next_old old c.ic_label hd) tl
+            | [] -> match old with
+              | Some c -> handle_constr c
+              | None -> bad_variant "constructor does not exist"
+        in use_first None s.cstrs
+      (* accumulate properties TODO: which order is correct?*)
+      | Prop (lst,{t;_}), v -> of_variant (properties @ lst) ~t v
+      | Abstract (name, _), v ->
+        let rec use_first : variantizable list -> a = function
+          | [] -> failwith (
+              "no suitable variantizer registered for abstract type " ^ name)
+          | hd :: tl -> begin
+              let bad_variant = { failwith = bad_variant } in
+              match hd with
+              | T0 (module T) -> begin
+                  match T.is_t t with
+                  | None -> use_first tl
+                  | Some (T.Is TypEq.Eq) ->
+                    T.of_variant bad_variant v
+                end
+              | T1 (module T) -> begin
+                  match T.is_t t with
+                  | None -> use_first tl
+                  | Some (T.Is (t1, TypEq.Eq)) ->
+                    let t1 = of_variant [] ~t:t1 in
+                    T.of_variant bad_variant t1 v
+                end
+              | T2 (module T) -> begin
+                  match T.is_t t with
+                  | None -> use_first tl
+                  | Some (T.Is (t1, t2, TypEq.Eq)) ->
+                    let t1 = of_variant [] ~t:t1
+                    and t2 = of_variant [] ~t:t2 in
+                    T.of_variant bad_variant t1 t2 v
+                end
             end
-          | T1 (module T) -> begin
-              match T.is_t t with
-              | None -> use_first tl
-              | Some (T.Is (t1, TypEq.Eq)) ->
-                let t1 = of_variant ~t:t1 in
-                T.of_variant bad_variant t1 v
-            end
-          | T2 (module T) -> begin
-              match T.is_t t with
-              | None -> use_first tl
-              | Some (T.Is (t1, t2, TypEq.Eq)) ->
-                let t1 = of_variant ~t:t1
-                and t2 = of_variant ~t:t2 in
-                T.of_variant bad_variant t1 t2 v
-            end
-        end
-    in
-    use_first (Hashtbl.find_all abstract_variantizers name) ;
-  | Function _, _ -> bad_variant "function"
-  | Object _, _ -> bad_variant "object"
-  | Unit, _ -> bad_variant "type mismatch"
-  | Bool, _ -> bad_variant "type mismatch"
-  | Float, _ -> bad_variant "type mismatch"
-  | Int, _ -> bad_variant "type mismatch"
-  | Int32, _ -> bad_variant "type mismatch"
-  | Int64, _ -> bad_variant "type mismatch"
-  | Nativeint, _ -> bad_variant "type mismatch"
-  | String, _ -> bad_variant "type mismatch"
-  | Char, _ -> bad_variant "type mismatch"
-  | List _, _ -> bad_variant "type mismatch"
-  | Array _, _ -> bad_variant "type mismatch"
-  | Option _, _ -> bad_variant "type mismatch"
-  | Lazy _, _ -> bad_variant "type mismatch"
-  | Tuple _, _
-  | Record _, _
-  | Sum _, _ -> bad_variant "type mismatch"
+        in
+        use_first (Hashtbl.find_all abstract_variantizers name) ;
+      | Function _, _ -> bad_variant "function"
+      | Object _, _ -> bad_variant "object"
+      | Unit, _ -> bad_variant "type mismatch"
+      | Bool, _ -> bad_variant "type mismatch"
+      | Float, _ -> bad_variant "type mismatch"
+      | Int, _ -> bad_variant "type mismatch"
+      | Int32, _ -> bad_variant "type mismatch"
+      | Int64, _ -> bad_variant "type mismatch"
+      | Nativeint, _ -> bad_variant "type mismatch"
+      | String, _ -> bad_variant "type mismatch"
+      | Char, _ -> bad_variant "type mismatch"
+      | List _, _ -> bad_variant "type mismatch"
+      | Array _, _ -> bad_variant "type mismatch"
+      | Option _, _ -> bad_variant "type mismatch"
+      | Lazy _, _ -> bad_variant "type mismatch"
+      | Tuple _, _
+      | Record _, _
+      | Sum _, _ -> bad_variant "type mismatch"
+    with Bad_type_for_variant _ as e ->
+    (* check accumulated properties for recovery mechanism *)
+      let rec use_first p =
+        (* TODO: get rid of reiteration. *)
+        match assoc_consume "of_variant_mapper" p with
+        | None -> raise e
+        | Some (name, reduced_props) ->
+          match Hashtbl.find_opt variant_mappers name with
+          | None -> assert false (* TODO: what do we want to do here? *)
+          | Some mapper ->
+            match mapper v with
+            | Some mapped -> of_variant ~t reduced_props mapped
+            | None -> use_first reduced_props
+      in use_first properties
+
+let of_variant = of_variant []
 
 let pp_may_left_paren ppf parens = if parens then begin Format.pp_open_box ppf 1; Format.pp_print_char ppf '(' end else Format.pp_open_box ppf 1
 let pp_may_right_paren ppf parens = if parens then Format.pp_print_char ppf ')'; Format.pp_close_box ppf ()
@@ -480,7 +504,7 @@ let rec iter_sep f sep = function
 
 let print_compact_header fields =
   Buffer.add_string buf "LEXIFICOMPACTRECORDS1(";
-  iter_sep (fun (field, _value) ->  Buffer.add_char buf '\"'; Buffer.add_string buf field; Buffer.add_char buf '\"') ',' fields;
+  iter_sep (fun (field, _value) -> Buffer.add_char buf '\"'; Buffer.add_string buf field; Buffer.add_char buf '\"') ',' fields;
   Buffer.add_string buf ");"
 
 let compact_buffer_of_variant ?dont_compress_records ?with_more_spaces v =

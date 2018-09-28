@@ -104,7 +104,7 @@ type f = int * string [@@prop {of_variant_mapper = "f_flip"}]
 [@@deriving t]
 
 let mapper = function
-  | Tuple [String s; Int i] -> Some (Tuple [String s; Int i])
+  | Tuple [String s; Int i] -> Some (Tuple [Int i; String s])
   | _ -> None
 
 let () = of_variant_mapper ~t:f_t mapper
