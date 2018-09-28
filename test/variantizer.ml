@@ -60,7 +60,6 @@ let%expect_test _ = shows ht_t ht;
     [("c", None); ("b", Some{d1 = 4611686018427387903; d2 = 1e+42});
      ("a", Some{d1 = 1; d2 = nan})] |}]
 
-
 (* Test whether record fields can be reordered *)
 let%test _ =
   of_variant ~t:d_t (Record ["d1", Int 0; "d2", Float 0.]) = {d2=0.; d1=0}
@@ -69,3 +68,26 @@ let%test _ =
 (* of_variant_old_name, of_variant_default *)
 let%test _ =
   of_variant ~t:d_t (Record ["d", Int 0]) = {d2=1e-4; d1=0}
+
+type e =
+  | A of string [@prop {of_variant_old_name="E1"}]
+  | B of char * char [@prop {of_variant_old_name="E2"}]
+  | C of nativeint [@prop {of_variant_old_name="E3"}]
+[@@deriving t]
+
+let%test _ = round e_t (A "a")
+let%test _ = round e_t (B ('b','b'))
+let%test _ = round e_t (C Nativeint.max_int)
+
+let%expect_test _ = showv e_t (A "a");
+  [%expect {|
+    Constructor ("A", Some (String "a")) |}]
+
+let%test _ =
+  of_variant ~t:e_t (Constructor ("A", Some (Tuple [String "a"]))) = (A "a")
+let%test _ =
+  of_variant ~t:e_t (Constructor ("A", Some (String "a"))) = (A "a")
+let%test _ =
+  of_variant ~t:e_t (Constructor ("E1", Some (String "a"))) = (A "a")
+
+

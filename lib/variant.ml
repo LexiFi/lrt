@@ -120,6 +120,10 @@ let rec to_variant: type a. t: a ttype -> a to_variant = fun ~t x ->
     Record (Fields.map_record r dyn_named x)
   | Sum s -> begin match constructor_by_value s x with
       | Constant c -> Constructor (fst c.cc_label, None)
+      | Regular ({rc_label; rc_flds = [Field el]; _} as c) ->
+        let arg = to_variant ~t:el.typ.t
+            (Fields.regular_constructor c el x |> Ext.Option.value_exn)
+        in Constructor (fst rc_label, Some arg)
       | Regular c ->
         let l = Fields.map_regular c dyn x in
         Constructor (fst c.rc_label, Some (Tuple l))
@@ -230,18 +234,33 @@ let rec of_variant: type a. t: a ttype -> a of_variant = fun ~t v ->
     Builder.tuple tup (field_builder l)
   | Record r, Record l ->
     Builder.record r (record_field_builder l)
-  | Sum s, Constructor (name, args) -> begin
-      match Lookup.constructor s name with
-      | None -> bad_variant "non-existing constructor"
-      | Some c -> begin match c, args with
+  | Sum s, Constructor (name, args) ->
+      let handle_constr c = match c, args with
           | Constant c, None -> Builder.constant_constructor c
           | Regular c, Some (Tuple l) ->
             Builder.regular_constructor c (field_builder l)
+          | Regular c, Some singleton ->
+            Builder.regular_constructor c (field_builder [singleton])
           | Inlined c, Some (Record l) ->
             Builder.inlined_constructor c (record_field_builder l)
           | _ -> bad_variant "constructor argument mismatch"
-        end
-    end
+      in let next_old old (_,props) constr =
+        match old, List.assoc_opt "of_variant_old_name" props with
+        | None, Some old_name when old_name = name -> Some constr
+        | Some _, Some old_name when old_name = name ->
+          assert false (* TODO: old_name given twice. Recover or fail? *)
+        | x, _ -> x
+      in let rec use_first old = function
+        | Constant c as hd :: _ when fst c.cc_label = name -> handle_constr hd
+        | Regular c as hd :: _ when fst c.rc_label = name -> handle_constr hd
+        | Inlined c as hd :: _ when fst c.ic_label = name -> handle_constr hd
+        | Constant c as hd :: tl -> use_first (next_old old c.cc_label hd) tl
+        | Regular c as hd :: tl -> use_first (next_old old c.rc_label hd) tl
+        | Inlined c as hd :: tl -> use_first (next_old old c.ic_label hd) tl
+        | [] -> match old with
+          | Some c -> handle_constr c
+          | None -> bad_variant "constructor does not exist"
+      in use_first None s.cstrs
   | Prop _, v -> of_variant ~t v
   | Abstract (name, _), v ->
     let rec use_first : variantizable list -> a = function
