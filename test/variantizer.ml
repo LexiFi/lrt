@@ -72,16 +72,22 @@ let%test _ =
 type e =
   | A of string [@prop {of_variant_old_name="E1"}]
   | B of char * char [@prop {of_variant_old_name="E2"}]
-  | C of nativeint [@prop {of_variant_old_name="E3"}]
+  | C of {i: nativeint [@prop {of_variant_old_name="native"}]}
+        [@prop {of_variant_old_name="E3"}]
 [@@deriving t]
 
 let%test _ = round e_t (A "a")
 let%test _ = round e_t (B ('b','b'))
-let%test _ = round e_t (C Nativeint.max_int)
+let%test _ = round e_t (C {i=Nativeint.max_int})
 
-let%expect_test _ = showv e_t (A "a");
+let%expect_test _ =
+  showv e_t (A "a");
+  showv e_t (B ('b','b'));
+  showv e_t (C {i=Nativeint.zero});
   [%expect {|
-    Constructor ("A", Some (String "a")) |}]
+    Constructor ("A", Some (String "a"))
+    Constructor ("B", Some (Tuple [Int 98; Int 98]))
+    Constructor ("C", Some (Record [("i", String "0")])) |}]
 
 let%test _ =
   of_variant ~t:e_t (Constructor ("A", Some (Tuple [String "a"]))) = (A "a")
@@ -90,4 +96,6 @@ let%test _ =
 let%test _ =
   of_variant ~t:e_t (Constructor ("E1", Some (String "a"))) = (A "a")
 
-
+let%test _ =
+  of_variant ~t:e_t (Constructor ("E3", Some (Record [("native", String "0")])))
+  = (C {i=Nativeint.zero})
