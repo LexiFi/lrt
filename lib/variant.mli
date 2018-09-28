@@ -97,6 +97,24 @@ val variant_of_file: string -> t
 val value_of_variant_in_file: t:'a ttype -> string -> 'a
 (** Read a value as a variant from a text file. *)
 
+(** {2 Variant mapper} *)
+
+(** Lexifi has documentation on how to use mappers and the other properties.
+    This should go here *)
+
+type mapper = t -> t option
+
+val of_variant_mapper: ?overwrite: bool -> t: 'a ttype -> mapper -> unit
+(** Fails when the [of_variant_mapper] name was used before. The check can be
+    bypassed by setting [~overwrite:true].
+
+    Also fails, when [of_variant_mapper] property is not set. *)
+
+val set_of_variant_mapper_by_name: ?overwrite: bool -> string -> mapper -> unit
+(** Same as [of_variant_mapper] but instead of reading the mapper name from a
+    [ttype], it can be provided directly. *)
+(* TODO: why exactly do we need this? *)
+
 (** {2 Handle abstract types} *)
 
 type 'a to_variant = 'a -> t

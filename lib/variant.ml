@@ -109,6 +109,7 @@ let rec to_variant: type a. t: a ttype -> a to_variant = fun ~t x ->
   | Nativeint -> String (Nativeint.to_string x)
   | Float -> Float x
   | String -> String x
+  (* TODO: old implementation stores char in string *)
   | Char -> Int (int_of_char x)
   | List {t;_} -> List (List.map (to_variant ~t) x)
   | Array {t;_} -> Array (Array.map (to_variant ~t) x)
@@ -170,6 +171,23 @@ and dyn = fun (Dyn (t,x)) -> to_variant ~t x
 and dyn_named = fun ~name (Dyn (t,x)) -> name, to_variant ~t x
 
 exception Bad_type_for_variant of Dynt_core.Stype.stype * t * string
+
+type mapper = t -> t option
+let variant_mappers : (string, mapper) Hashtbl.t = Hashtbl.create 4
+
+let set_of_variant_mapper_by_name ?(overwrite=false) name mapper =
+  if not overwrite && Hashtbl.mem variant_mappers name
+  then failwith (Printf.sprintf "of_variant_mapper %s already registered" name);
+  Hashtbl.replace variant_mappers name mapper
+
+let rec of_variant_mapper ?overwrite ~t mapper =
+  match xtype_of_ttype t with
+  | Prop (lst, {t;_}) -> begin
+      match List.assoc_opt "of_variant_mapper" lst with
+      | None -> of_variant_mapper ~t mapper
+      | Some name -> set_of_variant_mapper_by_name ?overwrite name mapper
+    end
+  | _ -> failwith "of_variant_mapper property not set"
 
 let conv: type a. (string -> a) -> (string -> a) -> string -> a =
   fun failwith conv s -> match conv s with

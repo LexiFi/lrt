@@ -99,3 +99,24 @@ let%test _ =
 let%test _ =
   of_variant ~t:e_t (Constructor ("E3", Some (Record [("native", String "0")])))
   = (C {i=Nativeint.zero})
+
+type f = int * string [@@prop {of_variant_mapper = "f_flip"}]
+[@@deriving t]
+
+let mapper = function
+  | Tuple [String s; Int i] -> Some (Tuple [String s; Int i])
+  | _ -> None
+
+let () = of_variant_mapper ~t:f_t mapper
+
+let%expect_test _ =
+  match of_variant_mapper ~t:f_t mapper with
+  | _ -> assert false
+  | exception Failure msg -> print_endline msg;
+  [%expect {| of_variant_mapper f_flip already registered |}]
+
+let%expect_test _ =
+  match of_variant_mapper ~t:e_t mapper with
+  | _ -> assert false
+  | exception Failure msg -> print_endline msg;
+  [%expect {| of_variant_mapper property not set |}]
