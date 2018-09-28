@@ -383,6 +383,16 @@ and print_application_like parens ppf name v =
 
 let print_variant = print_variant false
 
+let () = Printexc.register_printer
+    (function
+      | Bad_type_for_variant (t, v, s) ->
+        Some(
+          Format.asprintf
+            "Bad type for value: %s@.@[** Variant: %a@.@[** Type: %a@]"
+            s print_variant v Dynt_core.Stype.print_stype t)
+      | _ -> None
+    )
+
 (* register hashtable variantizer *)
 
 let () = add_abstract_2 (module struct

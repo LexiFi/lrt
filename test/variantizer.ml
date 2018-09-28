@@ -126,3 +126,6 @@ let of_variant_string ~t s =
 
 let%test _ =
   of_variant_string ~t:f_t "(1, \"1\")" = (1,"1")
+
+let%test _ =
+  of_variant_string ~t:f_t "(\"1\", 1)" = (1,"1")
