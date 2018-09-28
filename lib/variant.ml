@@ -132,7 +132,7 @@ let rec to_variant: type a. t: a ttype -> a to_variant = fun ~t x ->
         let l = Fields.map_inlined c dyn_named x in
         Constructor (fst c.ic_label, Some (Record l))
     end
-  | Prop _ -> to_variant ~t x
+  | Prop (_,{t;_}) -> to_variant ~t x
   | Object _ -> failwith "Objects cannot be variantized"
   | Function _ -> failwith "Functions cannot be variantized"
   | Abstract (name, _) ->
@@ -279,7 +279,7 @@ let rec of_variant: type a. t: a ttype -> a of_variant = fun ~t v ->
           | Some c -> handle_constr c
           | None -> bad_variant "constructor does not exist"
       in use_first None s.cstrs
-  | Prop _, v -> of_variant ~t v
+  | Prop (_,{t;_}), v -> of_variant ~t v
   | Abstract (name, _), v ->
     let rec use_first : variantizable list -> a = function
       | [] -> failwith (

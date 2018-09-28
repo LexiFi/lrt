@@ -120,3 +120,9 @@ let%expect_test _ =
   | _ -> assert false
   | exception Failure msg -> print_endline msg;
   [%expect {| of_variant_mapper property not set |}]
+
+let of_variant_string ~t s =
+  variant_of_string s |> of_variant ~t
+
+let%test _ =
+  of_variant_string ~t:f_t "(1, \"1\")" = (1,"1")
