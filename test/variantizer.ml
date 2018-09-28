@@ -43,7 +43,7 @@ let%test _ =
 
 type d =
   { d1 : int [@prop {of_variant_old_name="d"}]
-  ; d2 : float
+  ; d2 : float [@prop {of_variant_default="1e-4"}]
   }[@@deriving t]
 
 let ht = Hashtbl.create 3
@@ -66,6 +66,6 @@ let%test _ =
   of_variant ~t:d_t (Record ["d1", Int 0; "d2", Float 0.]) = {d2=0.; d1=0}
 let%test _ =
   of_variant ~t:d_t (Record ["d2", Float 0.; "d1", Int 0]) = {d2=0.; d1=0}
-(* of_variant_old_name *)
+(* of_variant_old_name, of_variant_default *)
 let%test _ =
-  of_variant ~t:d_t (Record ["d2", Float 0.; "d", Int 0]) = {d2=0.; d1=0}
+  of_variant ~t:d_t (Record ["d", Int 0]) = {d2=1e-4; d1=0}

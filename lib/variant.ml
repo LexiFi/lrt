@@ -200,8 +200,17 @@ let rec of_variant: type a. t: a ttype -> a of_variant = fun ~t v ->
       | None -> match assoc_consume "of_variant_old_name" props with
         | Some (old_name, reduced_props) ->
           mk (old_name, reduced_props) el
-        | None -> bad_variant ("missing field in variant: " ^ name)
-        (* TODO: of_variant_default. Requires lexer *)
+        | None -> match assoc_consume "of_variant_default" props with
+          | Some (default, _reduced_props) ->
+            begin try of_variant ~t:el.typ.t (variant_of_string default) with
+              | Variant_parser {msg; text; loc} ->
+                raise (Variant_parser {msg = "of_variant_default: " ^ msg
+                                      ; text; loc})
+              | Bad_type_for_variant (typ, v, msg) ->
+                raise (Bad_type_for_variant (typ, v,
+                                             "of_variant_default: " ^ msg))
+            end
+          | None -> bad_variant ("missing field in variant: " ^ name)
     in {mk}
   in match xtype_of_ttype t, v with
   | Unit, Unit -> ()
