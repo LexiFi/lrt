@@ -6,8 +6,8 @@ let variant_round t value =
 
 let string_round t value =
   to_variant ~t value
-  |> Format.asprintf "%a" Variant.print_variant
-  |> Variant_lexer.variant_of_string
+  |> Format.asprintf "%a" print_variant
+  |> variant_of_string
   |> of_variant ~t
 
 let round cmp t v =

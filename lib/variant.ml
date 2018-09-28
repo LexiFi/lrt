@@ -3,13 +3,14 @@ open Xtype
 
 open Dynt_core.Std
 
-type t =
+exception Variant_parser = Variant_lexer.Error
+
+type t = Variant_lexer.t =
   | Unit
   | Bool of bool
   | Int of int
   | Float of float
   | String of string
-  | Char of char
   | Tuple of t list
   | List of t list
   | Array of t array
@@ -73,7 +74,7 @@ let add_abstract_0 (module M : VARIANTIZABLE_0) =
   end in
   match T.is_abstract with
   | Some name ->
-      Hashtbl.add abstract_variantizers name (T0 (module T))
+    Hashtbl.add abstract_variantizers name (T0 (module T))
   | None -> raise (Invalid_argument "add_abstract: received non abstract type")
 
 let add_abstract_1 (module M : VARIANTIZABLE_1) =
@@ -84,7 +85,7 @@ let add_abstract_1 (module M : VARIANTIZABLE_1) =
   end in
   match T.is_abstract with
   | Some name ->
-      Hashtbl.add abstract_variantizers name (T1 (module T))
+    Hashtbl.add abstract_variantizers name (T1 (module T))
   | _ -> raise (Invalid_argument "add_abstract: received non abstract type")
 
 let add_abstract_2 (module M : VARIANTIZABLE_2) =
@@ -95,7 +96,7 @@ let add_abstract_2 (module M : VARIANTIZABLE_2) =
   end in
   match T.is_abstract with
   | Some name ->
-      Hashtbl.add abstract_variantizers name (T2 (module T))
+    Hashtbl.add abstract_variantizers name (T2 (module T))
   | _ -> raise (Invalid_argument "add_abstract: received non abstract type")
 
 let rec to_variant: type a. t: a ttype -> a to_variant = fun ~t x ->
@@ -108,7 +109,7 @@ let rec to_variant: type a. t: a ttype -> a to_variant = fun ~t x ->
   | Nativeint -> String (Nativeint.to_string x)
   | Float -> Float x
   | String -> String x
-  | Char -> Char x
+  | Char -> Int (int_of_char x)
   | List {t;_} -> List (List.map (to_variant ~t) x)
   | Array {t;_} -> Array (Array.map (to_variant ~t) x)
   | Option {t;_} -> Option (Ext.Option.map (to_variant ~t) x)
@@ -171,6 +172,16 @@ let conv: type a. (string -> a) -> (string -> a) -> string -> a =
     | v -> v
     | exception (Failure _) -> failwith "conversion error"
 
+let assoc_consume key lst =
+  let rec f acc = function
+    | [] -> None
+    | (k,v) :: tl when k = key -> Some (v, List.rev_append acc tl)
+    | hd :: tl -> f (hd :: acc) tl
+  in f [] lst
+
+let variant_of_string = Variant_lexer.variant_of_string
+let variant_of_file = Variant_lexer.variant_of_file
+
 let rec of_variant: type a. t: a ttype -> a of_variant = fun ~t v ->
   let bad_variant s = raise (Bad_type_for_variant(stype_of_ttype t, v, s)) in
   let field_builder: t list -> _ Builder.t = fun lst ->
@@ -180,17 +191,17 @@ let rec of_variant: type a. t: a ttype -> a of_variant = fun ~t v ->
       if nth < len then of_variant ~t:typ.t arr.(nth)
       else bad_variant ("tuple length mismatch")
     in {mk}
-  and record_field_builder: (string * t) list -> _ Builder.t' = fun assoc ->
+  and record_field_builder: (string * t) list -> _ Builder.t' = fun lst ->
+    let lref = ref lst in
     let rec mk (name, props) el =
-      (* TODO: consume from the assoc list for speeding things up *)
-      match List.assoc_opt name assoc with
-      | Some v -> of_variant ~t:el.typ.t v
-      | None -> match List.assoc_opt "of_variant_old_name" props with
-        | Some name ->
-          (* TODO: prone to recursive infinite loop *)
-          mk (name, List.remove_assoc "of_variant_old_name" props) el
+      (* When lst is in the correct order, it is traversed only once. *)
+      match assoc_consume name !lref with
+      | Some (v, newlst) -> lref := newlst; of_variant ~t:el.typ.t v
+      | None -> match assoc_consume "of_variant_old_name" props with
+        | Some (old_name, reduced_props) ->
+          mk (old_name, reduced_props) el
         | None -> bad_variant ("missing field in variant: " ^ name)
-                    (* TODO: of_variant_default. Requires lexer *)
+        (* TODO: of_variant_default. Requires lexer *)
     in {mk}
   in match xtype_of_ttype t, v with
   | Unit, Unit -> ()
@@ -201,7 +212,7 @@ let rec of_variant: type a. t: a ttype -> a of_variant = fun ~t v ->
   | Int64, String x -> conv bad_variant Int64.of_string x
   | Nativeint, String x -> conv bad_variant Nativeint.of_string x
   | String, String x -> x
-  | Char, Char x -> x
+  | Char, Int x -> char_of_int x
   | List {t;_}, List x -> List.map (of_variant ~t) x
   | Array {t;_}, Array x -> Array.map (of_variant ~t) x
   | Option {t;_}, Option x -> Ext.Option.map (of_variant ~t) x
@@ -288,7 +299,6 @@ let rec print_variant parens ppf =
   | Unit -> pp_print_string ppf "()"
   | Bool false -> pp_print_string ppf "false"
   | Bool true -> pp_print_string ppf "true"
-  | Char c -> pp_print_char ppf c
   | Int x -> pp_may_paren ppf parens abs pp_print_int x
   | Float x -> pp_may_paren ppf parens abs_float Ext.Float.pp_repres x
   | String s ->  pp_print_char ppf '\"'; pp_print_string ppf (String.escaped s); pp_print_char ppf '\"'
@@ -304,24 +314,24 @@ let rec print_variant parens ppf =
   | Constructor (s, Some v) -> print_application_like parens ppf s v
   | Variant v -> print_application_like parens ppf "variant" v
   | Lazy v ->
-      try
-        let v = Lazy.force v in
-        print_application_like parens ppf "lazy" v
-      with exn ->
-        pp_may_left_paren ppf parens;
-        pp_print_string ppf "lazy(raise \""; pp_print_string ppf (Printexc.to_string exn); pp_print_string ppf "\")";
-        pp_may_right_paren ppf parens
+    try
+      let v = Lazy.force v in
+      print_application_like parens ppf "lazy" v
+    with exn ->
+      pp_may_left_paren ppf parens;
+      pp_print_string ppf "lazy(raise \""; pp_print_string ppf (Printexc.to_string exn); pp_print_string ppf "\")";
+      pp_may_right_paren ppf parens
 and print_application_like parens ppf name v =
   let open Format in
   pp_may_left_paren ppf parens;
   pp_print_string ppf name;
   begin match v with
-  | Tuple _ | List _ | Array _ | Record _ ->
-    pp_print_cut ppf (); print_variant false ppf v;
-  | Unit | Bool _ | Int _ | Float _ | String _
-  | Option None | Constructor (_, None) ->
-    pp_print_space ppf (); print_variant true ppf v
-  | _ -> pp_print_cut ppf (); print_variant true ppf v;
+    | Tuple _ | List _ | Array _ | Record _ ->
+      pp_print_cut ppf (); print_variant false ppf v;
+    | Unit | Bool _ | Int _ | Float _ | String _
+    | Option None | Constructor (_, None) ->
+      pp_print_space ppf (); print_variant true ppf v
+    | _ -> pp_print_cut ppf (); print_variant true ppf v;
   end;
   pp_may_right_paren ppf parens
 
@@ -348,3 +358,178 @@ let () = add_abstract_2 (module struct
       | _ -> failwith "expected list of (key,value)"
   end)
 
+(* serializing / deserializing convenience *)
+
+let strings_of_variant v =
+  let rec loop acc = function
+    | Unit -> acc
+    | Bool b -> string_of_bool b :: acc
+    | Int n -> string_of_int n :: acc
+    | Float f -> string_of_float f :: acc
+    | String s -> s :: acc
+    | Tuple l
+    | List l -> List.fold_left loop acc l
+    | Array a -> Array.fold_left loop acc a
+    | Option None -> acc
+    | Option (Some v) -> loop acc v
+    | Record l -> List.fold_left loop acc (List.map snd l)
+    | Constructor (s, None) -> s :: acc
+    | Constructor (s, Some v) -> loop (s :: acc) v
+    | Variant v
+    | Lazy (lazy v) -> loop acc v
+  in
+  loop [] v
+
+let value_of_variant_in_file ~t file_name =
+  of_variant ~t (variant_of_file file_name)
+
+let format_to_out_channel ?margin oc printer arg =
+  let open Format in
+  let ppf = formatter_of_out_channel oc in
+  (match margin with
+   | None -> ()
+   | Some m -> pp_set_margin ppf m);
+  printer ppf arg;
+  pp_print_newline ppf ()
+
+let format_to_file ?eol_lf ?margin outfile printer arg =
+  let oc = match eol_lf with
+    | Some () -> open_out_bin outfile
+    | None -> open_out outfile in
+  try
+    format_to_out_channel ?margin oc printer arg;
+    close_out oc
+  with
+  | e -> close_out oc; raise e
+
+let variant_to_file ?eol_lf fn v = format_to_file ?eol_lf fn print_variant v
+
+let value_to_variant_in_file ~t ?eol_lf file_name v =
+  variant_to_file ?eol_lf file_name (to_variant ~t v)
+
+(* compact representation *)
+
+let rec same_fields fields fields' =
+  match fields, fields' with
+  | [], [] -> true
+  | [], _ | _, [] -> false
+  | (f, _) :: fields, (f', _) :: fields' -> f = f' && same_fields fields fields'
+
+let buf = Buffer.create 512
+
+let rec iter_sep f sep = function
+  | [] -> ()
+  | [x] -> f x
+  | x :: rest -> f x; Buffer.add_char buf sep; iter_sep f sep rest
+
+let print_compact_header fields =
+  Buffer.add_string buf "LEXIFICOMPACTRECORDS1(";
+  iter_sep (fun (field, _value) ->  Buffer.add_char buf '\"'; Buffer.add_string buf field; Buffer.add_char buf '\"') ',' fields;
+  Buffer.add_string buf ");"
+
+let compact_buffer_of_variant ?dont_compress_records ?with_more_spaces v =
+  let compress_records = (dont_compress_records : unit option) == None in
+  let with_more_spaces = (with_more_spaces : unit option) != None in
+
+  let rec compact_print_variant parens = function
+    | Unit -> Buffer.add_string buf "()"
+    | Bool true -> Buffer.add_string buf "true"
+    | Bool false -> Buffer.add_string buf "false"
+    | Int i when i < 0 && parens ->
+      Buffer.add_char buf '(';
+      Buffer.add_string buf (string_of_int i);
+      Buffer.add_char buf ')'
+    | Int i -> Buffer.add_string buf (string_of_int i)
+    | Float f when f < 0. && parens ->
+      Buffer.add_char buf '(';
+      Buffer.add_string buf (Ext.Float.repres f);
+      Buffer.add_char buf ')'
+    | Float f -> Buffer.add_string buf (Ext.Float.repres f)
+    | String s ->
+      Buffer.add_char buf '\"';
+      Buffer.add_string buf (String.escaped s);
+      Buffer.add_char buf '\"'
+    | Option None -> Buffer.add_string buf "None"
+    | Option (Some v) -> compact_print_application_like parens "Some" v
+    | Tuple l -> Buffer.add_char buf '('; iter_sep_compact ',' l; Buffer.add_char buf ')'
+    | List [] -> Buffer.add_string buf "[]"
+    | List l ->
+      Buffer.add_char buf '[';
+      if compress_records then
+        match l with
+        | Record fields :: (_ :: _ :: _ as other_records) when List.for_all (function | Record fields' -> same_fields fields fields' | _ -> false) other_records ->
+          print_compact_header fields;
+          iter_sep print_compact_line ';' l
+        | _ -> iter_sep_compact ';' l
+      else
+        iter_sep_compact ';' l;
+      Buffer.add_char buf ']'
+    | Array [||] -> Buffer.add_string buf "[||]"
+    | Array l ->
+      Buffer.add_string buf "[|";
+      let length = Array.length l in
+      let iter f = Array.iteri (fun i v -> f v; if i < length - 1 then Buffer.add_char buf ';') l in
+      if compress_records && 3 <= length then
+        match l.(0) with
+        | Record fields when Array.for_all (function | Record fields' -> same_fields fields fields' | _ -> false) l ->
+          print_compact_header fields;
+          iter print_compact_line
+        | _ -> iter (compact_print_variant false)
+      else
+        iter (compact_print_variant false);
+      Buffer.add_string buf "|]"
+    | Record l when with_more_spaces ->
+      let rec loop = function
+        | [] -> ()
+        | (k, v) :: rest ->
+          Buffer.add_string buf k; Buffer.add_string buf " = "; compact_print_variant false v;
+          if rest != [] then (Buffer.add_string buf "; "; loop rest)
+      in
+      Buffer.add_char buf '{'; loop l; Buffer.add_char buf '}'
+    | Record l ->
+      let rec loop = function
+        | [] -> ()
+        | (k, v) :: rest ->
+          Buffer.add_string buf k; Buffer.add_char buf '='; compact_print_variant false v;
+          if rest != [] then (Buffer.add_char buf ';'; loop rest)
+      in
+      Buffer.add_char buf '{'; loop l; Buffer.add_char buf '}'
+    | Constructor (s, None) -> Buffer.add_string buf s
+    | Constructor ("RAWVARIANT", Some (String s)) -> Buffer.add_string buf s
+    | Constructor (s, Some t) -> compact_print_application_like parens s t
+    | Variant v -> compact_print_application_like parens "variant" v
+    | Lazy v ->
+      let v = Lazy.force v in  (* the exception escape... *)
+      compact_print_application_like parens "lazy" v
+  and compact_print_application_like parens name v =
+    if parens then Buffer.add_char buf '(';
+    Buffer.add_string buf name;
+    begin
+      match v with
+      | Tuple _ | Record _ | List _ | Array _ -> compact_print_variant false v
+      | Unit | Bool _ | Int _ | Float _ | String _ | Option None |  Constructor (_, None) -> Buffer.add_char buf ' '; compact_print_variant true v
+      | _ -> Buffer.add_char buf '('; compact_print_variant false v; Buffer.add_char buf ')'
+    end;
+    if parens then Buffer.add_char buf ')'
+  and print_compact_line = function
+    | Record l -> iter_sep (fun (_field, value) -> compact_print_variant false value) ',' l;
+    | _ -> assert false
+  and iter_sep_compact sep = function
+    | [] -> ()
+    | [x] -> compact_print_variant false x
+    | x :: rest -> compact_print_variant false x; Buffer.add_char buf sep; if with_more_spaces then Buffer.add_char buf ' '; iter_sep_compact sep rest
+  in
+  compact_print_variant false v
+
+let compact_string_of_variant ?dont_compress_records ?with_more_spaces v =
+  Buffer.clear buf;
+  compact_buffer_of_variant ?dont_compress_records ?with_more_spaces v;
+  Buffer.contents buf
+
+let string_one_line_of_variant v =
+  compact_string_of_variant ~dont_compress_records:() ~with_more_spaces:() v
+
+let output_compact_string_of_variant ?dont_compress_records ?with_more_spaces oc v =
+  Buffer.clear buf;
+  compact_buffer_of_variant ?dont_compress_records ?with_more_spaces v;
+  Buffer.output_buffer oc buf

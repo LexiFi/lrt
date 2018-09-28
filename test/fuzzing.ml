@@ -39,7 +39,7 @@ let f : Ttype.dynamic -> bool =
     let x' = Variant.of_variant ~t v in
     let s = Format.asprintf "%a%!" Variant.print_variant v in
     let v' =
-      try Variant_lexer.variant_of_string s
+      try Variant.variant_of_string s
       with r -> Printf.eprintf "Could not parse string:\n%s\n%!" s; raise r
     in
     let x'' = Variant.of_variant ~t v' in

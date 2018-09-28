@@ -5,13 +5,12 @@
 
 open Dynt_core.Ttype
 
-type t =
+type t = Variant_lexer.t =
   | Unit
   | Bool of bool
   | Int of int
   | Float of float
   | String of string
-  | Char of char
   | Tuple of t list
   | List of t list
   | Array of t array
@@ -46,8 +45,57 @@ val of_variant: t:'a ttype -> t -> 'a
     de-variantizer.
 *)
 
+(** {2 (De)Serialization} *)
+
 val print_variant: Format.formatter -> t -> unit
 (** Print a variant with the syntax of MLFi constants. *)
+
+val strings_of_variant: t -> string list
+(** Return a list of "string"-like components found inside the variant; useful
+    to implement generic textual search. *)
+
+val string_one_line_of_variant: t -> string
+(** Return a textual representation of a variant, with the syntax
+    of MLFi constants, on one line. Same behavior with respect
+    to exceptions than [compact_string_of_variant]. *)
+
+val compact_string_of_variant: ?dont_compress_records:unit ->
+  ?with_more_spaces:unit -> t -> string
+(** Similar to {!Mlfi_isdatypes.string_one_line_of_variant}, but use a more compact
+    form, with fewer whitespaces, and a special syntax for lists and arrays of
+    records (unless the [dont_compress_records] flag is used). The result is
+    guaranteed to not contain any newline characters. If the variant
+    contains a lazy which raises an exception, the function fails and raises
+    that exception.
+*)
+
+val output_compact_string_of_variant: ?dont_compress_records:unit ->
+  ?with_more_spaces:unit -> out_channel -> t -> unit
+(** Same as compact_string_of_variant, but write the result into a file. *)
+
+
+val variant_to_file: ?eol_lf:unit -> string -> t -> unit
+(** Write a variant to a text file. *)
+
+val value_to_variant_in_file: t:'a ttype -> ?eol_lf:unit -> string -> 'a -> unit
+(** Write a value as a variant to a text file. *)
+
+exception Variant_parser of {msg:string; text:string; loc:string}
+(** Raised when an exception is raised by the variant parser.
+    [msg] contains the error message; [text] is the fragment
+    of source showing the error; [loc] is a description of the
+    error location *)
+
+val variant_of_string: string -> t
+(** Parse a textual representation of a variant (produced e.g. by
+    {!Mlfi_isdatypes.string_one_line_of_variant} from a string. *)
+
+val variant_of_file: string -> t
+(** Parse a textual representation of a variant (produced e.g. by
+    {!Mlfi_isdatypes.string_one_line_of_variant} from a text file. *)
+
+val value_of_variant_in_file: t:'a ttype -> string -> 'a
+(** Read a value as a variant from a text file. *)
 
 (** {2 Handle abstract types} *)
 

@@ -4,7 +4,6 @@ module Xtype = Xtype
 module Print = Print
 module Check = Check
 module Variant = Variant
-module Variant_lexer = Variant_lexer
 
 (** deprecated *)
 module Xtype_depr = Xtype_depr

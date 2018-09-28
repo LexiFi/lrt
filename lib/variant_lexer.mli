@@ -6,7 +6,21 @@
 (***************************************************************************)
 
 (** Variant parsing *)
-open Variant
+
+type t =
+  | Unit
+  | Bool of bool
+  | Int of int
+  | Float of float
+  | String of string
+  | Tuple of t list
+  | List of t list
+  | Array of t array
+  | Option of t option
+  | Record of (string * t) list
+  | Constructor of string * t option
+  | Variant of t
+  | Lazy of t Lazy.t
 
 type error =
   | Unterminated_string
