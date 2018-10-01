@@ -172,38 +172,41 @@ and dyn_named = fun ~name (Dyn (t,x)) -> name, to_variant ~t x
 
 exception Bad_type_for_variant of Dynt_core.Stype.stype * t * string
 
-type mapper = t -> t option
-
-module Mappers : sig
-  type uid = int
-  val register: ?name:string -> mapper -> uid
-  val get: uid -> string option * mapper
+module Custom_of: sig
+  type uid = string
+  type custom =
+    | Of_variant : 'a ttype * (t -> 'a option) * string option -> custom
+  val register: ?name:string -> t: 'a ttype -> (t -> 'a option) -> uid
+  val get: uid -> custom
 end = struct
   module IntMap = Map.Make(struct type t = int let compare = compare end)
-
-  type uid = int
-
+  type uid = string
   let last_uid = ref (-1)
-  let t = ref IntMap.empty
 
-  let register ?name mapper =
+  type custom =
+    | Of_variant : 'a ttype * (t -> 'a option) * string option -> custom
+
+  let map : custom IntMap.t ref = ref IntMap.empty
+
+  let register ?name ~t custom =
     let uid = succ !last_uid in
     last_uid := uid;
-    t := IntMap.add uid (name, mapper) !t;
-    uid
+    map := IntMap.add uid (Of_variant (t, custom, name)) !map;
+    string_of_int uid
 
   let get uid =
-    IntMap.find uid !t
+    IntMap.find (int_of_string uid) !map
 end
 
-let of_variant_mapper ?name ~t mapper =
-  let uid = Mappers.register ?name mapper in
-  let props = ["of_variant_mapper", string_of_int uid] in
+let of_variant_custom ?name ~t custom =
+  (* TODO: write this into the xtype/stype instead of a separate map *)
+  let uid = Custom_of.register ?name ~t custom in
+  let props = ["of_variant_custom", uid] in
   Dynt_core.Ttype.add_props props t
 
 let of_variant_default ?name ~t init =
-  let mapper = fun _ -> Some (to_variant ~t (init ())) in
-  of_variant_mapper ?name ~t mapper
+  let custom _v = Some (init ()) in
+  of_variant_custom ?name ~t custom
 
 let conv: type a. (string -> a) -> (string -> a) -> string -> a =
   fun failwith conv s -> match conv s with
@@ -367,20 +370,28 @@ let rec of_variant: type a. t: a ttype -> properties -> a of_variant =
     with Bad_type_for_variant _ as e ->
       (* check accumulated properties for recovery mechanism *)
       let rec use_first props =
-        match assoc_consume "of_variant_mapper" props with
+        match assoc_consume "of_variant_custom" props with
         | None -> raise e
-        | Some (uid_s, reduced_props) ->
-          let uid = match int_of_string_opt uid_s with
-            | Some uid -> uid
-            | None -> failwith "inconsistent property of_variant_mapper"
-          in let (_name_opt, mapper) = Mappers.get uid in
+        | Some (uid, reduced_props) ->
+          let open Custom_of in
+          let Of_variant (t', custom, _name_opt) = get uid in
           (* TODO: use name_opt for error messages *)
-          match mapper v with
-          | Some mapped -> of_variant ~t reduced_props mapped
-          | None -> use_first reduced_props
+          match ttypes_equality_modulo_props t t' with
+          | None -> assert false
+          | Some (TypEq.Eq) ->
+            match custom v with
+            | Some x -> (x: a)
+            | None -> use_first reduced_props
       in use_first properties
 
 let of_variant = of_variant []
+
+let of_variant_mapper ?name ~t mapper =
+  let custom v =
+    match mapper v with
+    | None -> None
+    | Some v' -> Some (of_variant ~t v')
+  in of_variant_custom ?name ~t custom
 
 let pp_may_left_paren ppf parens = if parens then begin Format.pp_open_box ppf 1; Format.pp_print_char ppf '(' end else Format.pp_open_box ppf 1
 let pp_may_right_paren ppf parens = if parens then Format.pp_print_char ppf ')'; Format.pp_close_box ppf ()

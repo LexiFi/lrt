@@ -106,17 +106,27 @@ let f_flip = function
   | Tuple [String s; Int i] -> Some (Tuple [Int i; String s])
   | _ -> None
 
+let f_custom = function
+  | Int i -> Some (i, string_of_int i)
+  | _ -> None
+
 let f_i = ref 0
 let f_default () = f_i := succ !f_i; (!f_i,"0")
 
 let f_t = of_variant_mapper ~name:"Variantizer.f_flip" ~t:f_t f_flip
+let f_t = of_variant_custom ~name:"Variantizer.f_custom" ~t:f_t f_custom
 let f_t = of_variant_default ~name:"Variantizer.f_default" ~t:f_t f_default
+
+let%expect_test _ =
+  Format.printf "%a\n%!" Stype.print_stype (Ttype.stype_of_ttype [%t: f]);
+  [%expect {| (int * string) + [of_variant_custom = "0"] + [of_variant_custom = "1"] + [of_variant_custom = "2"] |}]
 
 let of_variant_string ~t s =
   variant_of_string s |> of_variant ~t
 
-let%test _ = of_variant_string ~t:f_t "(1, \"1\")" = (1,"1")
-let%test _ = of_variant_string ~t:f_t "(\"1\", 1)" = (1,"1")
-let%test _ = of_variant_string ~t:f_t "Invalid" = (1,"0")
-let%test _ = of_variant_string ~t:f_t "Invalid" = (2,"0")
-let%test _ = of_variant_string ~t:f_t "Invalid" = (3,"0")
+let%test "mapper0"  = of_variant_string ~t:f_t "(1, \"1\")" = (1,"1")
+let%test "mapper1"  = of_variant_string ~t:f_t "(\"1\", 1)" = (1,"1")
+let%test "custom"   = of_variant_string ~t:f_t "42" = (42,"42")
+let%test "default0" = of_variant_string ~t:f_t "Invalid" = (1,"0")
+let%test "default1" = of_variant_string ~t:f_t "Invalid" = (2,"0")
+let%test "default2" = of_variant_string ~t:f_t "Invalid" = (3,"0")

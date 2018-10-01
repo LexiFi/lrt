@@ -102,27 +102,35 @@ val value_of_variant_in_file: t:'a ttype -> string -> 'a
 (** Lexifi has documentation on how to use mappers and the other properties.
     This should go here *)
 
-type mapper = t -> t option
+val of_variant_custom:
+  ?name: string -> t: 'a ttype -> (t -> 'a option) -> 'a ttype
+(** [of_variant_custom ~t custom] returns a modified [t] such that
+    [of_variant ~t v] uses [custom v] as fallback when the normal
+    devariantization fails.
 
-val of_variant_mapper: ?name: string -> t: 'a ttype -> mapper -> 'a ttype
+    The optional [name] argument is used for identifying the custom
+    devariantizer in error messages. (Not implemented yet.)
+
+    Multiple custom devariantizers can be registered. They will be applied in
+    order of registration.
+*)
+
+val of_variant_mapper:
+  ?name: string -> t: 'a ttype -> (t -> t option) -> 'a ttype
 (** [of_variant_mapper ~t mapper] returns a modified [t] such that
     [of_variant ~t] uses [mapper] as fallback mechanism when the normal
     conversion fails.
 
-    The optional [name] argument is used for identifying the mapper
-    in error messages.
-
-    Multiple mappers can be registered. The mappers will be applied in order of
-    registration.
+    This is a wrapper for [of_variant_custom].
 *)
 
-val of_variant_default: ?name: string -> t: 'a ttype -> (unit -> 'a) -> 'a ttype
+val of_variant_default:
+  ?name: string -> t: 'a ttype -> (unit -> 'a) -> 'a ttype
 (** [of_variant_default ~t init] returns a modified [t] such that
     [of_variant ~t] uses [init ()] as default value when the normal conversion
     fails.
 
-    Under the hood, this builds a [mapper] and registers it using
-    [of_variant_mapper].
+    This is a wrapper for [of_variant_custom].
 *)
 
 (** {2 Handle abstract types} *)
