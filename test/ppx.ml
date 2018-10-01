@@ -1,8 +1,7 @@
 open Dynt
 
 let print x =
-  Ttype.stype_of_ttype x
-  |> Format.(fprintf std_formatter "%a\n%!" Stype.print_stype)
+  Format.printf "%a\n%!" Ttype.print x
 
 module Basic = struct
 
@@ -339,8 +338,8 @@ module Inline = struct
   (* let bad_t =  [%t: list list ] *)
   (* let bad_t =  [%t: 'a list ] *)
 
-  let t1 (type t) (t : t ttype) = [%t: (t * int) array]
-  let t2 (type typ) (typ_t : typ ttype) = [%t: (typ * int) list]
+  let t1 (type t) (t : t Ttype.t) = [%t: (t * int) array]
+  let t2 (type typ) (typ_t : typ Ttype.t) = [%t: (typ * int) list]
 
 
   let%expect_test _ =

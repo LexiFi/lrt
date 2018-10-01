@@ -1,27 +1,25 @@
 (** Dynamic type representations for standard ocaml types. *)
 
-open Ttype
-
-(** Dynamic representation of [ttype]. Used for printing of types. *)
-val ttype_t: 'a ttype -> 'a ttype ttype
+(** Dynamic representation of [Ttype.t]. Used for printing of types. *)
+val ttype_t: 'a Ttype.t -> 'a Ttype.t Ttype.t
 
 (** {2 Pervasives } *)
 
-val unit_t: unit ttype
-val bool_t: bool ttype
-val int_t: int ttype
-val string_t: string ttype
-val float_t: float ttype
-val char_t: char ttype
-val nativeint_t: nativeint ttype
-val int32_t: int32 ttype
-val int64_t: int64 ttype
+val unit_t: unit Ttype.t
+val bool_t: bool Ttype.t
+val int_t: int Ttype.t
+val string_t: string Ttype.t
+val float_t: float Ttype.t
+val char_t: char Ttype.t
+val nativeint_t: nativeint Ttype.t
+val int32_t: int32 Ttype.t
+val int64_t: int64 Ttype.t
 
-val option_t: 'a ttype -> 'a option ttype
-val list_t: 'a ttype -> 'a list ttype
-val array_t: 'a ttype -> 'a array ttype
+val option_t: 'a Ttype.t -> 'a option Ttype.t
+val list_t: 'a Ttype.t -> 'a list Ttype.t
+val array_t: 'a Ttype.t -> 'a array Ttype.t
 
 (** {2 Stdlib } *)
 
-val lazy_t: 'a ttype -> 'a Lazy.t ttype
-val hashtbl_t: 'a ttype -> 'b ttype -> ('a,'b) Hashtbl.t ttype
+val lazy_t: 'a Ttype.t -> 'a Lazy.t Ttype.t
+val hashtbl_t: 'a Ttype.t -> 'b Ttype.t -> ('a,'b) Hashtbl.t Ttype.t

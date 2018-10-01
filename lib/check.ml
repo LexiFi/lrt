@@ -5,8 +5,7 @@
 (*  form or for any purpose without the express permission of LexiFi SAS.  *)
 (***************************************************************************)
 
-open Dynt_core.Ttype
-open Dynt_core.Stype
+open Dynt_core
 open Dynt_core.Std
 
 (* Utils. *)
@@ -343,22 +342,23 @@ let lident =
 let uident = ident uppercase_letter
 
 module UGen = struct
-  type t = Gen: 'a ttype * (int -> 'a gen) -> t
+  type t = Gen: 'a Ttype.t * (int -> 'a gen) -> t
   let create ~t f = Gen (t, f)
 end
 
-let rec find_custom: type a. UGen.t list -> a ttype -> (int -> a gen) option = fun l t ->
+let rec find_custom:
+  type a. UGen.t list -> a Ttype.t -> (int -> a gen) option = fun l t ->
   match l with
   | [] -> None
   | (UGen.Gen (u, fu)) :: tl ->
-    begin match ttypes_equality t u with
+    begin match Ttype.equality t u with
       | Some TypEq.Eq -> Some fu
       | None -> find_custom tl t
     end
 
 class type custom_of_type =
   object
-    method apply: 'a. 'a ttype -> (int -> 'a gen) option
+    method apply: 'a. 'a Ttype.t -> (int -> 'a gen) option
   end
 
 let of_list l =
@@ -368,18 +368,18 @@ let of_list l =
 
 module H = Hashtbl.Make
     (struct
-      type t = stype
-      let equal = strict_types_equality
-      let hash = Internal.hash0
+      type t = Stype.t
+      let equal = Stype.strict_equality
+      let hash = Stype.Internal.hash0
     end)
 
 let fields_of_record_fields flds = List.map (function _, f -> f) flds
 
-let is_leaf: type a . a ttype -> bool =
+let is_leaf: type a . a Ttype.t -> bool =
   fun tty ->
     let open Xtype in
     let seen = H.create 12 in
-    let replace t = H.replace seen (stype_of_ttype t.t) () in
+    let replace t = H.replace seen (Ttype.to_stype t.t) () in
     let rec really_loop: type a. a Xtype.t -> bool =
       fun t -> match Lazy.force t.xt with
         | Unit -> true
@@ -420,10 +420,10 @@ let is_leaf: type a . a ttype -> bool =
           fields
 
     and loop: type a . a Xtype.t -> bool =
-      fun t -> not (H.mem seen (stype_of_ttype t.t)) && really_loop t
+      fun t -> not (H.mem seen (Ttype.to_stype t.t)) && really_loop t
     in
 
-    loop (Xtype.t_of_ttype tty)
+    loop (Xtype.of_ttype tty)
 
 module Test: sig end = struct
   [@@@warning "-37"]
@@ -454,10 +454,10 @@ end
 
 type ('a, 'b) mk = ('a Xtype.Make.t -> unit) -> 'b
 
-let of_type_gen_sized: type a. UGen.t list -> t: a ttype -> int -> a gen =
+let of_type_gen_sized: type a. UGen.t list -> t: a Ttype.t -> int -> a gen =
   fun l ~t sz ->
     let find_custom = of_list l in
-    let rec of_type_default_sized: type a. t: a ttype -> int -> a gen =
+    let rec of_type_default_sized: type a. t: a Ttype.t -> int -> a gen =
       fun ~t sz ->
         let szp = pred_size sz in
         let fields: type a b. (a, b) mk -> a Xtype.field list -> int -> b gen =
@@ -511,7 +511,7 @@ let of_type_gen_sized: type a. UGen.t list -> t: a ttype -> int -> a gen =
           failwith "Check.f: reached Int64"
         | Nativeint ->
           failwith "Check.f: reached Nativeint"
-    and of_type_sized: type a. t:a ttype -> int -> a gen = fun ~t sz ->
+    and of_type_sized: type a. t:a Ttype.t -> int -> a gen = fun ~t sz ->
       match find_custom # apply t with
       | None -> of_type_default_sized ~t sz
       | Some fu -> fu sz
@@ -523,15 +523,15 @@ let of_type_gen ?size gg ~t =
   | Some i -> of_type_gen_sized gg ~t i
   | None -> sized (fun n -> of_type_gen_sized gg ~t n)
 
-let dt_unit : stype gen = unit_t |> stype_of_ttype |> return
-let dt_bool : stype gen = bool_t |> stype_of_ttype |> return
-let dt_int : stype gen = int_t |> stype_of_ttype |> return
-let dt_float : stype gen = float_t |> stype_of_ttype |> return
-let dt_string : stype gen = string_t |> stype_of_ttype |> return
-let dt_list t = (fun t -> DT_list t) <$> t
-let dt_array t = (fun t -> DT_array t) <$> t
-let dt_option t = (fun t -> DT_option t) <$> t
-let dt_tuple tl = (fun tl -> DT_tuple tl) <$> tl
+let dt_unit : Stype.t gen = unit_t |> Ttype.to_stype |> return
+let dt_bool : Stype.t gen = bool_t |> Ttype.to_stype |> return
+let dt_int : Stype.t gen = int_t |> Ttype.to_stype |> return
+let dt_float : Stype.t gen = float_t |> Ttype.to_stype |> return
+let dt_string : Stype.t gen = string_t |> Ttype.to_stype |> return
+let dt_list t = (fun t -> Stype.DT_list t) <$> t
+let dt_array t = (fun t -> Stype.DT_array t) <$> t
+let dt_option t = (fun t -> Stype.DT_option t) <$> t
+let dt_tuple tl = (fun tl -> Stype.DT_tuple tl) <$> tl
 
 let rec stype () = join (stype_gen ())
 
@@ -542,9 +542,9 @@ and dt_constructor const_type =
     all_different (fun x -> x) uident >>= fun names ->
     list_copy (List.length names) (list (stype ())) >>= fun types ->
     return
-      (Internal.create_variant_type name []
+      (Stype.Internal.create_variant_type name []
          (fun _ ->
-            List.map2 (fun name types -> name, [], C_tuple types)
+            List.map2 (fun name types -> name, [], Stype.C_tuple types)
               names types,
             Variant_regular
          )
@@ -553,7 +553,7 @@ and dt_constructor const_type =
     uident >>= fun c_name ->
     dt_record ~inline:true () >>= fun inline_type ->
     return
-      (Internal.create_variant_type name []
+      (Stype.Internal.create_variant_type name []
          (fun _ -> [c_name, [], C_inline inline_type], Variant_regular )
       )
 
@@ -563,8 +563,9 @@ and dt_record ?(inline=false) () =
   string_lowercase >>= fun type_name ->
   let fields = List.map (fun (f, x, y) -> f, x, y) fields in
   (* TODO: What happens when all fields are floats? *)
-  let repr = if inline then Record_inline 0 else Record_regular in
-  return (Internal.create_record_type type_name [] (fun _ -> fields, repr))
+  let repr = if inline then Stype.Record_inline 0 else Record_regular in
+  return (
+    Stype.Internal.create_record_type type_name [] (fun _ -> fields, repr))
 
 and stype_gen () =
   elements_freq_lazy
@@ -586,8 +587,9 @@ and stype_gen () =
 let stype = stype ()
 
 let dynamic ?size l =
+  let open Ttype in
   stype >>= fun s ->
-  let Ttype t = ttype_of_stype s in
+  let Ttype t = of_stype s in
   let valgen = of_type_gen ?size l ~t in
   map (fun v -> Dyn (t, v)) valgen
 

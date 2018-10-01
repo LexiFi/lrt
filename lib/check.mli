@@ -5,8 +5,7 @@
 (*  form or for any purpose without the express permission of LexiFi SAS.  *)
 (***************************************************************************)
 
-open Dynt_core.Stype
-open Dynt_core.Ttype
+open Dynt_core
 
 (** A quickcheck-like library for OCaml. *)
 
@@ -157,10 +156,10 @@ val uident: string gen
 
 module UGen: sig
   type t
-  val create: t:'a ttype -> (int -> 'a gen) -> t
+  val create: t:'a Ttype.t -> (int -> 'a gen) -> t
 end
 
-val of_type_gen: ?size:int -> UGen.t list -> t:'a ttype -> 'a gen
+val of_type_gen: ?size:int -> UGen.t list -> t:'a Ttype.t -> 'a gen
 (** Generate a random value of type ['a].
 
     Useful for automatically creating generators for simple types, but may loop
@@ -170,10 +169,10 @@ val of_type_gen: ?size:int -> UGen.t list -> t:'a ttype -> 'a gen
     determining the size of the drawn base values.
 *)
 
-val stype: stype gen
+val stype: Stype.t gen
 (** Generate a random [stype]. *)
 
-val dynamic: ?size: int -> UGen.t list -> dynamic gen
+val dynamic: ?size: int -> UGen.t list -> Ttype.dynamic gen
 (** Generate a random [Dyn ('a ttype, 'a)]. Arguments correspond to
  *  the ones of [of_type_gen]. *)
 

@@ -19,8 +19,7 @@ let seed = if Array.length Sys.argv > 2 then
 
 let f : Ttype.dynamic -> bool = function Ttype.Dyn (t,x) ->
   let () =
-    Format.printf "Type: %a\n%!"
-      Stype.print_stype (Ttype.stype_of_ttype t) ;
+    Format.printf "Type: %a\n%!" Ttype.print t;
     Format.printf "Value: %a\n%!" (Print.print ~t) x
   in true
 

@@ -2,7 +2,7 @@
  * of variants and records. Now it is put into the (single) field / constructor.
  * This lead to indirections, when accessing the flag. *)
 
-type stype_properties = (string * string) list
+type properties = (string * string) list
 
 type record_repr = Record_regular | Record_float | Record_unboxed
                  | Record_inline of int
@@ -22,7 +22,7 @@ type 'node gtype =
   | DT_abstract of string * 'node gtype list
   | DT_arrow of string * 'node gtype * 'node gtype
   | DT_object of (string * 'node gtype) list
-  | DT_prop of stype_properties * 'node gtype
+  | DT_prop of properties * 'node gtype
   | DT_var of int
 
 let unnode = function
@@ -62,13 +62,13 @@ let equal_list f l1 l2 =
 
 type memoized_type_prop = ..
 
-type stype = node gtype
+type t = node gtype
 
 and node = {
   mutable rec_descr: node_descr;
   rec_uid: int;
   rec_name: string;
-  rec_args: stype list;
+  rec_args: t list;
   mutable rec_has_var: bool option;
   mutable rec_hash: int;
   mutable rec_memoized: memoized_type_prop array;
@@ -79,7 +79,7 @@ and node_descr =
   | DT_record of record_descr
 
 and variant_descr = {
-  variant_constrs: (string * stype_properties * stype variant_args) list;
+  variant_constrs: (string * properties * t variant_args) list;
   variant_repr: variant_repr;
 }
 and 'stype variant_args =
@@ -89,7 +89,7 @@ and 'stype variant_args =
 
 
 and record_descr = {
-  record_fields: (string * stype_properties * stype) list;
+  record_fields: (string * properties * t) list;
   record_repr: record_repr;
 }
 
@@ -244,12 +244,11 @@ let print_stype ~show_enumerations ppf =
   in
   aux ppf
 
-let print_stype_hide_enumerations = print_stype ~show_enumerations: false
+let print_hide_enumerations = print_stype ~show_enumerations: false
 
-let print_stype_ref = ref (print_stype ~show_enumerations: true)
+let print_ref = ref (print_stype ~show_enumerations: true)
 
-let print_stype ppf =
-  !print_stype_ref ppf
+let print ppf = !print_ref ppf
 
 module Internal = struct
 
@@ -472,9 +471,9 @@ module Internal = struct
 
   let substitute subst t =
     if debug then begin
-      Format.printf "  SUBST t=%a@." print_stype t;
+      Format.printf "  SUBST t=%a@." print t;
       Array.iteri (fun i _t ->
-          Format.printf " SUBST %i -> %a@." i print_stype subst.(i)) subst;
+          Format.printf " SUBST %i -> %a@." i print subst.(i)) subst;
     end;
     let tbl = Hashtbl.create 4 in
     let rec aux = function
@@ -517,13 +516,15 @@ end
 (* Textual form for import-export *)
 
 module Textual = struct
+  type stype = t
+
   type t = int gtype
 
   type node =
     | Variant of
-        string * t list * (string * stype_properties * t variant_args) list * variant_repr
+        string * t list * (string * properties * t variant_args) list * variant_repr
     | Record of
-        string * t list * (string * stype_properties * t) list * record_repr
+        string * t list * (string * properties * t) list * record_repr
 
   type textual = {
     nodes: node array;
@@ -652,27 +653,21 @@ module Textual = struct
   let import t = import t [||]
 end
 
-let rec remove_first_props = function
-  | DT_prop(_, t) -> remove_first_props t
+let rec remove_outer_props = function
+  | DT_prop(_, t) -> remove_outer_props t
   | x -> x
 
-let rec abstract_stype = function
-  | DT_node {rec_name=name; rec_args=l; _} -> DT_abstract(name, l)
-  | DT_prop(props, t) -> DT_prop(props, abstract_stype t)
-  | _ ->
-    failwith "abstract_stype only applies to variant or record types."
-
-let strict_types_equality =
+let strict_equality =
   Internal.equal ~ignore_props:false ~ignore_path:false
-let types_equality_modulo_props =
+let equality_modulo_props =
   Internal.equal ~ignore_props:true ~ignore_path:true
-let types_equality =
+let equality =
   Internal.equal ~ignore_props:false ~ignore_path:true
 
-let strict_types_equality t1 t2 =
+let strict_equality t1 t2 =
   match t1, t2 with
   | DT_node n1, DT_node n2 ->
-    n1 == n2 || (n1.rec_name = n2.rec_name && strict_types_equality t1 t2)
+    n1 == n2 || (n1.rec_name = n2.rec_name && strict_equality t1 t2)
   | DT_node _, _
   | _, DT_node _ -> false
-  | _ -> strict_types_equality t1 t2
+  | _ -> strict_equality t1 t2

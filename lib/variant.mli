@@ -3,7 +3,7 @@
     Values can be converted to and from variants using {!variant} and
     {!of_variant}. *)
 
-open Dynt_core.Ttype
+open Dynt_core
 
 type t = Variant_lexer.t =
   | Unit
@@ -21,7 +21,7 @@ type t = Variant_lexer.t =
   | Lazy of t Lazy.t
 [@@deriving t]
 
-val to_variant: t:'a ttype -> 'a -> t
+val to_variant: t:'a Ttype.t -> 'a -> t
 (**
    Transform a typed value into a variant.
 
@@ -36,9 +36,9 @@ val to_variant: t:'a ttype -> 'a -> t
    variantized.
 *)
 
-exception Bad_type_for_variant of Dynt_core.Stype.stype * t * string
+exception Bad_type_for_variant of Stype.t * t * string
 
-val of_variant: t:'a ttype -> t -> 'a
+val of_variant: t:'a Ttype.t -> t -> 'a
 (** Rebuild a typed value from a variant. May raise [Bad_type_for_variant]
     if [t] does not match the type of the variant or [Failure] if e.g. a value
     of an abstract type needs to be rebuilt but there is no registered
@@ -77,7 +77,8 @@ val output_compact_string_of_variant: ?dont_compress_records:unit ->
 val variant_to_file: ?eol_lf:unit -> string -> t -> unit
 (** Write a variant to a text file. *)
 
-val value_to_variant_in_file: t:'a ttype -> ?eol_lf:unit -> string -> 'a -> unit
+val value_to_variant_in_file:
+  t:'a Ttype.t -> ?eol_lf:unit -> string -> 'a -> unit
 (** Write a value as a variant to a text file. *)
 
 exception Variant_parser of {msg:string; text:string; loc:string}
@@ -94,7 +95,7 @@ val variant_of_file: string -> t
 (** Parse a textual representation of a variant (produced e.g. by
     {!Mlfi_isdatypes.string_one_line_of_variant} from a text file. *)
 
-val value_of_variant_in_file: t:'a ttype -> string -> 'a
+val value_of_variant_in_file: t:'a Ttype.t -> string -> 'a
 (** Read a value as a variant from a text file. *)
 
 (** {2 Variant mapper} *)
@@ -103,7 +104,7 @@ val value_of_variant_in_file: t:'a ttype -> string -> 'a
     This should go here *)
 
 val of_variant_custom:
-  ?name: string -> t: 'a ttype -> (t -> 'a option) -> 'a ttype
+  ?name: string -> t: 'a Ttype.t -> (t -> 'a option) -> 'a Ttype.t
 (** [of_variant_custom ~t custom] returns a modified [t] such that
     [of_variant ~t v] uses [custom v] as fallback when the normal
     devariantization fails.
@@ -116,7 +117,7 @@ val of_variant_custom:
 *)
 
 val of_variant_mapper:
-  ?name: string -> t: 'a ttype -> (t -> t option) -> 'a ttype
+  ?name: string -> t: 'a Ttype.t -> (t -> t option) -> 'a Ttype.t
 (** [of_variant_mapper ~t mapper] returns a modified [t] such that
     [of_variant ~t] uses [mapper] as fallback mechanism when the normal
     conversion fails.
@@ -125,7 +126,7 @@ val of_variant_mapper:
 *)
 
 val of_variant_default:
-  ?name: string -> t: 'a ttype -> (unit -> 'a) -> 'a ttype
+  ?name: string -> t: 'a Ttype.t -> (unit -> 'a) -> 'a Ttype.t
 (** [of_variant_default ~t init] returns a modified [t] such that
     [of_variant ~t] uses [init ()] as default value when the normal conversion
     fails.

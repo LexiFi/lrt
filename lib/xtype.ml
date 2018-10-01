@@ -1,12 +1,10 @@
 open Dynt_core
-open Dynt_core.Ttype
-open Dynt_core.Stype
 
 type record_repr = Regular | Float | Unboxed
 type constr_repr = Tag of int | Unboxed
 
 type 'a t =
-  { t: 'a ttype
+  { t: 'a Ttype.t
   ; xt: 'a xtype Lazy.t
   }
 
@@ -29,8 +27,8 @@ and 'a xtype =
   | Sum: 'a sum -> 'a xtype
   | Function: ('b,'c) arrow -> ('b -> 'c) xtype
   | Object: 'a object_ -> 'a xtype
-  | Prop: (stype_properties * 'a t) -> 'a xtype
-  | Abstract: (string * stype list) -> 'a xtype
+  | Prop: (Stype.properties * 'a t) -> 'a xtype
+  | Abstract: (string * Stype.t list) -> 'a xtype
 
 and ('s,'t) element =
   { typ: 't t
@@ -43,7 +41,7 @@ and 's field =
 and 's tuple =
   { t_flds : 's field list }
 
-and label = string * stype_properties
+and label = string * Stype.properties
 
 and 's record_field = label * 's field
 
@@ -90,33 +88,36 @@ and 's object_ =
   { methods : 's method_ list }
 
 (* internal Helpers *)
-let cast_ttype: stype -> 'a ttype = Obj.magic
+let cast_ttype: Stype.t -> 'a Ttype.t = Obj.magic
 let cast_xtype: type a b. a xtype -> b xtype = Obj.magic
 module StepMeta = Path.Internal [@@ocaml.warning "-3"]
 
 (* Memoize xtype in stype node *)
-type memoized_type_prop += Xtype of Obj.t xtype
+module M = struct
+  open Stype
+  type memoized_type_prop += Xtype of Obj.t xtype
 
-let rec search a n i =
-  if i = n then None
-  else match a.(i) with
-  | Xtype r -> Some r
-  | _ -> search a n (i + 1)
+  let rec search a n i =
+    if i = n then None
+    else match a.(i) with
+      | Xtype r -> Some r
+      | _ -> search a n (i + 1)
 
-let is_memoized (node : node) : Obj.t xtype option =
-  search node.rec_memoized (Array.length node.rec_memoized) 0
+  let is_memoized (node : node) : Obj.t xtype option =
+    search node.rec_memoized (Array.length node.rec_memoized) 0
 
-let memoize: type a. node -> a xtype -> a xtype = fun node xt ->
-  let s = Xtype (Obj.magic xt) in
-  let old = node.rec_memoized in
-  let a = Array.make (Array.length old + 1) s in
-  Array.blit old 0 a 1 (Array.length old);
-  Internal.set_memoized node a;
-  xt
+  let memoize: type a. node -> a xtype -> a xtype = fun node xt ->
+    let s = Xtype (Obj.magic xt) in
+    let old = node.rec_memoized in
+    let a = Array.make (Array.length old + 1) s in
+    Array.blit old 0 a 1 (Array.length old);
+    Internal.set_memoized node a;
+    xt
+end
 
-let rec xtype_of_ttype : type a. a ttype -> a xtype = fun t ->
+let rec xtype_of_ttype : type a. a Ttype.t -> a xtype = fun t ->
   (* CAUTION: This must be consistent with core/std.ml *)
-  match stype_of_ttype t with
+  match Ttype.to_stype t with
   | DT_int -> cast_xtype Int
   | DT_float -> cast_xtype Float
   | DT_string -> cast_xtype String
@@ -137,13 +138,13 @@ let rec xtype_of_ttype : type a. a ttype -> a xtype = fun t ->
     in cast_xtype (Function {arg_label; arg_t = bundle t1; res_t = bundle t2})
   | DT_tuple l -> cast_xtype (Tuple {t_flds=fields l})
   | DT_node ({rec_descr = DT_record r; _} as node) ->
-    begin match is_memoized node with
-    | None -> memoize node (cast_xtype (Record (record r)))
+    begin match M.is_memoized node with
+    | None -> M.memoize node (cast_xtype (Record (record r)))
     | Some xt -> cast_xtype xt
     end
   | DT_node ({rec_descr = DT_variant v; _} as node) ->
-    begin match is_memoized node with
-    | None -> memoize node (cast_xtype (Sum (sum v)))
+    begin match M.is_memoized node with
+    | None -> M.memoize node (cast_xtype (Sum (sum v)))
     | Some xt -> cast_xtype xt
     end
   | DT_object methods -> cast_xtype (Object (object_ methods))
@@ -151,11 +152,11 @@ let rec xtype_of_ttype : type a. a ttype -> a xtype = fun t ->
   | DT_abstract (name, l) -> Abstract (name, l)
   | DT_var _ -> assert false
 
-and bundle : type a. stype -> a t = fun s ->
+and bundle : type a. Stype.t -> a t = fun s ->
     let t = cast_ttype s
     in {t; xt = lazy (xtype_of_ttype t)}
 
-and fields (fields : stype list) : 'a field list =
+and fields (fields : Stype.t list) : 'a field list =
   List.mapi (fun i t ->
       Field { typ = bundle t
             ; nth = i }
@@ -166,7 +167,7 @@ and record_fields fields : 'a record_field list =
       (field_name, field_props), Field { typ = bundle s ; nth }
     ) fields
 
-and record (r: record_descr) : 'a record =
+and record (r: Stype.record_descr) : 'a record =
   let r_flds = record_fields r.record_fields in
   let r_repr : record_repr = match r.record_repr with
     | Record_unboxed -> Unboxed
@@ -175,7 +176,7 @@ and record (r: record_descr) : 'a record =
     | Record_inline _ -> assert false
   in {r_flds; r_repr}
 
-and sum (v: variant_descr) : 'a sum =
+and sum (v: Stype.variant_descr) : 'a sum =
   let repr = match v.variant_repr with
     | Variant_unboxed -> fun _ -> Unboxed
     | Variant_regular -> fun tag -> Tag tag
@@ -184,6 +185,7 @@ and sum (v: variant_descr) : 'a sum =
   let cst_i, ncst_i = ref 0, ref 0 in
   let cstrs = List.map (fun (name, props, arg) ->
       let lbl = name, props in
+      let open Stype in
       match arg with
       | C_tuple [] -> Constant {cc_label = lbl;  cc_nr = pincr cst_i}
       | C_tuple l ->
@@ -207,7 +209,7 @@ and object_ methods : 'a object_ =
   in
   let methods = List.mapi prepare methods in { methods }
 
-let t_of_ttype t = {t;xt = lazy (xtype_of_ttype t)}
+let of_ttype t = {t; xt = lazy (xtype_of_ttype t)}
 
 (* builders *)
 
@@ -327,22 +329,6 @@ module Make = struct
       Builder.inlined_constructor c (named_builder f (List.length c.ic_flds))
 end
 
-
-(* property handling *)
-
-let get_first_props_xtype xt =
-  let rec loop accu = function
-    | Prop (l, {xt=lazy xt;_}) ->
-        loop (l :: accu) xt
-    | _ ->
-        List.concat (List.rev accu)
-  in
-  loop [] xt
-
-let rec remove_first_props_xtype : type t. t xtype -> t xtype = function
-  | Prop (_, {xt=lazy xt;_}) -> remove_first_props_xtype xt
-  | xt -> xt
-
 module Fields = struct
   let check tag o = Obj.is_block o && Obj.tag o = tag
 
@@ -374,21 +360,23 @@ module Fields = struct
       | Unboxed -> fun o -> Some (Obj.repr o))
 
   let map_tuple tup f x =
-    let mapf (Field e) = f (Dyn (e.typ.t, tuple tup e x)) in
+    let mapf (Field e) = f (Ttype.Dyn (e.typ.t, tuple tup e x)) in
     List.map mapf tup.t_flds
 
   let map_record r f x =
-    let mapf ((name,_), Field e) = f ~name (Dyn (e.typ.t, record r e x)) in
+    let mapf ((name,_), Field e) = f ~name (Ttype.Dyn (e.typ.t, record r e x)) in
     List.map mapf r.r_flds
 
   let map_regular c f x =
     let mapf (Field e) =
-      f (Dyn (e.typ.t, Ext.Option.value_exn (regular_constructor c e x))) in
+      f (Ttype.Dyn (e.typ.t, Ext.Option.value_exn (regular_constructor c e x)))
+    in
     List.map mapf c.rc_flds
 
   let map_inlined c f x =
     let mapf ((name,_), Field e) =
-      f ~name (Dyn (e.typ.t, Ext.Option.value_exn (inlined_constructor c e x)))
+      f ~name (Ttype.Dyn (e.typ.t,
+                          Ext.Option.value_exn (inlined_constructor c e x)))
     in
     List.map mapf c.ic_flds
 end
@@ -532,7 +520,7 @@ module Step = struct
       StepMeta.constructor_inline ~name ~field_name
 end
 
-let option_step_some : type a. a ttype -> (a option, a) Path.step =
+let option_step_some : type a. a Ttype.t -> (a option, a) Path.step =
   (* ttype helps to avoid Obj.magic *)
   fun _t ->
     let get x = x
@@ -542,9 +530,9 @@ let option_step_some : type a. a ttype -> (a option, a) Path.step =
     in Path.{ get; set} ,
        StepMeta.constructor_regular ~name:"Some" ~nth:0 ~arity:1
 
-let rec all_paths: type a b. a ttype -> b ttype -> (a, b) Path.t list =
+let rec all_paths: type a b. a Ttype.t -> b Ttype.t -> (a, b) Path.t list =
   fun root target ->
-    match ttypes_equality root target with
+    match Ttype.equality root target with
     | Some TypEq.Eq -> [Path.[]]
     | None ->
       match xtype_of_ttype root with
@@ -578,7 +566,7 @@ let rec all_paths: type a b. a ttype -> b ttype -> (a, b) Path.t list =
       | Lazy _ -> []
       | Abstract _ -> []
 
-and tuple : type a b. target: b ttype -> a tuple -> (a, b) Path.t list =
+and tuple : type a b. target: b Ttype.t -> a tuple -> (a, b) Path.t list =
   fun ~target tup ->
     List.map
       (function (Field f) ->
@@ -588,7 +576,7 @@ and tuple : type a b. target: b ttype -> a tuple -> (a, b) Path.t list =
     |> List.concat
 
 and record :
-  type a b. target: b ttype -> a record -> (a, b) Path.t list =
+  type a b. target: b Ttype.t -> a record -> (a, b) Path.t list =
   fun ~target r ->
     List.map
       (function (_, Field f) ->
@@ -598,7 +586,7 @@ and record :
     |> List.concat
 
 and regular_constructor : type a b c.
-  target: c ttype -> (a, b) regular_constructor -> (a, c) Path.t list =
+  target: c Ttype.t -> (a, b) regular_constructor -> (a, c) Path.t list =
   fun ~target c ->
     List.map
       (function (Field f) ->
@@ -608,7 +596,7 @@ and regular_constructor : type a b c.
     |> List.concat
 
 and inlined_constructor : type a b c.
-  target: c ttype -> (a, b) inlined_constructor -> (a, c) Path.t list =
+  target: c Ttype.t -> (a, b) inlined_constructor -> (a, c) Path.t list =
   fun ~target c ->
     List.map
       (function (_, Field f) ->
@@ -623,9 +611,9 @@ let assert_some = function
   | Some x -> x
   | None -> assert false
 
-let cast : type a b. a t -> b ttype = fun t -> Obj.magic t.t
+let cast : type a b. a t -> b Ttype.t = fun t -> Obj.magic t.t
 
-let rec project_path : type a b. a ttype -> (a,b) Path.t -> b ttype =
+let rec project_path : type a b. a Ttype.t -> (a,b) Path.t -> b Ttype.t =
   fun t -> let open Path in function
     | [] -> t
     | (_, meta) :: tl ->
@@ -654,42 +642,43 @@ let rec project_path : type a b. a ttype -> (a,b) Path.t -> b ttype =
 
 module type TYPE_0 = sig
   type t
-  val t: t ttype
+  val t: t Ttype.t
 end
 
 module type TYPE_1 = sig
   type 'a t
-  val t: 'a ttype -> 'a t ttype
+  val t: 'a Ttype.t -> 'a t Ttype.t
 end
 
 module type TYPE_2 = sig
   type ('a, 'b) t
-  val t: 'a ttype -> 'b ttype -> ('a, 'b) t ttype
+  val t: 'a Ttype.t -> 'b Ttype.t -> ('a, 'b) t Ttype.t
 end
 
 module type MATCHER_0 = sig
   include TYPE_0
   type _ is_t = Is: ('a, t) TypEq.t -> 'a is_t
-  val is_t: ?modulo_props : bool -> 'a ttype -> 'a is_t option
+  val is_t: ?modulo_props : bool -> 'a Ttype.t -> 'a is_t option
   val is_abstract: string option
 end
 
 module type MATCHER_1 = sig
   include TYPE_1
-  type _ is_t = Is: 'b ttype * ('a, 'b t) TypEq.t -> 'a is_t
-  val is_t: ?modulo_props : bool -> 'a ttype -> 'a is_t option
+  type _ is_t = Is: 'b Ttype.t * ('a, 'b t) TypEq.t -> 'a is_t
+  val is_t: ?modulo_props : bool -> 'a Ttype.t -> 'a is_t option
   val is_abstract: string option
 end
 
 module type MATCHER_2 = sig
   include TYPE_2
-  type _ is_t = Is: 'b ttype * 'c ttype * ('a, ('b, 'c) t) TypEq.t -> 'a is_t
-  val is_t: ?modulo_props : bool -> 'a ttype -> 'a is_t option
+  type _ is_t =
+      Is: 'b Ttype.t * 'c Ttype.t * ('a, ('b, 'c) t) TypEq.t -> 'a is_t
+  val is_t: ?modulo_props : bool -> 'a Ttype.t -> 'a is_t option
   val is_abstract: string option
 end
 
-let get_abstract_name (s: stype) =
-  match remove_first_props s with
+let get_abstract_name (s: Stype.t) =
+  match Stype.remove_outer_props s with
   | DT_abstract (name, _) -> Some name
   | _ -> None
 
@@ -702,21 +691,21 @@ let rec unifier_list_iter2 f l1 l2 =
   | _, [] -> raise Not_unifiable
   | h1 :: t1 , h2 :: t2 -> f h1 h2 ; unifier_list_iter2 f t1 t2
 
-let variant_constrs_iter2 (f: stype -> stype -> unit)
+let variant_constrs_iter2 (f: Stype.t -> Stype.t -> unit)
     (name1, props1, vargs1)
     (name2, props2, vargs2) =
   if name1 <> name2 then raise Not_unifiable;
   if props1 <> props2 then raise Not_unifiable;
   match vargs1, vargs2 with
-  | C_inline s1, C_inline s2 -> f s1 s2
+  | Stype.C_inline s1, Stype.C_inline s2 -> f s1 s2
   | C_tuple l1, C_tuple l2 -> unifier_list_iter2 f l1 l2
   | C_inline _, _
   | C_tuple _, _ -> raise Not_unifiable
 
 (* iterate over all stypes in a node *)
-let node_iter2 (f: stype -> stype -> unit)
-    ({rec_descr = descr1; rec_name = name1; rec_args = args1; _}: node)
-    ({rec_descr = descr2; rec_name = name2; rec_args = args2; _}: node) =
+let node_iter2 (f: Stype.t -> Stype.t -> unit)
+    ({rec_descr = descr1; rec_name = name1; rec_args = args1; _}: Stype.node)
+    ({rec_descr = descr2; rec_name = name2; rec_args = args2; _}: Stype.node) =
   if name1 <> name2 then raise Not_unifiable;
   unifier_list_iter2 f args1 args2;
   match descr1, descr2 with
@@ -734,7 +723,7 @@ let node_iter2 (f: stype -> stype -> unit)
   | DT_record _, _
   | DT_variant _, _ -> raise Not_unifiable
 
-let unifier ~(modulo_props : bool) ~(subs : stype option array) (s1 : stype) (s2 : stype) =
+let unifier ~(modulo_props : bool) ~(subs : Stype.t option array) s1 s2 =
   let l = Array.length subs in
   let set k s =
     if k < 0 || k >= l then raise (Invalid_argument "unifier: variable index out of bounds") ;
@@ -744,7 +733,7 @@ let unifier ~(modulo_props : bool) ~(subs : stype option array) (s1 : stype) (s2
       if s <> s' then raise Not_unifiable
   in
   let rec unifier s1 s2 =
-    match s1, s2 with
+    match (s1, s2: Stype.t * Stype.t) with
     | DT_var _, DT_var _ -> raise (Invalid_argument "unifier: received type variable on the right")
     | DT_var k, s2 -> set k s2
     | DT_int, DT_int
@@ -792,21 +781,21 @@ module Matcher_0 (T : TYPE_0) = struct
 
   type _ is_t = Is: ('a, t) TypEq.t -> 'a is_t
 
-  let s = stype_of_ttype T.t
+  let s = Ttype.to_stype T.t
   let is_abstract = get_abstract_name s
 
   let key =
     let () =
       (* Check for free type variables and fail early *)
-      if Internal.has_var s
-      then failwith (Format.asprintf "Xtype: invalid MATCHER_0 witness: %a" print_stype s)
-    in
-    s
+      if Stype.Internal.has_var s
+      then failwith (
+          Format.asprintf "Xtype: invalid MATCHER_0 witness: %a" Stype.print s)
+    in s
 
-  let is_t ?(modulo_props=false) (t : 'a ttype) : 'a is_t option =
+  let is_t ?(modulo_props=false) (t : 'a Ttype.t) : 'a is_t option =
     try
       let subs = Array.make 0 None in
-      unifier ~modulo_props ~subs key (stype_of_ttype t);
+      unifier ~modulo_props ~subs key (Ttype.to_stype t);
       Some (Is (Obj.magic TypEq.refl))
     with
       Not_unifiable -> None
@@ -816,23 +805,24 @@ end
 module Matcher_1 (T : TYPE_1) = struct
   include T
 
-  type _ is_t = Is: 'b ttype * ('a, 'b T.t) TypEq.t -> 'a is_t
+  type _ is_t = Is: 'b Ttype.t * ('a, 'b T.t) TypEq.t -> 'a is_t
 
-  let s = T.t Std.unit_t |> stype_of_ttype
+  let s = T.t Std.unit_t |> Ttype.to_stype
   let is_abstract = get_abstract_name s
 
   let key =
     let () =
       (* Check for free type variables and fail early *)
-      if Internal.has_var s
-      then failwith (Format.asprintf "Xtype: invalid MATCHER_1 witness: %a" print_stype s)
+      if Stype.Internal.has_var s
+      then failwith (
+          Format.asprintf "Xtype: invalid MATCHER_1 witness: %a" Stype.print s)
     in
-    stype_of_ttype (T.t (cast_ttype (DT_var 0)))
+    Ttype.to_stype (T.t (cast_ttype (DT_var 0)))
 
-  let is_t ?(modulo_props=false) (type s) (t : s ttype) : s is_t option =
+  let is_t ?(modulo_props=false) (type s) (t : s Ttype.t) : s is_t option =
     try
       let subs = Array.make 1 None in
-      unifier ~modulo_props ~subs key (stype_of_ttype t);
+      unifier ~modulo_props ~subs key (Ttype.to_stype t);
       match subs with
       | [|Some s|] -> Some (Is (cast_ttype s, Obj.magic (TypEq.refl)))
       (* unification success, but unused type args *)
@@ -845,23 +835,25 @@ end
 module Matcher_2 (T : TYPE_2) = struct
   include T
 
-  type _ is_t = Is: 'aa ttype * 'bb ttype * ('a, ('aa,'bb) t) TypEq.t -> 'a is_t
+  type _ is_t =
+      Is: 'aa Ttype.t * 'bb Ttype.t * ('a, ('aa,'bb) t) TypEq.t -> 'a is_t
 
-  let s = T.t Std.unit_t Std.unit_t |> stype_of_ttype
+  let s = T.t Std.unit_t Std.unit_t |> Ttype.to_stype
   let is_abstract = get_abstract_name s
 
   let key =
     let () =
       (* Check for free type variables and fail early *)
-      if Internal.has_var s
-      then failwith (Format.asprintf "Xtype: invalid MATCHER_2 witness: %a" print_stype s)
+      if Stype.Internal.has_var s
+      then failwith (
+          Format.asprintf "Xtype: invalid MATCHER_2 witness: %a" Stype.print s)
     in
-    stype_of_ttype (T.t (cast_ttype (DT_var 0)) (cast_ttype (DT_var 1)))
+    Ttype.to_stype (T.t (cast_ttype (DT_var 0)) (cast_ttype (DT_var 1)))
 
-  let is_t ?(modulo_props=false) (type s) (t : s ttype) : s is_t option =
+  let is_t ?(modulo_props=false) (type s) (t : s Ttype.t) : s is_t option =
     try
       let subs = Array.make 2 None in
-      unifier ~modulo_props ~subs key (stype_of_ttype t);
+      unifier ~modulo_props ~subs key (Ttype.to_stype t);
       match subs with
       | [|Some s1; Some s2|] -> Some (Is (cast_ttype s1, cast_ttype s2, Obj.magic (TypEq.refl)))
       (* unification success, but unused type args *)

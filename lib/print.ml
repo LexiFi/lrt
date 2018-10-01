@@ -1,5 +1,4 @@
-open Dynt_core.Stype
-open Dynt_core.Ttype
+open Dynt_core
 open Dynt_core.Std
 
 type 'a printer = Format.formatter -> 'a -> unit
@@ -87,7 +86,7 @@ let add_unsafe_abstract_0 ~name
     (printer: Format.formatter -> 'a printer ) =
   add_abstract_0 ( module struct
     type t = Obj.t
-    let t : t ttype = Obj.magic (DT_abstract (name, []))
+    let t : t Ttype.t = Obj.magic (Stype.DT_abstract (name, []))
     let printer = Obj.magic printer
   end )
 
@@ -95,8 +94,8 @@ let add_unsafe_abstract_1
     (module P : UNSAFE_ABSTRACT_PRINTABLE_1) =
   add_abstract_1 ( module struct
     type 'a t = Obj.t
-    let t (a : 'a ttype) : 'a t ttype =
-      Obj.magic (DT_abstract (P.name, [stype_of_ttype a]))
+    let t (a : 'a Ttype.t) : 'a t Ttype.t =
+      Obj.magic (Stype.DT_abstract (P.name, [Ttype.to_stype a]))
     let printer = Obj.magic P.printer
   end )
 
@@ -104,8 +103,9 @@ let add_unsafe_abstract_2
     (module P : UNSAFE_ABSTRACT_PRINTABLE_2) =
   add_abstract_2 ( module struct
     type ('a, 'b) t = Obj.t
-    let t (a : 'a ttype) (b : 'b ttype)  : ('a, 'b) t ttype =
-      Obj.magic (DT_abstract (P.name, [stype_of_ttype a; stype_of_ttype b]))
+    let t (a : 'a Ttype.t) (b : 'b Ttype.t)  : ('a, 'b) t Ttype.t =
+      Obj.magic (Stype.DT_abstract (P.name,
+                                    [Ttype.to_stype a; Ttype.to_stype b]))
     let printer = Obj.magic P.printer
   end )
 
@@ -144,7 +144,7 @@ let print_dynamic fmt (t, x) =
           f rest
       in
       pp_print_string fmt pre; f lst; pp_print_string fmt pst;
-  and print_dynamic : type t. t ttype -> bool -> t -> unit =
+  and print_dynamic : type t. t Ttype.t -> bool -> t -> unit =
     fun t parens x ->
       match xtype_of_ttype t with
       | Unit -> pp_print_string fmt "()"
@@ -297,7 +297,7 @@ module Hashtbl_printer = struct
   open Format
 
   type ('a, 'b) t = ('a, 'b) Hashtbl.t
-  let t (type a) (type b) (a: a ttype) (b: b ttype) = hashtbl_t a b
+  let t (type a) (type b) (a: a Ttype.t) (b: b Ttype.t) = hashtbl_t a b
 
   let printer (print1 : 'a printer) (print2 : 'b printer) ppf
       (h : ('a, 'b) Hashtbl.t) =
@@ -328,9 +328,9 @@ let () =
     let printer ppf () =  Format.pp_print_string ppf "()"
   end) ;
   add_abstract_1 (module struct
-    type 'a t = 'a ttype
-    let t (type a) (a: a ttype) = ttype_t a
-    let printer _pp_a ppf t = print_stype ppf (stype_of_ttype t)
+    type 'a t = 'a Ttype.t
+    let t (type a) (a: a Ttype.t) = ttype_t a
+    let printer _pp_a ppf t = Stype.print ppf (Ttype.to_stype t)
   end)
 
 module Test = struct

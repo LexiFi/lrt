@@ -1,4 +1,4 @@
-open Dynt_core.Ttype
+open Dynt_core
 open Xtype
 
 open Dynt_core.Std
@@ -99,7 +99,7 @@ let add_abstract_2 (module M : VARIANTIZABLE_2) =
     Hashtbl.add abstract_variantizers name (T2 (module T))
   | _ -> raise (Invalid_argument "add_abstract: received non abstract type")
 
-let rec to_variant: type a. t: a ttype -> a to_variant = fun ~t x ->
+let rec to_variant: type a. t: a Ttype.t -> a to_variant = fun ~t x ->
   match xtype_of_ttype t with
   | Unit -> Unit
   | Bool -> Bool x
@@ -167,16 +167,16 @@ let rec to_variant: type a. t: a ttype -> a to_variant = fun ~t x ->
     in
     use_first (Hashtbl.find_all abstract_variantizers name) ;
 
-and dyn = fun (Dyn (t,x)) -> to_variant ~t x
-and dyn_named = fun ~name (Dyn (t,x)) -> name, to_variant ~t x
+and dyn = fun (Ttype.Dyn (t,x)) -> to_variant ~t x
+and dyn_named = fun ~name (Ttype.Dyn (t,x)) -> name, to_variant ~t x
 
-exception Bad_type_for_variant of Dynt_core.Stype.stype * t * string
+exception Bad_type_for_variant of Stype.t * t * string
 
 module Custom_of: sig
   type uid = string
   type custom =
-    | Of_variant : 'a ttype * (t -> 'a option) * string option -> custom
-  val register: ?name:string -> t: 'a ttype -> (t -> 'a option) -> uid
+    | Of_variant : 'a Ttype.t * (t -> 'a option) * string option -> custom
+  val register: ?name:string -> t: 'a Ttype.t -> (t -> 'a option) -> uid
   val get: uid -> custom
 end = struct
   module IntMap = Map.Make(struct type t = int let compare = compare end)
@@ -184,7 +184,7 @@ end = struct
   let last_uid = ref (-1)
 
   type custom =
-    | Of_variant : 'a ttype * (t -> 'a option) * string option -> custom
+    | Of_variant : 'a Ttype.t * (t -> 'a option) * string option -> custom
 
   let map : custom IntMap.t ref = ref IntMap.empty
 
@@ -223,12 +223,10 @@ let assoc_consume key lst =
 let variant_of_string = Variant_lexer.variant_of_string
 let variant_of_file = Variant_lexer.variant_of_file
 
-type properties = Dynt_core.Stype.stype_properties
-
-let rec of_variant: type a. t: a ttype -> properties -> a of_variant =
+let rec of_variant: type a. t: a Ttype.t -> Stype.properties -> a of_variant =
   fun ~t properties v ->
     let bad_variant s =
-      raise (Bad_type_for_variant(stype_of_ttype t, v, s)) in
+      raise (Bad_type_for_variant(Ttype.to_stype t, v, s)) in
     let field_builder: t list -> _ Builder.t = fun lst ->
       let arr = Array.of_list lst in
       let len = Array.length arr in
@@ -376,7 +374,7 @@ let rec of_variant: type a. t: a ttype -> properties -> a of_variant =
           let open Custom_of in
           let Of_variant (t', custom, _name_opt) = get uid in
           (* TODO: use name_opt for error messages *)
-          match ttypes_equality_modulo_props t t' with
+          match Ttype.equality_modulo_props t t' with
           | None -> assert false
           | Some (TypEq.Eq) ->
             match custom v with
@@ -452,7 +450,7 @@ let () = Printexc.register_printer
         Some(
           Format.asprintf
             "Bad type for value: %s@.@[** Variant: %a@.@[** Type: %a@]"
-            s print_variant v Dynt_core.Stype.print_stype t)
+            s print_variant v Stype.print t)
       | _ -> None
     )
 

@@ -1,11 +1,11 @@
 (** Dynamic printing. *)
 
-open Dynt_core.Ttype
+open Dynt_core
 
-val print: t:'a ttype -> Format.formatter -> 'a -> unit
+val print: t:'a Ttype.t -> Format.formatter -> 'a -> unit
 (** Print a value to the given formatter. *)
 
-val show: t:'a ttype -> 'a -> unit
+val show: t:'a Ttype.t -> 'a -> unit
 (** Print a value to stdout. *)
 
 (** {2 Handling abstract types} *)

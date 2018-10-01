@@ -1,14 +1,12 @@
 (** Safe inspection of runtime types. *)
 
 open Dynt_core
-open Dynt_core.Ttype
-open Dynt_core.Stype
 
 type record_repr = Regular | Float | Unboxed
 type constr_repr = Tag of int | Unboxed
 
 type 'a t = private
-  { t: 'a ttype
+  { t: 'a Ttype.t
   ; xt: 'a xtype Lazy.t
   }
 
@@ -31,8 +29,8 @@ and 'a xtype = private
   | Sum: 'a sum -> 'a xtype
   | Function: ('b,'c) arrow -> ('b -> 'c) xtype
   | Object: 'a object_ -> 'a xtype
-  | Prop: (stype_properties * 'a t) -> 'a xtype
-  | Abstract: (string * stype list) -> 'a xtype
+  | Prop: (Stype.properties * 'a t) -> 'a xtype
+  | Abstract: (string * Stype.t list) -> 'a xtype
 
 and ('s,'t) element = private
   { typ: 't t
@@ -45,7 +43,7 @@ and 's field = private
 and 's tuple = private
   { t_flds : 's field list }
 
-and label = string * stype_properties
+and label = string * Stype.properties
 
 and 's record_field = label * 's field
 
@@ -98,11 +96,8 @@ and 's object_ = private
     Getting rid of this function allowed to ditch some ugly parts of the xtypes
     implementation. *)
 
-val xtype_of_ttype: 'a ttype -> 'a xtype
-val t_of_ttype: 'a ttype -> 'a t
-
-val get_first_props_xtype: 'a xtype -> stype_properties
-val remove_first_props_xtype: 'a xtype -> 'a xtype
+val xtype_of_ttype: 'a Ttype.t -> 'a xtype
+val of_ttype: 'a Ttype.t -> 'a t
 
 module Fields : sig
   val tuple : 'a tuple -> ('a, 'b) element -> 'a -> 'b
@@ -112,12 +107,13 @@ module Fields : sig
   val inlined_constructor :
     ('a, 'b) inlined_constructor -> ('b, 'c) element -> 'a -> 'c option
 
-  val map_tuple : 'a tuple -> (dynamic -> 'b) -> 'a -> 'b list
-  val map_record : 'a record -> (name:string -> dynamic -> 'b) -> 'a -> 'b list
+  val map_tuple : 'a tuple -> (Ttype.dynamic -> 'b) -> 'a -> 'b list
+  val map_record :
+    'a record -> (name:string -> Ttype.dynamic -> 'b) -> 'a -> 'b list
   val map_regular : ('a, 'b) regular_constructor ->
-    (dynamic -> 'c) -> 'a -> 'c list
+    (Ttype.dynamic -> 'c) -> 'a -> 'c list
   val map_inlined : ('a, 'b) inlined_constructor ->
-    (name:string -> dynamic -> 'c) -> 'a -> 'c list
+    (name:string -> Ttype.dynamic -> 'c) -> 'a -> 'c list
 end
 (** Read values from tuples, records and constructors. *)
 
@@ -194,12 +190,12 @@ module Step : sig
 end
 (** Build steps from elements. *)
 
-val all_paths: 'a ttype -> 'b ttype -> ('a, 'b) Path.t list
+val all_paths: 'a Ttype.t -> 'b Ttype.t -> ('a, 'b) Path.t list
 (** Returns all the paths leading to a value of type ['a] inside
     a value of type ['b]. Does not traverse list, array, lazy, objects.
     Will loop on recursive types. *)
 
-val project_path : 'a ttype -> ('a,'b) Path.t -> 'b ttype
+val project_path : 'a Ttype.t -> ('a,'b) Path.t -> 'b Ttype.t
 (** Extraction of sub-type pointed to by a path. *)
 
 (** {2 Type Matchers}
@@ -207,37 +203,38 @@ val project_path : 'a ttype -> ('a,'b) Path.t -> 'b ttype
 
 module type TYPE_0 = sig
   type t
-  val t: t ttype
+  val t: t Ttype.t
 end
 
 module type TYPE_1 = sig
   type 'a t
-  val t: 'a ttype -> 'a t ttype
+  val t: 'a Ttype.t -> 'a t Ttype.t
 end
 
 module type TYPE_2 = sig
   type ('a, 'b) t
-  val t: 'a ttype -> 'b ttype -> ('a, 'b) t ttype
+  val t: 'a Ttype.t -> 'b Ttype.t -> ('a, 'b) t Ttype.t
 end
 
 module type MATCHER_0 = sig
   include TYPE_0
   type _ is_t = Is: ('a, t) TypEq.t -> 'a is_t
-  val is_t: ?modulo_props : bool -> 'a ttype -> 'a is_t option
+  val is_t: ?modulo_props : bool -> 'a Ttype.t -> 'a is_t option
   val is_abstract: string option
 end
 
 module type MATCHER_1 = sig
   include TYPE_1
-  type _ is_t = Is: 'b ttype * ('a, 'b t) TypEq.t -> 'a is_t
-  val is_t: ?modulo_props : bool -> 'a ttype -> 'a is_t option
+  type _ is_t = Is: 'b Ttype.t * ('a, 'b t) TypEq.t -> 'a is_t
+  val is_t: ?modulo_props : bool -> 'a Ttype.t -> 'a is_t option
   val is_abstract: string option
 end
 
 module type MATCHER_2 = sig
   include TYPE_2
-  type _ is_t = Is: 'b ttype * 'c ttype * ('a, ('b, 'c) t) TypEq.t -> 'a is_t
-  val is_t: ?modulo_props : bool -> 'a ttype -> 'a is_t option
+  type _ is_t =
+      Is: 'b Ttype.t * 'c Ttype.t * ('a, ('b, 'c) t) TypEq.t -> 'a is_t
+  val is_t: ?modulo_props : bool -> 'a Ttype.t -> 'a is_t option
   val is_abstract: string option
 end
 
