@@ -4,33 +4,33 @@ open Dynt_core.Std
 type 'a printer = Format.formatter -> 'a -> unit
 
 module type PRINTABLE_0 = sig
-  include Xtype.TYPE_0
+  include Xtype.T0
   val printer: t printer
 end
 
 module type PRINTABLE_1 = sig
-  include Xtype.TYPE_1
+  include Xtype.T1
   val printer: 'a printer -> 'a t printer
 end
 
 module type PRINTABLE_2 = sig
-  include Xtype.TYPE_2
+  include Xtype.T2
   val printer: 'a printer -> 'b printer -> ('a, 'b) t printer
 end
 
 module type PMATCHER_0 = sig
   include PRINTABLE_0
-  include Xtype.MATCHER_0 with type t := t
+  include Xtype.MATCH0 with type t := t
 end
 
 module type PMATCHER_1 = sig
   include PRINTABLE_1
-  include Xtype.MATCHER_1 with type 'a t := 'a t
+  include Xtype.MATCH1 with type 'a t := 'a t
 end
 
 module type PMATCHER_2 = sig
   include PRINTABLE_2
-  include Xtype.MATCHER_2 with type ('a,'b) t := ('a,'b) t
+  include Xtype.MATCH2 with type ('a,'b) t := ('a,'b) t
 end
 
 type printable =
@@ -42,7 +42,7 @@ let abstract_printers : (string, printable) Hashtbl.t = Hashtbl.create 17
 
 let add_abstract_0 (module P : PRINTABLE_0) =
   let module T = struct
-    include Xtype.Matcher_0(P)
+    include Xtype.Match0(P)
     let printer = P.printer
   end in
   match T.is_abstract with
@@ -52,7 +52,7 @@ let add_abstract_0 (module P : PRINTABLE_0) =
 
 let add_abstract_1 (module P : PRINTABLE_1) =
   let module T = struct
-    include Xtype.Matcher_1(P)
+    include Xtype.Match1(P)
     let printer = P.printer
   end in
   match T.is_abstract with
@@ -62,7 +62,7 @@ let add_abstract_1 (module P : PRINTABLE_1) =
 
 let add_abstract_2 (module P : PRINTABLE_2) =
   let module T = struct
-    include Xtype.Matcher_2(P)
+    include Xtype.Match2(P)
     let printer = P.printer
   end in
   match T.is_abstract with
@@ -384,7 +384,7 @@ module Test = struct
 
   let%expect_test _ =
     print_endline "ttype:";
-    show [%t: tt ttype] tt_t;
+    show (ttype_t tt_t) tt_t;
     [%expect {|
       ttype:
       (tt =

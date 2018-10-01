@@ -8,7 +8,6 @@ module Types = struct
   open Dynt_core.Stype.Internal
 
   type 'a lazy_t = 'a Lazy.t
-  type nonrec 'a ttype = 'a Ttype.t
   type nonrec node = Stype.node
 
   let ttype_of_stype (type a) (s : Stype.t) = (Obj.magic s : a Ttype.t)

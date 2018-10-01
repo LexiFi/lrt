@@ -1,4 +1,4 @@
-(** The [\[%path . \]] syntax extension. *)
+(** The [\[%path? .\]] syntax extension. *)
 
 (**/**)
 

@@ -26,36 +26,36 @@ type 'a of_variant = t -> 'a
 type failwith = {failwith: 'a. string -> 'a} [@@unboxed]
 
 module type VARIANTIZABLE_0 = sig
-  include Xtype.TYPE_0
+  include Xtype.T0
   val to_variant: t to_variant
   val of_variant: failwith -> t of_variant
 end
 
 module type VARIANTIZABLE_1 = sig
-  include Xtype.TYPE_1
+  include Xtype.T1
   val to_variant: 'a to_variant -> 'a t to_variant
   val of_variant: failwith -> 'a of_variant -> 'a t of_variant
 end
 
 module type VARIANTIZABLE_2 = sig
-  include Xtype.TYPE_2
+  include Xtype.T2
   val to_variant: 'a to_variant -> 'b to_variant -> ('a, 'b) t to_variant
   val of_variant: failwith -> 'a of_variant -> 'b of_variant -> ('a, 'b) t of_variant
 end
 
 module type VMATCHER_0 = sig
   include VARIANTIZABLE_0
-  include Xtype.MATCHER_0 with type t := t
+  include Xtype.MATCH0 with type t := t
 end
 
 module type VMATCHER_1 = sig
   include VARIANTIZABLE_1
-  include Xtype.MATCHER_1 with type 'a t := 'a t
+  include Xtype.MATCH1 with type 'a t := 'a t
 end
 
 module type VMATCHER_2 = sig
   include VARIANTIZABLE_2
-  include Xtype.MATCHER_2 with type ('a,'b) t := ('a,'b) t
+  include Xtype.MATCH2 with type ('a,'b) t := ('a,'b) t
 end
 
 type variantizable =
@@ -68,7 +68,7 @@ let abstract_variantizers : (string, variantizable) Hashtbl.t =
 
 let add_abstract_0 (module M : VARIANTIZABLE_0) =
   let module T = struct
-    include Xtype.Matcher_0(M)
+    include Xtype.Match0(M)
     let to_variant = M.to_variant
     let of_variant = M.of_variant
   end in
@@ -79,7 +79,7 @@ let add_abstract_0 (module M : VARIANTIZABLE_0) =
 
 let add_abstract_1 (module M : VARIANTIZABLE_1) =
   let module T = struct
-    include Xtype.Matcher_1(M)
+    include Xtype.Match1(M)
     let to_variant = M.to_variant
     let of_variant = M.of_variant
   end in
@@ -90,7 +90,7 @@ let add_abstract_1 (module M : VARIANTIZABLE_1) =
 
 let add_abstract_2 (module M : VARIANTIZABLE_2) =
   let module T = struct
-    include Xtype.Matcher_2(M)
+    include Xtype.Match2(M)
     let to_variant = M.to_variant
     let of_variant = M.of_variant
   end in

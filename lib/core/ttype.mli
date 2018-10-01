@@ -1,10 +1,10 @@
-(** Typed representation of types. *)
+(** Typed runtime representation of types. *)
 
 type 'a t
 
 val print : Format.formatter -> 'a t -> unit
 
-(** Packed ttype and value. *)
+(** A dynamically typed value. *)
 type dynamic = Dyn: 'a t * 'a -> dynamic
 
 val equality: 'a t -> 'b t -> ('a, 'b) TypEq.t option
@@ -36,11 +36,9 @@ assert (fst (consume_outer_props s_t) = fst (consume_outer_props t))
 
 val add_props: Stype.properties -> 'a t -> 'a t
 
-(** {2 Upgrade stype to ttype} *)
+(** {2 Conversion to/from stype} *)
 
 type is_t = Ttype: 'a t -> is_t
 val of_stype: Stype.t -> is_t
-
-(** {2 Downgrade ttype to stype} *)
 
 val to_stype: _ t -> Stype.t

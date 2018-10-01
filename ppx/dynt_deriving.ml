@@ -132,7 +132,7 @@ let lazy_value_binding ~loc txt typ expr =
   let (module M) = Ast_builder.make loc in
   let open M in
   let pat = ppat_constraint (ppat_var {loc;txt})
-      [%type: [%t typ] ttype lazy_t] in
+      [%type: [%t typ] Ttype.t lazy_t] in
   let expr = ignore ~loc (evar txt) [%expr lazy [%e expr]] in
   value_binding ~pat ~expr
 
@@ -156,9 +156,10 @@ let wrap_props ~loc props t =
 (* check whether ttype is of a certain type and make it an stype *)
 let stype_of_ttype ({ ptyp_loc = loc ; _ } as ct) expr =
   (* strip patch attribute *)
-  let ct, _ = patch_of_ct ct in
+  let ct, _ = patch_of_ct ct
+  and txt = Longident.parse "Ttype.t" in
   [%expr stype_of_ttype
-      ([%e expr] : [%t ptyp_constr ~loc {loc; txt = Lident "ttype"} [ct]])]
+      ([%e expr] : [%t ptyp_constr ~loc {loc; txt} [ct]])]
 
 (*
  * mangle names
@@ -196,7 +197,8 @@ let names_of_type_decl td =
   { typ ; ttyp = mangle_label typ ; node = typ ^ "_node"}
 
 let ttype_ct_of_ct ~loc ct =
-  ptyp_constr ~loc {txt = Lident "ttype"; loc} [ct]
+  let txt = Longident.parse "Ttype.t" in
+  ptyp_constr ~loc {txt; loc} [ct]
 
 let type_of_type_decl ~loc td : core_type =
   let (module M) = Ast_builder.make loc in
@@ -208,11 +210,11 @@ let ttype_of_type_decl ~loc td : core_type =
   let (module M) = Ast_builder.make loc in
   let open M in
   let ct  = type_of_type_decl ~loc td in
-  ptyp_constr {txt=Longident.parse "Dynt_runtime.Types.ttype"; loc} [ct]
+  ptyp_constr {txt=Longident.parse "Ttype.t"; loc} [ct]
 
 let close_ttype ~loc ~free ttype =
     List.fold_left (fun acc name ->
-        [%type: [%t ptyp_var ~loc name] Dynt_runtime.Types.ttype -> [%t acc]])
+        [%type: [%t ptyp_var ~loc name] Ttype.t -> [%t acc]])
       ttype (List.rev free)
 
 (*

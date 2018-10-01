@@ -89,8 +89,6 @@ and 's method_ = private
 and 's object_ = private
   { methods : 's method_ list }
 
-(** {2 Basics} *)
-
 (** There was a [ttype_of_xtype] function before. I think this encourages bad
     style, i.e. forcing an xtype too early and then going back to ttype.
     Getting rid of this function allowed to ditch some ugly parts of the xtypes
@@ -199,46 +197,49 @@ val project_path : 'a Ttype.t -> ('a,'b) Path.t -> 'b Ttype.t
 (** Extraction of sub-type pointed to by a path. *)
 
 (** {2 Type Matchers}
-    Compare nontrivial ttypes with each other. *)
+    Compare nontrivial types. *)
 
-module type TYPE_0 = sig
+module type T0 = sig
   type t
   val t: t Ttype.t
 end
 
-module type TYPE_1 = sig
+module type T1 = sig
   type 'a t
   val t: 'a Ttype.t -> 'a t Ttype.t
 end
 
-module type TYPE_2 = sig
+module type T2 = sig
   type ('a, 'b) t
   val t: 'a Ttype.t -> 'b Ttype.t -> ('a, 'b) t Ttype.t
 end
 
-module type MATCHER_0 = sig
-  include TYPE_0
+module type MATCH0 = sig
+  include T0
   type _ is_t = Is: ('a, t) TypEq.t -> 'a is_t
   val is_t: ?modulo_props : bool -> 'a Ttype.t -> 'a is_t option
   val is_abstract: string option
+  (** If [t] is an abstract type, [is_abstract t] provides its identifier.*)
 end
 
-module type MATCHER_1 = sig
-  include TYPE_1
+module type MATCH1 = sig
+  include T1
   type _ is_t = Is: 'b Ttype.t * ('a, 'b t) TypEq.t -> 'a is_t
   val is_t: ?modulo_props : bool -> 'a Ttype.t -> 'a is_t option
   val is_abstract: string option
+  (** If [t] is an abstract type, [is_abstract t] provides its identifier.*)
 end
 
-module type MATCHER_2 = sig
-  include TYPE_2
+module type MATCH2 = sig
+  include T2
   type _ is_t =
       Is: 'b Ttype.t * 'c Ttype.t * ('a, ('b, 'c) t) TypEq.t -> 'a is_t
   val is_t: ?modulo_props : bool -> 'a Ttype.t -> 'a is_t option
   val is_abstract: string option
+  (** If [t] is an abstract type, [is_abstract t] provides its identifier.*)
 end
 
-module Matcher_0 (T : TYPE_0) : MATCHER_0 with type t = T.t
-module Matcher_1 (T : TYPE_1) : MATCHER_1 with type 'a t = 'a T.t
-module Matcher_2 (T : TYPE_2) : MATCHER_2 with type ('a, 'b) t = ('a, 'b) T.t
+module Match0 (T : T0) : MATCH0 with type t = T.t
+module Match1 (T : T1) : MATCH1 with type 'a t = 'a T.t
+module Match2 (T : T2) : MATCH2 with type ('a, 'b) t = ('a, 'b) T.t
 

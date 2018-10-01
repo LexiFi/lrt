@@ -13,17 +13,17 @@ val show: t:'a Ttype.t -> 'a -> unit
 type 'a printer = Format.formatter -> 'a -> unit
 
 module type PRINTABLE_0 = sig
-  include Xtype.TYPE_0
+  include Xtype.T0
   val printer: t printer
 end
 
 module type PRINTABLE_1 = sig
-  include Xtype.TYPE_1
+  include Xtype.T1
   val printer: 'a printer -> 'a t printer
 end
 
 module type PRINTABLE_2 = sig
-  include Xtype.TYPE_2
+  include Xtype.T2
   val printer: 'a printer -> 'b printer -> ('a, 'b) t printer
 end
 

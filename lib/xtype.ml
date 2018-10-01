@@ -640,41 +640,44 @@ let rec project_path : type a b. a Ttype.t -> (a,b) Path.t -> b Ttype.t =
 
 (* type matching *)
 
-module type TYPE_0 = sig
+module type T0 = sig
   type t
   val t: t Ttype.t
 end
 
-module type TYPE_1 = sig
+module type T1 = sig
   type 'a t
   val t: 'a Ttype.t -> 'a t Ttype.t
 end
 
-module type TYPE_2 = sig
+module type T2 = sig
   type ('a, 'b) t
   val t: 'a Ttype.t -> 'b Ttype.t -> ('a, 'b) t Ttype.t
 end
 
-module type MATCHER_0 = sig
-  include TYPE_0
+module type MATCH0 = sig
+  include T0
   type _ is_t = Is: ('a, t) TypEq.t -> 'a is_t
   val is_t: ?modulo_props : bool -> 'a Ttype.t -> 'a is_t option
   val is_abstract: string option
+  (** If [t] is an abstract type, [is_abstract t] provides its identifier.*)
 end
 
-module type MATCHER_1 = sig
-  include TYPE_1
+module type MATCH1 = sig
+  include T1
   type _ is_t = Is: 'b Ttype.t * ('a, 'b t) TypEq.t -> 'a is_t
   val is_t: ?modulo_props : bool -> 'a Ttype.t -> 'a is_t option
   val is_abstract: string option
+  (** If [t] is an abstract type, [is_abstract t] provides its identifier.*)
 end
 
-module type MATCHER_2 = sig
-  include TYPE_2
+module type MATCH2 = sig
+  include T2
   type _ is_t =
       Is: 'b Ttype.t * 'c Ttype.t * ('a, ('b, 'c) t) TypEq.t -> 'a is_t
   val is_t: ?modulo_props : bool -> 'a Ttype.t -> 'a is_t option
   val is_abstract: string option
+  (** If [t] is an abstract type, [is_abstract t] provides its identifier.*)
 end
 
 let get_abstract_name (s: Stype.t) =
@@ -776,7 +779,7 @@ let unifier ~(modulo_props : bool) ~(subs : Stype.t option array) s1 s2 =
   in
   unifier s1 s2
 
-module Matcher_0 (T : TYPE_0) = struct
+module Match0 (T : T0) = struct
   include T
 
   type _ is_t = Is: ('a, t) TypEq.t -> 'a is_t
@@ -802,7 +805,7 @@ module Matcher_0 (T : TYPE_0) = struct
 
 end
 
-module Matcher_1 (T : TYPE_1) = struct
+module Match1 (T : T1) = struct
   include T
 
   type _ is_t = Is: 'b Ttype.t * ('a, 'b T.t) TypEq.t -> 'a is_t
@@ -832,7 +835,7 @@ module Matcher_1 (T : TYPE_1) = struct
       Not_unifiable -> None
 end
 
-module Matcher_2 (T : TYPE_2) = struct
+module Match2 (T : T2) = struct
   include T
 
   type _ is_t =
