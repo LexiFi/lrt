@@ -182,7 +182,7 @@ and expand acc ({ppat_loc = loc;_} as x) =
 
 let expand ~loc ~path x =
   ignore path;
-  [%expr let open! Dynt_runtime.Path in
+  [%expr let open! Dynt_ppx_runtime.Path in
     [%e elist ~loc (expand [] x |> List.rev)]]
 
 (* Register the expander *)

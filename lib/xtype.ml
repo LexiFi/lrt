@@ -1,5 +1,3 @@
-open Dynt_core
-
 type record_repr = Regular | Float | Unboxed
 type constr_repr = Tag of int | Unboxed
 

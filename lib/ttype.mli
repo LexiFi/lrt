@@ -1,6 +1,8 @@
-(** Typed runtime representation of types. *)
+(** Typed representation of types. *)
 
 type 'a t
+
+val t : 'a t -> 'a t t
 
 val print : Format.formatter -> 'a t -> unit
 
@@ -42,3 +44,4 @@ type is_t = Ttype: 'a t -> is_t
 val of_stype: Stype.t -> is_t
 
 val to_stype: _ t -> Stype.t
+

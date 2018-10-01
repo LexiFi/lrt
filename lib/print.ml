@@ -1,5 +1,4 @@
-open Dynt_core
-open Dynt_core.Std
+open Std
 
 type 'a printer = Format.formatter -> 'a -> unit
 
@@ -329,7 +328,7 @@ let () =
   end) ;
   add_abstract_1 (module struct
     type 'a t = 'a Ttype.t
-    let t (type a) (a: a Ttype.t) = ttype_t a
+    let t (type a) (a: a Ttype.t) = Ttype.t a
     let printer _pp_a ppf t = Stype.print ppf (Ttype.to_stype t)
   end)
 
@@ -384,7 +383,7 @@ module Test = struct
 
   let%expect_test _ =
     print_endline "ttype:";
-    show (ttype_t tt_t) tt_t;
+    show (Ttype.t tt_t) tt_t;
     [%expect {|
       ttype:
       (tt =

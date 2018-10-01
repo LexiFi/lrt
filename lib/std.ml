@@ -24,10 +24,6 @@ let array_t a =
   let t = Ttype.to_stype a in
   DT_array t |> Obj.magic
 
-let ttype_t a =
-  let t = Ttype.to_stype a in
-  DT_abstract ("Dynt.Types.ttype", [t]) |> Obj.magic
-
 let lazy_t a =
   let t = Ttype.to_stype a in
   DT_abstract ("Lazy.t", [t]) |> Obj.magic

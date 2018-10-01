@@ -5,8 +5,6 @@
 (*  form or for any purpose without the express permission of LexiFi SAS.  *)
 (***************************************************************************)
 
-open Dynt_core
-
 (** A quickcheck-like library for OCaml. *)
 
 (** {2 Generators} *)

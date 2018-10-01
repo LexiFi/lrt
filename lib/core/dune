@@ -1,4 +1,0 @@
-(library
- (name dynt_core)
- (synopsis "Parts of Dynt that do not depend on the PPX")
- (public_name dynt.core))

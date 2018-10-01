@@ -5,8 +5,7 @@
 (*  form or for any purpose without the express permission of LexiFi SAS.  *)
 (***************************************************************************)
 
-open Dynt_core
-open Dynt_core.Std
+open Std
 
 (* Utils. *)
 

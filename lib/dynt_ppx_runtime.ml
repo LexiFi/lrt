@@ -4,8 +4,7 @@
 module Types = struct
   (** Runtime for building types *)
 
-  open Dynt_core
-  open Dynt_core.Stype.Internal
+  open Stype.Internal
 
   type 'a lazy_t = 'a Lazy.t
   type nonrec node = Stype.node
@@ -23,7 +22,7 @@ module Types = struct
 
   let record_representation (l: Stype.t list) : Stype.record_repr =
     let p = Stype.equality_modulo_props (
-        stype_of_ttype Dynt_core.Std.float_t) in
+        stype_of_ttype Std.float_t) in
     if List.for_all p l then Record_float else Record_regular
 
   module Set = Set.Make(String)
@@ -62,7 +61,7 @@ module Path = struct
     | x -> Some x
     | exception _ -> None
 
-  include Dynt_core.Path
+  include Path
   include Internal [@@ocaml.warning "-3"]
 
 end

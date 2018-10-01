@@ -31,3 +31,7 @@ let equality_modulo_props t1 t2 =
 
 type is_t = Ttype: 'a t -> is_t
 let of_stype s = Ttype (Obj.magic s)
+
+let t a =
+  let t = to_stype a in
+  Stype.DT_abstract ("Dynt.Ttype.t", [t]) |> Obj.magic

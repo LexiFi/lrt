@@ -1,18 +1,10 @@
 (library
- (name dynt_runtime)
- (public_name dynt.runtime)
- (synopsis "Runtime components of [@@deriving t]")
- (modules dynt_runtime)
- (libraries dynt_core))
-
-(library
  (name dynt_ppx)
  (public_name dynt.ppx)
- (synopsis "[@@deriving t]")
+ (synopsis "[@@deriving t] & [%path? .] syntax extensions")
  (libraries ppxlib)
  (preprocess (pps ppxlib.metaquot))
  (modules dynt_deriving dynt_path)
- (ppx_runtime_libraries dynt_runtime)
  (kind ppx_deriver))
 
 (executable

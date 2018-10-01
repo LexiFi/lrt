@@ -1,7 +1,5 @@
-open Dynt_core
 open Xtype
-
-open Dynt_core.Std
+open Std
 
 exception Variant_parser = Variant_lexer.Error
 
@@ -202,7 +200,7 @@ let of_variant_custom ?name ~t custom =
   (* TODO: write this into the xtype/stype instead of a separate map *)
   let uid = Custom_of.register ?name ~t custom in
   let props = ["of_variant_custom_uid", uid] in
-  Dynt_core.Ttype.add_props props t
+  Ttype.add_props props t
 
 let of_variant_default ?name ~t init =
   let custom _v = Some (init ()) in

@@ -1,7 +1,5 @@
 (** Dynamic printing. *)
 
-open Dynt_core
-
 val print: t:'a Ttype.t -> Format.formatter -> 'a -> unit
 (** Print a value to the given formatter. *)
 

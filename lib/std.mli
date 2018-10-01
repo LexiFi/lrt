@@ -1,8 +1,5 @@
 (** Dynamic type representations for standard ocaml types. *)
 
-(** Dynamic representation of [Ttype.t]. Used for printing of types. *)
-val ttype_t: 'a Ttype.t -> 'a Ttype.t Ttype.t
-
 (** {2 Pervasives } *)
 
 val unit_t: unit Ttype.t

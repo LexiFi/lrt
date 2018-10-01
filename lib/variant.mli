@@ -1,9 +1,7 @@
 (** Universal untyped representation of values.
 
-    Values can be converted to and from variants using {!variant} and
+    Values can be converted to and from variants using {!to_variant} and
     {!of_variant}. *)
-
-open Dynt_core
 
 type t = Variant_lexer.t =
   | Unit

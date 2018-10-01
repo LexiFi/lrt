@@ -144,7 +144,7 @@ let stypes_of_free ~loc free =
   List.mapi (fun i _v -> [%expr DT_var [%e eint i]]) free |> elist
 
 let wrap_runtime ~loc =
-  let txt = (Longident.parse "Dynt_runtime.Types") in
+  let txt = (Longident.parse "Dynt_ppx_runtime.Types") in
   pexp_open ~loc Override {txt;loc}
 
 let wrap_props ~loc props t =

@@ -1,4 +1,5 @@
-(** Type equalities *)
+(** Type equalities. *)
+
 type (_, _) t = Eq: ('a, 'a) t
 (** A value of type [('a, 'b) t] is a witness that the two types ['a] and
  * ['b] are equal. *)
