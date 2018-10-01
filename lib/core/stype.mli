@@ -68,6 +68,24 @@ val equality: t -> t -> bool
 val equality_modulo_props: t -> t -> bool
 
 val remove_outer_props: t -> t
+(** Remove properties from a stype. If properties are nested, all are removed.*)
+
+val consume_outer_props: t -> properties * t
+(** Read the properties from a stype and returns a stype that is not a property
+    node. If properties are nested, the innermost properties are at the
+    beginning of the return list.
+
+    In the sense of this function the following types [s] and [t] carry the same
+    list of properties.
+    {[
+type s' = int [@prop {a = "b"; b = "c"}] [@@deriving t]
+type s = s' [@prop {c = "d"; d = "e"}] [@@deriving t]
+type t = int [@prop {a = "b"; b = "c"; c = "d"; d = "e"}] [@@deriving t]
+let t = Ttype.to_stype t
+and s = Ttype.to_stype s_t in
+assert (fst (consume_outer_props s) = fst (consume_outer_props t))
+    ]}
+*)
 
 val uninline : 'a variant_args -> 'a list
 val is_cst_args : 'a variant_args -> bool

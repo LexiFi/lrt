@@ -119,7 +119,7 @@ let f_t = of_variant_default ~name:"Variantizer.f_default" ~t:f_t f_default
 
 let%expect_test _ =
   Format.printf "%a\n%!" Ttype.print [%t: f];
-  [%expect {| (int * string) + [of_variant_custom = "0"] + [of_variant_custom = "1"] + [of_variant_custom = "2"] |}]
+  [%expect {| (int * string) [@prop {of_variant_custom_uid = "0"; of_variant_custom_uid = "1"; of_variant_custom_uid = "2"}] |}]
 
 let of_variant_string ~t s =
   variant_of_string s |> of_variant ~t

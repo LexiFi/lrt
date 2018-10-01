@@ -201,7 +201,7 @@ end
 let of_variant_custom ?name ~t custom =
   (* TODO: write this into the xtype/stype instead of a separate map *)
   let uid = Custom_of.register ?name ~t custom in
-  let props = ["of_variant_custom", uid] in
+  let props = ["of_variant_custom_uid", uid] in
   Dynt_core.Ttype.add_props props t
 
 let of_variant_default ?name ~t init =
@@ -315,7 +315,9 @@ let rec of_variant: type a. t: a Ttype.t -> Stype.properties -> a of_variant =
               | None -> bad_variant "constructor does not exist"
         in use_first None s.cstrs
       (* accumulate properties TODO: which order is correct?*)
-      | Prop (lst, {t; _}), v -> of_variant (lst @ properties) ~t v
+      | Prop _, v ->
+        let props, t = Ttype.consume_outer_props t in
+        of_variant props ~t v
       | Abstract (name, _), v ->
         let rec use_first : variantizable list -> a = function
           | [] -> failwith (
@@ -368,7 +370,7 @@ let rec of_variant: type a. t: a Ttype.t -> Stype.properties -> a of_variant =
     with Bad_type_for_variant _ as e ->
       (* check accumulated properties for recovery mechanism *)
       let rec use_first props =
-        match assoc_consume "of_variant_custom" props with
+        match assoc_consume "of_variant_custom_uid" props with
         | None -> raise e
         | Some (uid, reduced_props) ->
           let open Custom_of in

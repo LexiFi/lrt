@@ -396,39 +396,50 @@ module Properties = struct
     } [@@deriving t]
 
   type 'a constructors =
-    | A of 'a [@prop "key" "value"]
-    | B of 'a [@prop "k" "v"] [@@deriving t]
+    | A of 'a [@prop {key = "value"}]
+    | B of 'a [@prop {k = "v"}] [@@deriving t]
 
-  type 'a coretype = ('a [@prop "some" "prop"]) list [@@deriving t]
+  type 'a coretype = ('a [@prop {some = "prop"}]) list [@@deriving t]
+
+  type many = int [@prop {a = "b"; b = "c"}] [@@deriving t]
+  type many' = many [@prop {c = "d"}] [@@deriving t]
 
   type ('a, 'b) combined =
-    | Core of ((('a [@prop "w" "a"]) * ('b [@prop "w" "b"]) [@prop "w" "a*b"]) list [@prop "w" "(a*b)list"])
+    | Core of ((('a [@prop {w = "a"}]) * ('b [@prop {w = "b"}]) [@prop {w = "a*b"}]) list [@prop "w" "(a*b)list"])
           [@prop "w" "Core"]
-    | Inline of { field : ('b [@prop "w" "b"]) [@prop "w" "field"] } [@prop "w" "Inline"]
-  [@@deriving t] [@@prop "key" "value"]
+    | Inline of { field : ('b [@prop {w = "b"}]) [@prop {w = "field"}] } [@prop {w = "Inline"}]
+  [@@deriving t] [@@prop {key = "value"}]
 
   let%expect_test _ =
     print [%t: int fields];
     print [%t: int constructors];
     print [%t: int coretype];
+    print [%t: many'];
     print [%t: (int,string) combined [@prop "w" "combined"]];
     [%expect {|
       (int fields =
          {
-           we + [need = "some"; more = "record"]: int;
-           fields + [_with = "properties"]: int;
+           we [@prop {need = "some"; more = "record"}]: int;
+           fields [@prop {_with = "properties"}]: int;
          })
       (int constructors =
-         | A + [key = "value"] of int
-         | B + [k = "v"] of int)
-      int + [some = "prop"] list
+         | A [@prop {key = "value"}] of int
+         | B [@prop {k = "v"}] of int)
+      int [@prop {some = "prop"}] list
+      int [@prop {a = "b"; b = "c"; c = "d"}]
       ((int, string) combined =
-         | Core + [w = "Core"] of (int + [w = "a"] * string + [w = "b"]) + [w = "a*b"] list + [w = "(a*b)list"]
-         | Inline + [w = "Inline"] of
+         | Core [@prop {w = "Core"}] of (int [@prop {w = "a"}] * string [@prop {w = "b"}]) [@prop {w = "a*b"}] list [@prop {w = "(a*b)list"}]
+         | Inline [@prop {w = "Inline"}] of
           ((int, string) combined.Inline =
              {
-               field + [w = "field"]: string + [w = "b"];
-             })) + [key = "value"] + [w = "combined"] |}]
+               field [@prop {w = "field"}]: string [@prop {w = "b"}];
+             })) [@prop {key = "value"; w = "combined"}] |}]
+
+  type s' = int [@prop {a = "b"; b = "c"}] [@@deriving t]
+  type s = s' [@prop {c = "d"; d = "e"}] [@@deriving t]
+  type t = int [@prop {a = "b"; b = "c"; c = "d"; d = "e"}] [@@deriving t]
+  let%test _ =
+    fst (Ttype.consume_outer_props s_t) = fst (Ttype.consume_outer_props t)
 
 end
 
@@ -467,7 +478,7 @@ module Abstract = struct
     print [%t: bar];
       [%expect {|
         One.Abstract.foo
-        One.Abstract.foo + [w = "bar"] |}]
+        One.Abstract.foo [@prop {w = "bar"}] |}]
 
   module Hashtable : sig
     type ('a,'b) t [@@deriving t]

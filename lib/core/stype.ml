@@ -112,6 +112,16 @@ let is_cst_args = function
   | C_tuple [] -> true
   | _ -> false
 
+let rec remove_outer_props = function
+  | DT_prop(_, t) -> remove_outer_props t
+  | x -> x
+
+let rec consume_outer_props acc = function
+  | DT_prop(props, t) -> consume_outer_props (props @ acc) t
+  | x -> acc, x
+
+let consume_outer_props = consume_outer_props []
+
 let print_stype ~show_enumerations ppf =
   let seen = Hashtbl.create 8 in
   let rec is_complex t =
@@ -159,10 +169,12 @@ let print_stype ~show_enumerations ppf =
         fl;
       fprintf ppf "@]@ >"
 
-    | DT_prop (p, t) -> fprintf ppf "%a%a" aux t props p;
+    | DT_prop (_, _) ->
+      let p, t = consume_outer_props t in
+      fprintf ppf "%a%a" aux t props p;
     | DT_var i -> fprintf ppf "$%i" i
   and props ppf p =
-    fprintf ppf " + [";
+    fprintf ppf " [@prop {";
     let first = ref true in
     List.iter
       (fun (k,v) ->
@@ -171,7 +183,7 @@ let print_stype ~show_enumerations ppf =
          else fprintf ppf "%s = %S" k v
       )
       p;
-    fprintf ppf "]"
+    fprintf ppf "}]"
   and tlist sep ppf = function
     | [] -> fprintf ppf "[]"
     | [x] -> aux ppf x
@@ -652,10 +664,6 @@ module Textual = struct
 
   let import t = import t [||]
 end
-
-let rec remove_outer_props = function
-  | DT_prop(_, t) -> remove_outer_props t
-  | x -> x
 
 let strict_equality =
   Internal.equal ~ignore_props:false ~ignore_path:false

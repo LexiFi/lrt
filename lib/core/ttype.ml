@@ -7,6 +7,7 @@ let to_stype: _ t -> Stype.t = fun a -> a
 let print fmt t = Format.fprintf fmt "%a" Stype.print (to_stype t)
 
 let remove_outer_props = Stype.remove_outer_props
+let consume_outer_props = Stype.consume_outer_props
 let add_props props t = Stype.DT_prop(props, t)
 
 let split_arrow t =
