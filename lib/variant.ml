@@ -173,21 +173,37 @@ and dyn_named = fun ~name (Dyn (t,x)) -> name, to_variant ~t x
 exception Bad_type_for_variant of Dynt_core.Stype.stype * t * string
 
 type mapper = t -> t option
-let variant_mappers : (string, mapper) Hashtbl.t = Hashtbl.create 4
 
-let set_of_variant_mapper_by_name ?(overwrite=false) name mapper =
-  if not overwrite && Hashtbl.mem variant_mappers name
-  then failwith (Printf.sprintf "of_variant_mapper %s already registered" name);
-  Hashtbl.replace variant_mappers name mapper
+module Mappers : sig
+  type uid = int
+  val register: ?name:string -> mapper -> uid
+  val get: uid -> string option * mapper
+end = struct
+  module IntMap = Map.Make(struct type t = int let compare = compare end)
 
-let rec of_variant_mapper ?overwrite ~t mapper =
-  match xtype_of_ttype t with
-  | Prop (lst, {t;_}) -> begin
-      match List.assoc_opt "of_variant_mapper" lst with
-      | None -> of_variant_mapper ~t mapper
-      | Some name -> set_of_variant_mapper_by_name ?overwrite name mapper
-    end
-  | _ -> failwith "of_variant_mapper property not set"
+  type uid = int
+
+  let last_uid = ref (-1)
+  let t = ref IntMap.empty
+
+  let register ?name mapper =
+    let uid = succ !last_uid in
+    last_uid := uid;
+    t := IntMap.add uid (name, mapper) !t;
+    uid
+
+  let get uid =
+    IntMap.find uid !t
+end
+
+let of_variant_mapper ?name ~t mapper =
+  let uid = Mappers.register ?name mapper in
+  let props = ["of_variant_mapper", string_of_int uid] in
+  Dynt_core.Ttype.add_props props t
+
+let of_variant_default ?name ~t init =
+  let mapper = fun _ -> Some (to_variant ~t (init ())) in
+  of_variant_mapper ?name ~t mapper
 
 let conv: type a. (string -> a) -> (string -> a) -> string -> a =
   fun failwith conv s -> match conv s with
@@ -353,13 +369,15 @@ let rec of_variant: type a. t: a ttype -> properties -> a of_variant =
       let rec use_first props =
         match assoc_consume "of_variant_mapper" props with
         | None -> raise e
-        | Some (name, reduced_props) ->
-          match Hashtbl.find_opt variant_mappers name with
-          | None -> assert false (* TODO: what do we want to do here? *)
-          | Some mapper ->
-            match mapper v with
-            | Some mapped -> of_variant ~t reduced_props mapped
-            | None -> use_first reduced_props
+        | Some (uid_s, reduced_props) ->
+          let uid = match int_of_string_opt uid_s with
+            | Some uid -> uid
+            | None -> failwith "inconsistent property of_variant_mapper"
+          in let (_name_opt, mapper) = Mappers.get uid in
+          (* TODO: use name_opt for error messages *)
+          match mapper v with
+          | Some mapped -> of_variant ~t reduced_props mapped
+          | None -> use_first reduced_props
       in use_first properties
 
 let of_variant = of_variant []

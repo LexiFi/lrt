@@ -100,32 +100,23 @@ let%test _ =
   of_variant ~t:e_t (Constructor ("E3", Some (Record [("native", String "0")])))
   = (C {i=Nativeint.zero})
 
-type f = int * string [@@prop {of_variant_mapper = "f_flip"}]
-[@@deriving t]
+type f = int * string [@@deriving t]
 
-let mapper = function
+let f_flip = function
   | Tuple [String s; Int i] -> Some (Tuple [Int i; String s])
   | _ -> None
 
-let () = of_variant_mapper ~t:f_t mapper
+let f_i = ref 0
+let f_default () = f_i := succ !f_i; (!f_i,"0")
 
-let%expect_test _ =
-  match of_variant_mapper ~t:f_t mapper with
-  | _ -> assert false
-  | exception Failure msg -> print_endline msg;
-  [%expect {| of_variant_mapper f_flip already registered |}]
-
-let%expect_test _ =
-  match of_variant_mapper ~t:e_t mapper with
-  | _ -> assert false
-  | exception Failure msg -> print_endline msg;
-  [%expect {| of_variant_mapper property not set |}]
+let f_t = of_variant_mapper ~name:"Variantizer.f_flip" ~t:f_t f_flip
+let f_t = of_variant_default ~name:"Variantizer.f_default" ~t:f_t f_default
 
 let of_variant_string ~t s =
   variant_of_string s |> of_variant ~t
 
-let%test _ =
-  of_variant_string ~t:f_t "(1, \"1\")" = (1,"1")
-
-let%test _ =
-  of_variant_string ~t:f_t "(\"1\", 1)" = (1,"1")
+let%test _ = of_variant_string ~t:f_t "(1, \"1\")" = (1,"1")
+let%test _ = of_variant_string ~t:f_t "(\"1\", 1)" = (1,"1")
+let%test _ = of_variant_string ~t:f_t "Invalid" = (1,"0")
+let%test _ = of_variant_string ~t:f_t "Invalid" = (2,"0")
+let%test _ = of_variant_string ~t:f_t "Invalid" = (3,"0")

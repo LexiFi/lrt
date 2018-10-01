@@ -104,16 +104,26 @@ val value_of_variant_in_file: t:'a ttype -> string -> 'a
 
 type mapper = t -> t option
 
-val of_variant_mapper: ?overwrite: bool -> t: 'a ttype -> mapper -> unit
-(** Fails when the [of_variant_mapper] name was used before. The check can be
-    bypassed by setting [~overwrite:true].
+val of_variant_mapper: ?name: string -> t: 'a ttype -> mapper -> 'a ttype
+(** [of_variant_mapper ~t mapper] returns a modified [t] such that
+    [of_variant ~t] uses [mapper] as fallback mechanism when the normal
+    conversion fails.
 
-    Also fails, when [of_variant_mapper] property is not set. *)
+    The optional [name] argument is used for identifying the mapper
+    in error messages.
 
-val set_of_variant_mapper_by_name: ?overwrite: bool -> string -> mapper -> unit
-(** Same as [of_variant_mapper] but instead of reading the mapper name from a
-    [ttype], it can be provided directly. *)
-(* TODO: why exactly do we need this? *)
+    Multiple mappers can be registered. The mappers will be applied in order of
+    registration.
+*)
+
+val of_variant_default: ?name: string -> t: 'a ttype -> (unit -> 'a) -> 'a ttype
+(** [of_variant_default ~t init] returns a modified [t] such that
+    [of_variant ~t] uses [init ()] as default value when the normal conversion
+    fails.
+
+    Under the hood, this builds a [mapper] and registers it using
+    [of_variant_mapper].
+*)
 
 (** {2 Handle abstract types} *)
 
