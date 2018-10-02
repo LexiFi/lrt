@@ -1,8 +1,8 @@
 (** Type equalities. *)
 
+(** A value of type [('a, 'b) t] is a witness that the two types ['a] and ['b]
+    are equal. *)
 type (_, _) t = Eq: ('a, 'a) t
-(** A value of type [('a, 'b) t] is a witness that the two types ['a] and
- * ['b] are equal. *)
 
 val refl: ('a, 'a) t
 val trans: ('a, 'b) t -> ('b, 'c) t -> ('a, 'c) t

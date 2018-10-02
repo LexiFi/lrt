@@ -90,6 +90,7 @@ assert (fst (consume_outer_props s) = fst (consume_outer_props t))
 val uninline : 'a variant_args -> 'a list
 val is_cst_args : 'a variant_args -> bool
 
+(**/**)
 module Internal: sig
   (** Internally used helper functions *)
 
@@ -136,6 +137,7 @@ module Internal: sig
 
   val set_memoized: node -> memoized_type_prop array -> unit
 end
+(**/**)
 
 module Textual: sig
   (** This module defines a tree representation isomorphic to the internal

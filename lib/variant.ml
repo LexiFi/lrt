@@ -193,7 +193,9 @@ end = struct
     string_of_int uid
 
   let get uid =
-    IntMap.find (int_of_string uid) !map
+    try IntMap.find (int_of_string uid) !map
+    with
+    | Not_found | Failure _ -> failwith "invalid of_variant_custom_uid"
 end
 
 let of_variant_custom ?name ~t custom =
@@ -207,9 +209,9 @@ let of_variant_default ?name ~t init =
   of_variant_custom ?name ~t custom
 
 let conv: type a. (string -> a) -> (string -> a) -> string -> a =
-  fun failwith conv s -> match conv s with
+  fun bad_variant conv s -> match conv s with
     | v -> v
-    | exception (Failure _) -> failwith "conversion error"
+    | exception (Failure _) -> bad_variant "conversion error"
 
 let assoc_consume key lst =
   let rec f acc = function
@@ -372,14 +374,19 @@ let rec of_variant: type a. t: a Ttype.t -> Stype.properties -> a of_variant =
         | None -> raise e
         | Some (uid, reduced_props) ->
           let open Custom_of in
-          let Of_variant (t', custom, _name_opt) = get uid in
-          (* TODO: use name_opt for error messages *)
+          let Of_variant (t', custom, name_opt) = get uid in
           match Ttype.equality_modulo_props t t' with
-          | None -> assert false
+          | None -> failwith "Broken invariant in of_variant_custom registry"
           | Some (TypEq.Eq) ->
             match custom v with
             | Some x -> (x: a)
             | None -> use_first reduced_props
+            | exception (Bad_type_for_variant _) -> use_first reduced_props
+            | exception e ->
+              let pre = match name_opt with
+                | None -> "unnamed of_variant_custom raised: "
+                | Some s -> "of_variant_custom " ^ s ^ " raised: "
+              in failwith (pre ^ (Printexc.to_string e))
       in use_first properties
 
 let of_variant = of_variant []

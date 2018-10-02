@@ -30,7 +30,7 @@ val to_variant: t:'a Ttype.t -> 'a -> t
    of the "option" type) can result in unexpected behavior if the variant
    go through a roundtrip with textual syntax.
 
-   May raise the [Failure] exception if the value cannnot be
+   May raise the [Failure] exception if the value cannot be
    variantized.
 *)
 
@@ -59,7 +59,7 @@ val string_one_line_of_variant: t -> string
 
 val compact_string_of_variant: ?dont_compress_records:unit ->
   ?with_more_spaces:unit -> t -> string
-(** Similar to {!Mlfi_isdatypes.string_one_line_of_variant}, but use a more compact
+(** Similar to {!string_one_line_of_variant}, but use a more compact
     form, with fewer whitespaces, and a special syntax for lists and arrays of
     records (unless the [dont_compress_records] flag is used). The result is
     guaranteed to not contain any newline characters. If the variant
@@ -87,11 +87,11 @@ exception Variant_parser of {msg:string; text:string; loc:string}
 
 val variant_of_string: string -> t
 (** Parse a textual representation of a variant (produced e.g. by
-    {!Mlfi_isdatypes.string_one_line_of_variant} from a string. *)
+    {!string_one_line_of_variant} from a string. *)
 
 val variant_of_file: string -> t
 (** Parse a textual representation of a variant (produced e.g. by
-    {!Mlfi_isdatypes.string_one_line_of_variant} from a text file. *)
+    {!string_one_line_of_variant} from a text file. *)
 
 val value_of_variant_in_file: t:'a Ttype.t -> string -> 'a
 (** Read a value as a variant from a text file. *)
@@ -105,13 +105,26 @@ val of_variant_custom:
   ?name: string -> t: 'a Ttype.t -> (t -> 'a option) -> 'a Ttype.t
 (** [of_variant_custom ~t custom] returns a modified [t] such that
     [of_variant ~t v] uses [custom v] as fallback when the normal
-    devariantization fails.
-
-    The optional [name] argument is used for identifying the custom
-    devariantizer in error messages. (Not implemented yet.)
+    devariantization fails with [Bad_type_for_variant].
 
     Multiple custom devariantizers can be registered. They will be applied in
     order of registration.
+
+    Exception {!Bad_type_for_variant} raised by [custom] are caught and
+    interpreted as failed attempt to apply the custom devariantizer. If other
+    custom devariantizers are registered, they will be tried next. Otherwise,
+    the original {!Bad_type_for_variant} exception is raised.
+
+    All other exceptions raised by [custom] are transformed into a string,
+    prefixed with the optional [name] argument and re-raised as [Failure].
+
+    The following example shows how to handle the transition from [type t = int]
+    to [type t = int * string]: {[
+type t = int * string [@@deriving t]
+let t = of_variant_custom ~name:"int to (int * string)" ~t (function
+  | Int i -> Some (i, string_of_int i)
+  | _ -> None
+)]}
 *)
 
 val of_variant_mapper:
@@ -120,7 +133,15 @@ val of_variant_mapper:
     [of_variant ~t] uses [mapper] as fallback mechanism when the normal
     conversion fails.
 
-    This is a wrapper for [of_variant_custom].
+    This is a wrapper for {!of_variant_custom}:
+    {[
+let of_variant_mapper ?name ~t mapper =
+  let custom v =
+    match mapper v with
+    | None -> None
+    | Some v' -> Some (of_variant ~t v')
+  in of_variant_custom ?name ~t custom
+    ]}
 *)
 
 val of_variant_default:
@@ -129,7 +150,12 @@ val of_variant_default:
     [of_variant ~t] uses [init ()] as default value when the normal conversion
     fails.
 
-    This is a wrapper for [of_variant_custom].
+    This is a wrapper for {!of_variant_custom}:
+    {[
+let of_variant_default ?name ~t init =
+  let custom _v = Some (init ()) in
+  of_variant_custom ?name ~t custom
+    ]}
 *)
 
 (** {2 Handle abstract types} *)
@@ -137,8 +163,8 @@ val of_variant_default:
 type 'a to_variant = 'a -> t
 type 'a of_variant = t -> 'a
 
-(** [failwith s] raises [Bad_type_for_variant (., ., s)] with the
-    corresponding stype and variant inserted. *)
+(** [failwith s] raises {!Bad_type_for_variant} with the corresponding stype
+    and variant inserted. *)
 type failwith = {failwith: 'a. string -> 'a} [@@unboxed]
 
 module type VARIANTIZABLE_0 = sig
