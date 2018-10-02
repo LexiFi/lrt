@@ -735,7 +735,7 @@ let unifier ~(modulo_props : bool) ~(subs : Stype.t option array) s1 s2 =
   in
   let rec unifier s1 s2 =
     match (s1, s2: Stype.t * Stype.t) with
-    | DT_var _, DT_var _ -> raise (Invalid_argument "unifier: received type variable on the right")
+    | _, DT_var _ -> raise (Invalid_argument "unifier: received type variable on the right")
     | DT_var k, s2 -> set k s2
     | DT_int, DT_int
     | DT_float, DT_float

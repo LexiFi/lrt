@@ -55,46 +55,163 @@ end = struct
     | T1 : (module C1 with type res = 'a) -> 'a candidate
     | T2 : (module C2 with type res = 'a) -> 'a candidate
 
-  type 'a candidates = 'a candidate list
-  type 'a t = 'a candidate list
+  type 'a candidates = (Stype.t * 'a candidate) list
+
+  type 'a t = 'a candidates
+
+  type var
+  let var i : var Ttype.t = Obj.magic (Stype.DT_var i)
 
   let empty = []
 
-  let add ~t ~f lst = (T {t;f}) :: lst
-  let add0 m lst = (T0 m) :: lst
-  let add1 m lst = (T1 m) :: lst
-  let add2 m lst = (T2 m) :: lst
+  let add ~t ~f lst =
+    let s = Ttype.to_stype t in
+    (s, T {t;f}) :: lst
+
+  let add0 (type a) (module C : C0 with type res = a) lst =
+    let s = Ttype.to_stype C.t in
+    (s, T0 (module C : C0 with type res = a)) :: lst
+
+  let add1 (type a) (module C : C1 with type res = a) lst =
+    let s = Ttype.to_stype (C.t (var 0)) in
+    (s, T1 (module C : C1 with type res = a)) :: lst
+
+  let add2 (type a) (module C : C2 with type res = a) lst =
+    let s = Ttype.to_stype (C.t (var 0) (var 1)) in
+    (s, T2 (module C : C2 with type res = a)) :: lst
 
   let create x = List.rev x
 
+  module IntMap = Map.Make(struct type t = int let compare = compare end)
+
+  module U = struct
+    exception Not_unifiable
+
+    let rec unifier_list_iter2 f l1 l2 =
+      match l1, l2 with
+      | [], [] -> ()
+      | [], _
+      | _, [] -> raise Not_unifiable
+      | h1 :: t1 , h2 :: t2 -> f h1 h2 ; unifier_list_iter2 f t1 t2
+
+    let variant_constrs_iter2 (f: Stype.t -> Stype.t -> unit)
+        (name1, props1, vargs1)
+        (name2, props2, vargs2) =
+      if name1 <> name2 then raise Not_unifiable;
+      if props1 <> props2 then raise Not_unifiable;
+      match vargs1, vargs2 with
+      | Stype.C_inline s1, Stype.C_inline s2 -> f s1 s2
+      | C_tuple l1, C_tuple l2 -> unifier_list_iter2 f l1 l2
+      | C_inline _, _
+      | C_tuple _, _ -> raise Not_unifiable
+
+    (* iterate over all stypes in a node *)
+    let node_iter2 (f: Stype.t -> Stype.t -> unit)
+        ({rec_descr = descr1; rec_name = name1; rec_args = args1; _}: Stype.node)
+        ({rec_descr = descr2; rec_name = name2; rec_args = args2; _}: Stype.node) =
+      if name1 <> name2 then raise Not_unifiable;
+      unifier_list_iter2 f args1 args2;
+      match descr1, descr2 with
+      | DT_variant {variant_constrs = c1; variant_repr = r1},
+        DT_variant {variant_constrs = c2; variant_repr = r2} when r1 = r2 ->
+        unifier_list_iter2 (variant_constrs_iter2 f) c1 c2
+      | DT_record {record_fields = l1; record_repr = r1},
+        DT_record {record_fields = l2; record_repr = r2} when r1 = r2 ->
+        unifier_list_iter2 (
+          fun (name1, props1, s1) (name2, props2, s2) ->
+            if name1 <> name2 then raise Not_unifiable;
+            if props1 <> props2 then raise Not_unifiable;
+            f s1 s2
+        ) l1 l2
+      | DT_record _, _
+      | DT_variant _, _ -> raise Not_unifiable
+
+    let unifier ~(modulo_props : bool) s1 s2 =
+      let subs = ref IntMap.empty in
+      let set k s =
+        match IntMap.find_opt k !subs with
+        | None -> subs := IntMap.add k s !subs
+        | Some s' -> if s <> s' then raise Not_unifiable
+      in
+      let rec unifier s1 s2 =
+        match (s1, s2: Stype.t * Stype.t) with
+        | _, DT_var _ ->
+          raise (Invalid_argument "unifier: received type variable on the right")
+        | DT_var k, s2 -> set k s2
+        | DT_int, DT_int
+        | DT_float, DT_float
+        | DT_string, DT_string -> ()
+        | DT_option s1, DT_option s2
+        | DT_list s1, DT_list s2
+        | DT_array s1, DT_array s2 -> unifier s1 s2
+        | DT_tuple l1, DT_tuple l2 ->
+          unifier_list_iter2 unifier l1 l2
+        | DT_node n1, DT_node n2 -> node_iter2 unifier n1 n2
+        | DT_arrow (n1, s1, s1'), DT_arrow (n2, s2, s2') ->
+          if n1 <> n2 then raise Not_unifiable;
+          unifier s1  s2 ;
+          unifier s1' s2'
+        | DT_object l1, DT_object l2 ->
+          unifier_list_iter2 (fun (n1,s1) (n2,s2) ->
+              if n1 <> n2 then raise Not_unifiable;
+              unifier s1 s2
+            ) l1 l2
+        | DT_abstract (n1, l1), DT_abstract (n2, l2) ->
+          if n1 <> n2 then raise Not_unifiable;
+          unifier_list_iter2 unifier l1 l2
+        | DT_prop (_, t1), t2 when modulo_props -> unifier t1 t2
+        | t1, DT_prop (_, t2) when modulo_props -> unifier t1 t2
+        | DT_prop (p1, t1), DT_prop (p2, t2) when p1 = p2 -> unifier t1 t2
+        | DT_prop _, _
+        | DT_int, _
+        | DT_float, _
+        | DT_string, _
+        | DT_option _, _
+        | DT_list _, _
+        | DT_array _, _
+        | DT_tuple _, _
+        | DT_node _, _
+        | DT_arrow _, _
+        | DT_object _, _
+        | DT_abstract _, _ -> raise Not_unifiable
+      in
+      unifier s1 s2; !subs
+  end
+
   let apply : type a b. a t -> t: b Ttype.t -> b -> a =
     fun matcher ~t x ->
-    let rec loop = function
-      | [] -> raise Not_found
-      | T c :: tl -> begin
-        match Ttype.equality_modulo_props c.t t with
-        | Some (TypEq.Eq) -> c.f x
-        | None -> loop tl
-      end
-      | T0 (module C : C0 with type res = a) :: tl -> begin
+      let s = Ttype.to_stype t in
+      let rec loop = function
+        | [] -> raise Not_found
+        | (s', c) :: tl ->
+          match U.unifier ~modulo_props:true s' s with
+          | (_subs : Stype.t IntMap.t) -> c
+          | exception U.Not_unifiable -> loop tl
+      in match loop matcher with
+      (* This last step might equally well use magic *)
+      | T c -> begin
+          match Ttype.equality_modulo_props c.t t with
+          | Some (TypEq.Eq) -> c.f x
+          | None -> assert false
+        end
+      | T0 (module C : C0 with type res = a) -> begin
           let module M = Xtype.Match0 (C) in
           match M.is_t t with
-          | None -> loop tl
+          | None -> assert false
           | Some (M.Is (TypEq.Eq)) -> C.f x
         end
-      | T1 (module C : C1 with type res = a) :: tl -> begin
+      | T1 (module C : C1 with type res = a) -> begin
           let module M = Xtype.Match1 (C) in
           match M.is_t t with
-          | None -> loop tl
+          | None -> assert false
           | Some (M.Is (a, TypEq.Eq)) -> C.f a x
         end
-      | T2 (module C : C2 with type res = a) :: tl -> begin
+      | T2 (module C : C2 with type res = a) -> begin
           let module M = Xtype.Match2 (C) in
           match M.is_t t with
-          | None -> loop tl
+          | None -> assert false
           | Some (M.Is (a,b, TypEq.Eq)) -> C.f a b x
         end
-    in loop matcher
 end
 
 let matcher =
