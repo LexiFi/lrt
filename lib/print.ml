@@ -17,56 +17,26 @@ module type PRINTABLE_2 = sig
   val printer: 'a printer -> 'b printer -> ('a, 'b) t printer
 end
 
-module type PMATCHER_0 = sig
-  include PRINTABLE_0
-  include Xtype.MATCH0 with type t := t
-end
-
-module type PMATCHER_1 = sig
-  include PRINTABLE_1
-  include Xtype.MATCH1 with type 'a t := 'a t
-end
-
-module type PMATCHER_2 = sig
-  include PRINTABLE_2
-  include Xtype.MATCH2 with type ('a,'b) t := ('a,'b) t
-end
-
 type printable =
-  | Zero of (module PMATCHER_0)
-  | One  of (module PMATCHER_1)
-  | Two  of (module PMATCHER_2)
+  | T0 of (module PRINTABLE_0)
+  | T1 of (module PRINTABLE_1)
+  | T2 of (module PRINTABLE_2)
 
 let abstract_printers : (string, printable) Hashtbl.t = Hashtbl.create 17
 
 let add_abstract_0 (module P : PRINTABLE_0) =
-  let module T = struct
-    include Xtype.Match0(P)
-    let printer = P.printer
-  end in
-  match T.is_abstract with
-  | Some name ->
-      Hashtbl.add abstract_printers name (Zero (module T))
+  match Ttype.abstract_name P.t with
+  | Some name -> Hashtbl.add abstract_printers name (T0 (module P))
   | _ -> raise (Invalid_argument "add_abstract: received non abstract type")
 
 let add_abstract_1 (module P : PRINTABLE_1) =
-  let module T = struct
-    include Xtype.Match1(P)
-    let printer = P.printer
-  end in
-  match T.is_abstract with
-  | Some name ->
-      Hashtbl.add abstract_printers name (One (module T))
+  match Ttype.abstract_name (P.t unit_t) with
+  | Some name -> Hashtbl.add abstract_printers name (T1 (module P))
   | _ -> raise (Invalid_argument "add_abstract: received non abstract type")
 
 let add_abstract_2 (module P : PRINTABLE_2) =
-  let module T = struct
-    include Xtype.Match2(P)
-    let printer = P.printer
-  end in
-  match T.is_abstract with
-  | Some name ->
-      Hashtbl.add abstract_printers name (Two (module T))
+  match Ttype.abstract_name (P.t unit_t unit_t) with
+  | Some name -> Hashtbl.add abstract_printers name (T2 (module P))
   | _ -> raise (Invalid_argument "add_abstract: received non abstract type")
 
 module type UNSAFE_ABSTRACT_PRINTABLE_1 = sig
@@ -253,6 +223,7 @@ let print_dynamic fmt (t, x) =
       | Object _ -> pp_print_string fmt "<object>"
       | Prop (_, {t;_}) -> print_dynamic t parens x
       | Abstract (name, _) ->
+        let (module B) = Unify.t0 t in
         let rec use_first = function
           | [] ->
             pp_print_string fmt "<abstract: ";
@@ -260,27 +231,26 @@ let print_dynamic fmt (t, x) =
             pp_print_string fmt ">";
           | hd :: tl -> begin
               match hd with
-              | Zero (module T) -> begin
-                  match T.is_t t with
-                  | None -> use_first tl
-                  | Some (T.Is TypEq.Eq) ->
-                    T.printer fmt x
-                end
-              | One (module T) -> begin
-                  match T.is_t t with
-                  | None -> use_first tl
-                  | Some (T.Is (t, TypEq.Eq)) ->
-                    let pr _fmt x = print_dynamic t false x in
-                    T.printer pr fmt x
-                end
-              | Two (module T) -> begin
-                  match T.is_t t with
-                  | None -> use_first tl
-                  | Some (T.Is (t1, t2, TypEq.Eq)) ->
-                    let pr1 _fmt x = print_dynamic t1 false x in
-                    let pr2 _fmt x = print_dynamic t2 false x in
-                    T.printer pr1 pr2 fmt x
-                end
+              | T0 (module P : PRINTABLE_0) -> begin
+                  try
+                    let module U = Unify.U0 (P) (B) in
+                    let TypEq.Eq = U.eq in P.printer fmt x
+                  with Unify.Not_unifiable -> use_first tl end
+              | T1 (module P : PRINTABLE_1) -> begin
+                  try
+                    let module U = Unify.U1 (P) (B) in
+                    let TypEq.Eq = U.eq in
+                    let pr _fmt x = print_dynamic U.a_t false x in
+                    P.printer pr fmt x
+                  with Unify.Not_unifiable -> use_first tl end
+              | T2 (module P : PRINTABLE_2) -> begin
+                  try
+                    let module U = Unify.U2 (P) (B) in
+                    let TypEq.Eq = U.eq in
+                    let pr1 _fmt x = print_dynamic U.a_t false x in
+                    let pr2 _fmt x = print_dynamic U.b_t false x in
+                    P.printer pr1 pr2 fmt x
+                  with Unify.Not_unifiable -> use_first tl end
             end
         in
         pp_open_box fmt 0;

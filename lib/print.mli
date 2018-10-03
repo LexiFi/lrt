@@ -1,8 +1,10 @@
 (** Dynamic printing. *)
 
+(* TODO: val print: Format.fomatter -> Ttype.dynamic -> unit *)
 val print: t:'a Ttype.t -> Format.formatter -> 'a -> unit
 (** Print a value to the given formatter. *)
 
+(* TODO: val show: Ttype.dynamic -> unit *)
 val show: t:'a Ttype.t -> 'a -> unit
 (** Print a value to stdout. *)
 
@@ -11,17 +13,17 @@ val show: t:'a Ttype.t -> 'a -> unit
 type 'a printer = Format.formatter -> 'a -> unit
 
 module type PRINTABLE_0 = sig
-  include Xtype.T0
+  include Unify.T0
   val printer: t printer
 end
 
 module type PRINTABLE_1 = sig
-  include Xtype.T1
+  include Unify.T1
   val printer: 'a printer -> 'a t printer
 end
 
 module type PRINTABLE_2 = sig
-  include Xtype.T2
+  include Unify.T2
   val printer: 'a printer -> 'b printer -> ('a, 'b) t printer
 end
 

@@ -12,11 +12,17 @@ type dynamic = Dyn: 'a t * 'a -> dynamic
 val equality: 'a t -> 'b t -> ('a, 'b) TypEq.t option
 val equality_modulo_props: 'a t-> 'b t -> ('a, 'b) TypEq.t option
 
+(** {2 Access information in types} *)
+
 val split_arrow: ('a -> 'b) t-> 'a t * 'b t
 val build_arrow: 'a t -> 'b t -> ('a -> 'b) t
 
 val fst: ('a * 'b) t -> 'a t
 val snd: ('a * 'b) t -> 'b t
+
+val abstract_name: 'a t -> string option
+
+(** {2 Porperties } *)
 
 val remove_outer_props: 'a t -> 'a t
 (** Remove properties from a ttype. If properties are nested, all are removed.*)

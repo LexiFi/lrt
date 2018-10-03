@@ -21,6 +21,11 @@ let build_arrow t1 t2 =
 let fst = function Stype.DT_tuple [t; _] -> t | _ -> assert false
 let snd = function Stype.DT_tuple [_; t] -> t | _ -> assert false
 
+let abstract_name t =
+  match Stype.remove_outer_props t with
+  | DT_abstract (name, _) -> Some name
+  | _ -> None
+
 let equality t1 t2 =
   if Stype.equality t1 t2 then Some (Obj.magic TypEq.refl)
   else None
