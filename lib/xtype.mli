@@ -197,20 +197,10 @@ val project_path : 'a Ttype.t -> ('a,'b) Path.t -> 'b Ttype.t
 (** {2 Type Matchers}
     Compare nontrivial types. *)
 
-module type T0 = sig
-  type t
-  val t: t Ttype.t
-end
-
-module type T1 = sig
-  type 'a t
-  val t: 'a Ttype.t -> 'a t Ttype.t
-end
-
-module type T2 = sig
-  type ('a, 'b) t
-  val t: 'a Ttype.t -> 'b Ttype.t -> ('a, 'b) t Ttype.t
-end
+(* TODO: the following does not belong in xtypes *)
+module type T0 = Unification.T0
+module type T1 = Unification.T1
+module type T2 = Unification.T2
 
 module type MATCH0 = sig
   include T0

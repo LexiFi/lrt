@@ -44,4 +44,3 @@ type is_t = Ttype: 'a t -> is_t
 val of_stype: Stype.t -> is_t
 
 val to_stype: _ t -> Stype.t
-

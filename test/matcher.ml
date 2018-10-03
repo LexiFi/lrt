@@ -87,12 +87,12 @@ end = struct
   module U = struct
     exception Not_unifiable
 
-    let rec unifier_list_iter2 f l1 l2 =
+    let rec unify_list_iter2 f l1 l2 =
       match l1, l2 with
       | [], [] -> ()
       | [], _
       | _, [] -> raise Not_unifiable
-      | h1 :: t1 , h2 :: t2 -> f h1 h2 ; unifier_list_iter2 f t1 t2
+      | h1 :: t1 , h2 :: t2 -> f h1 h2 ; unify_list_iter2 f t1 t2
 
     let variant_constrs_iter2 (f: Stype.t -> Stype.t -> unit)
         (name1, props1, vargs1)
@@ -101,7 +101,7 @@ end = struct
       if props1 <> props2 then raise Not_unifiable;
       match vargs1, vargs2 with
       | Stype.C_inline s1, Stype.C_inline s2 -> f s1 s2
-      | C_tuple l1, C_tuple l2 -> unifier_list_iter2 f l1 l2
+      | C_tuple l1, C_tuple l2 -> unify_list_iter2 f l1 l2
       | C_inline _, _
       | C_tuple _, _ -> raise Not_unifiable
 
@@ -110,14 +110,14 @@ end = struct
         ({rec_descr = descr1; rec_name = name1; rec_args = args1; _}: Stype.node)
         ({rec_descr = descr2; rec_name = name2; rec_args = args2; _}: Stype.node) =
       if name1 <> name2 then raise Not_unifiable;
-      unifier_list_iter2 f args1 args2;
+      unify_list_iter2 f args1 args2;
       match descr1, descr2 with
       | DT_variant {variant_constrs = c1; variant_repr = r1},
         DT_variant {variant_constrs = c2; variant_repr = r2} when r1 = r2 ->
-        unifier_list_iter2 (variant_constrs_iter2 f) c1 c2
+        unify_list_iter2 (variant_constrs_iter2 f) c1 c2
       | DT_record {record_fields = l1; record_repr = r1},
         DT_record {record_fields = l2; record_repr = r2} when r1 = r2 ->
-        unifier_list_iter2 (
+        unify_list_iter2 (
           fun (name1, props1, s1) (name2, props2, s2) ->
             if name1 <> name2 then raise Not_unifiable;
             if props1 <> props2 then raise Not_unifiable;
@@ -126,42 +126,45 @@ end = struct
       | DT_record _, _
       | DT_variant _, _ -> raise Not_unifiable
 
-    let unifier ~(modulo_props : bool) s1 s2 =
+    let unify ~modulo_props ~free:s1 ~closed:s2 =
       let subs = ref IntMap.empty in
-      let set k s =
-        match IntMap.find_opt k !subs with
-        | None -> subs := IntMap.add k s !subs
-        | Some s' -> if s <> s' then raise Not_unifiable
-      in
-      let rec unifier s1 s2 =
+      let rec unify s1 s2 =
+        let set k s =
+          match IntMap.find_opt k !subs with
+          | None -> subs := IntMap.add k s !subs
+          | Some s' -> ignore (unify s s')
+          (* Both s and s' come from closed, but we did not check for absence
+             of free variables. Perhaps, we should do it right and apply the
+             substitutions here. TODO *)
+        in
         match (s1, s2: Stype.t * Stype.t) with
         | _, DT_var _ ->
-          raise (Invalid_argument "unifier: received type variable on the right")
+          raise (Invalid_argument "unify: free variable in closed")
         | DT_var k, s2 -> set k s2
         | DT_int, DT_int
         | DT_float, DT_float
         | DT_string, DT_string -> ()
         | DT_option s1, DT_option s2
         | DT_list s1, DT_list s2
-        | DT_array s1, DT_array s2 -> unifier s1 s2
+        | DT_array s1, DT_array s2 -> unify s1 s2
         | DT_tuple l1, DT_tuple l2 ->
-          unifier_list_iter2 unifier l1 l2
-        | DT_node n1, DT_node n2 -> node_iter2 unifier n1 n2
+          unify_list_iter2 unify l1 l2
+        | DT_node n1, DT_node n2 -> node_iter2 unify n1 n2
         | DT_arrow (n1, s1, s1'), DT_arrow (n2, s2, s2') ->
           if n1 <> n2 then raise Not_unifiable;
-          unifier s1  s2 ;
-          unifier s1' s2'
+          unify s1  s2 ;
+          unify s1' s2'
         | DT_object l1, DT_object l2 ->
-          unifier_list_iter2 (fun (n1,s1) (n2,s2) ->
+          unify_list_iter2 (fun (n1,s1) (n2,s2) ->
               if n1 <> n2 then raise Not_unifiable;
-              unifier s1 s2
+              unify s1 s2
             ) l1 l2
         | DT_abstract (n1, l1), DT_abstract (n2, l2) ->
           if n1 <> n2 then raise Not_unifiable;
-          unifier_list_iter2 unifier l1 l2
-        | DT_prop (_, t1), t2 when modulo_props -> unifier t1 t2
-        | t1, DT_prop (_, t2) when modulo_props -> unifier t1 t2
-        | DT_prop (p1, t1), DT_prop (p2, t2) when p1 = p2 -> unifier t1 t2
+          unify_list_iter2 unify l1 l2
+        | DT_prop (_, t1), t2 when modulo_props -> unify t1 t2
+        | t1, DT_prop (_, t2) when modulo_props -> unify t1 t2
+        | DT_prop (p1, t1), DT_prop (p2, t2) when p1 = p2 -> unify t1 t2
         | DT_prop _, _
         | DT_int, _
         | DT_float, _
@@ -175,16 +178,16 @@ end = struct
         | DT_object _, _
         | DT_abstract _, _ -> raise Not_unifiable
       in
-      unifier s1 s2; !subs
+      unify s1 s2; !subs
   end
 
   let apply : type a b. a t -> t: b Ttype.t -> b -> a =
     fun matcher ~t x ->
-      let s = Ttype.to_stype t in
       let rec loop = function
         | [] -> raise Not_found
-        | (s', c) :: tl ->
-          match U.unifier ~modulo_props:true s' s with
+        | (free, c) :: tl ->
+          let closed = Ttype.to_stype t in
+          match U.unify ~modulo_props:true ~free ~closed with
           | (_subs : Stype.t IntMap.t) -> c
           | exception U.Not_unifiable -> loop tl
       in match loop matcher with
@@ -210,7 +213,7 @@ end = struct
           let module M = Xtype.Match2 (C) in
           match M.is_t t with
           | None -> assert false
-          | Some (M.Is (a,b, TypEq.Eq)) -> C.f a b x
+          | Some (M.Is (a, b, TypEq.Eq)) -> C.f a b x
         end
 end
 

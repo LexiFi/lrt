@@ -8,6 +8,10 @@ module Check = Check
 module Variant = Variant
 module Std = Std
 
+type stype = Stype.t
+type 'a ttype = 'a Ttype.t
+type 'a xtype = 'a Xtype.t
+
 include Std
 
 (**/**)
