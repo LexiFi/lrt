@@ -1,6 +1,7 @@
 module Stype = Stype
 module TypEq = TypEq
 module Ttype = Ttype
+module Unification = Unification
 module Xtype = Xtype
 module Path = Path
 module Print = Print
