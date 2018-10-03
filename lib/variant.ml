@@ -41,60 +41,27 @@ module type VARIANTIZABLE_2 = sig
   val of_variant: failwith -> 'a of_variant -> 'b of_variant -> ('a, 'b) t of_variant
 end
 
-module type VMATCHER_0 = sig
-  include VARIANTIZABLE_0
-  include Xtype.MATCH0 with type t := t
-end
-
-module type VMATCHER_1 = sig
-  include VARIANTIZABLE_1
-  include Xtype.MATCH1 with type 'a t := 'a t
-end
-
-module type VMATCHER_2 = sig
-  include VARIANTIZABLE_2
-  include Xtype.MATCH2 with type ('a,'b) t := ('a,'b) t
-end
-
 type variantizable =
-  | T0 of (module VMATCHER_0)
-  | T1 of (module VMATCHER_1)
-  | T2 of (module VMATCHER_2)
+  | T0 of (module VARIANTIZABLE_0)
+  | T1 of (module VARIANTIZABLE_1)
+  | T2 of (module VARIANTIZABLE_2)
 
 let abstract_variantizers : (string, variantizable) Hashtbl.t =
   Hashtbl.create 17
 
 let add_abstract_0 (module M : VARIANTIZABLE_0) =
-  let module T = struct
-    include Xtype.Match0(M)
-    let to_variant = M.to_variant
-    let of_variant = M.of_variant
-  end in
-  match T.is_abstract with
-  | Some name ->
-    Hashtbl.add abstract_variantizers name (T0 (module T))
-  | None -> raise (Invalid_argument "add_abstract: received non abstract type")
+  match Ttype.abstract_name M.t with
+  | Some name -> Hashtbl.add abstract_variantizers name (T0 (module M))
+  | _ -> raise (Invalid_argument "add_abstract: received non abstract type")
 
 let add_abstract_1 (module M : VARIANTIZABLE_1) =
-  let module T = struct
-    include Xtype.Match1(M)
-    let to_variant = M.to_variant
-    let of_variant = M.of_variant
-  end in
-  match T.is_abstract with
-  | Some name ->
-    Hashtbl.add abstract_variantizers name (T1 (module T))
+  match Ttype.abstract_name (M.t unit_t) with
+  | Some name -> Hashtbl.add abstract_variantizers name (T1 (module M))
   | _ -> raise (Invalid_argument "add_abstract: received non abstract type")
 
 let add_abstract_2 (module M : VARIANTIZABLE_2) =
-  let module T = struct
-    include Xtype.Match2(M)
-    let to_variant = M.to_variant
-    let of_variant = M.of_variant
-  end in
-  match T.is_abstract with
-  | Some name ->
-    Hashtbl.add abstract_variantizers name (T2 (module T))
+  match Ttype.abstract_name (M.t unit_t unit_t) with
+  | Some name -> Hashtbl.add abstract_variantizers name (T2 (module M))
   | _ -> raise (Invalid_argument "add_abstract: received non abstract type")
 
 let rec to_variant: type a. t: a Ttype.t -> a to_variant = fun ~t x ->
@@ -134,33 +101,31 @@ let rec to_variant: type a. t: a Ttype.t -> a to_variant = fun ~t x ->
   | Object _ -> failwith "Objects cannot be variantized"
   | Function _ -> failwith "Functions cannot be variantized"
   | Abstract (name, _) ->
+    let (module B) = Unify.t0 t in
     let rec use_first = function
       | [] ->
         failwith ("no suitable variantizer registered for abstract type "
                   ^ name)
       | hd :: tl -> begin
           match hd with
-          | T0 (module T) -> begin
-              match T.is_t t with
-              | None -> use_first tl
-              | Some (T.Is TypEq.Eq) ->
-                T.to_variant x
-            end
-          | T1 (module T) -> begin
-              match T.is_t t with
-              | None -> use_first tl
-              | Some (T.Is (t1, TypEq.Eq)) ->
-                let t1 = to_variant ~t:t1 in
-                T.to_variant t1 x
-            end
-          | T2 (module T) -> begin
-              match T.is_t t with
-              | None -> use_first tl
-              | Some (T.Is (t1, t2, TypEq.Eq)) ->
-                let t1 = to_variant ~t:t1
-                and t2 = to_variant ~t:t2 in
-                T.to_variant t1 t2 x
-            end
+          | T0 (module M : VARIANTIZABLE_0) -> begin
+              try
+                let module U = Unify.U0 (M) (B) in
+                let TypEq.Eq = U.eq in M.to_variant x
+              with Unify.Not_unifiable -> use_first tl end
+          | T1 (module M : VARIANTIZABLE_1) -> begin
+              try
+                let module U = Unify.U1 (M) (B) in
+                let t1 = to_variant ~t:U.a_t in
+                let TypEq.Eq = U.eq in M.to_variant t1 x
+              with Unify.Not_unifiable -> use_first tl end
+          | T2 (module M : VARIANTIZABLE_2) -> begin
+              try
+                let module U = Unify.U2 (M) (B) in
+                let t1 = to_variant ~t:U.a_t in
+                let t2 = to_variant ~t:U.b_t in
+                let TypEq.Eq = U.eq in M.to_variant t1 t2 x
+              with Unify.Not_unifiable -> use_first tl end
         end
     in
     use_first (Hashtbl.find_all abstract_variantizers name) ;
@@ -319,33 +284,31 @@ let rec of_variant: type a. t: a Ttype.t -> Stype.properties -> a of_variant =
         let props, t = Ttype.consume_outer_props t in
         of_variant props ~t v
       | Abstract (name, _), v ->
+        let (module B) = Unify.t0 t in
         let rec use_first : variantizable list -> a = function
           | [] -> failwith (
               "no suitable variantizer registered for abstract type " ^ name)
           | hd :: tl -> begin
               let bad_variant = { failwith = bad_variant } in
               match hd with
-              | T0 (module T) -> begin
-                  match T.is_t t with
-                  | None -> use_first tl
-                  | Some (T.Is TypEq.Eq) ->
-                    T.of_variant bad_variant v
-                end
-              | T1 (module T) -> begin
-                  match T.is_t t with
-                  | None -> use_first tl
-                  | Some (T.Is (t1, TypEq.Eq)) ->
-                    let t1 = of_variant [] ~t:t1 in
-                    T.of_variant bad_variant t1 v
-                end
-              | T2 (module T) -> begin
-                  match T.is_t t with
-                  | None -> use_first tl
-                  | Some (T.Is (t1, t2, TypEq.Eq)) ->
-                    let t1 = of_variant [] ~t:t1
-                    and t2 = of_variant [] ~t:t2 in
-                    T.of_variant bad_variant t1 t2 v
-                end
+              | T0 (module M : VARIANTIZABLE_0) -> begin
+                  try
+                    let module U = Unify.U0 (M) (B) in
+                    let TypEq.Eq = U.eq in M.of_variant bad_variant v
+                  with Unify.Not_unifiable -> use_first tl end
+              | T1 (module M : VARIANTIZABLE_1) -> begin
+                  try
+                    let module U = Unify.U1 (M) (B) in
+                    let t1 = of_variant [] ~t:U.a_t in
+                    let TypEq.Eq = U.eq in M.of_variant bad_variant t1 v
+                  with Unify.Not_unifiable -> use_first tl end
+              | T2 (module M : VARIANTIZABLE_2) -> begin
+                  try
+                    let module U = Unify.U2 (M) (B) in
+                    let t1 = of_variant [] ~t:U.a_t
+                    and t2 = of_variant [] ~t:U.b_t in
+                    let TypEq.Eq = U.eq in M.of_variant bad_variant t1 t2 v
+                  with Unify.Not_unifiable -> use_first tl end
             end
         in
         use_first (Hashtbl.find_all abstract_variantizers name) ;
