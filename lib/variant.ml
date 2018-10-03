@@ -24,19 +24,19 @@ type 'a of_variant = t -> 'a
 type failwith = {failwith: 'a. string -> 'a} [@@unboxed]
 
 module type VARIANTIZABLE_0 = sig
-  include Xtype.T0
+  include Unify.T0
   val to_variant: t to_variant
   val of_variant: failwith -> t of_variant
 end
 
 module type VARIANTIZABLE_1 = sig
-  include Xtype.T1
+  include Unify.T1
   val to_variant: 'a to_variant -> 'a t to_variant
   val of_variant: failwith -> 'a of_variant -> 'a t of_variant
 end
 
 module type VARIANTIZABLE_2 = sig
-  include Xtype.T2
+  include Unify.T2
   val to_variant: 'a to_variant -> 'b to_variant -> ('a, 'b) t to_variant
   val of_variant: failwith -> 'a of_variant -> 'b of_variant -> ('a, 'b) t of_variant
 end
