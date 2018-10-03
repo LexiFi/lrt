@@ -638,7 +638,7 @@ let rec project_path : type a b. a Ttype.t -> (a,b) Path.t -> b Ttype.t =
 
 (* type matching *)
 
-open Unification
+open Unify
 module type T0 = T0
 module type T1 = T1
 module type T2 = T2

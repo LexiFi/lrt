@@ -198,9 +198,9 @@ val project_path : 'a Ttype.t -> ('a,'b) Path.t -> 'b Ttype.t
     Compare nontrivial types. *)
 
 (* TODO: the following does not belong in xtypes *)
-module type T0 = Unification.T0
-module type T1 = Unification.T1
-module type T2 = Unification.T2
+module type T0 = Unify.T0
+module type T1 = Unify.T1
+module type T2 = Unify.T2
 
 module type MATCH0 = sig
   include T0

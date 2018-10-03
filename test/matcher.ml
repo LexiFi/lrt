@@ -12,19 +12,19 @@ and 'a e = 'a list
 let e_t = e_t
 
 module type C0 = sig
-  include Unification.T0
+  include Unify.T0
   type res
   val f: t -> res
 end
 
 module type C1 = sig
-  include Unification.T1
+  include Unify.T1
   type res
   val f: 'a Ttype.t -> 'a t -> res
 end
 
 module type C2 = sig
-  include Unification.T2
+  include Unify.T2
   type res
   val f: 'a Ttype.t -> 'b Ttype.t -> ('a, 'b) t -> res
 end
@@ -50,9 +50,9 @@ module Matcher : sig
   *)
 end = struct
   type 'a candidate =
-    | T0 : (module C0 with type res = 'a) -> 'a candidate
-    | T1 : (module C1 with type res = 'a) -> 'a candidate
-    | T2 : (module C2 with type res = 'a) -> 'a candidate
+    | T0 of (module C0 with type res = 'a)
+    | T1 of (module C1 with type res = 'a)
+    | T2 of (module C2 with type res = 'a)
 
   type 'a candidates = 'a candidate list
 
@@ -79,24 +79,24 @@ end = struct
 
   let apply : type res a. res t -> t: a Ttype.t -> a -> res =
     fun matcher ~t x ->
-      let (module B) = Unification.t0 t in
+      let (module B) = Unify.t0 t in
       let rec loop = function
         | [] -> raise Not_found
         | T0 (module C : C0 with type res = res) :: tl ->
           begin try
-              let module U = Unification.U0 (C) (B) in
+              let module U = Unify.U0 (C) (B) in
               let TypEq.Eq = U.eq in C.f x
-            with Unification.Not_unifiable -> loop tl end
+            with Unify.Not_unifiable -> loop tl end
         | T1 (module C : C1 with type res = res) :: tl ->
           begin try
-              let module U = Unification.U1 (C) (B) in
+              let module U = Unify.U1 (C) (B) in
               let TypEq.Eq = U.eq in C.f U.a_t x
-            with Unification.Not_unifiable -> loop tl end
+            with Unify.Not_unifiable -> loop tl end
         | T2 (module C : C2 with type res = res) :: tl ->
           begin try
-              let module U = Unification.U2 (C) (B) in
+              let module U = Unify.U2 (C) (B) in
               let TypEq.Eq = U.eq in C.f U.a_t U.b_t x
-            with Unification.Not_unifiable -> loop tl end
+            with Unify.Not_unifiable -> loop tl end
       in loop matcher
 end
 
