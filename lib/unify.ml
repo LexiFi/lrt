@@ -16,6 +16,13 @@ module type T2 = sig
   val t: 'a Ttype.t -> 'b Ttype.t -> ('a, 'b) t Ttype.t
 end
 
+module type PARAM = sig
+  val modulo_props : bool
+end
+
+let init ~modulo_props : (module PARAM) =
+  (module struct let modulo_props = modulo_props end)
+
 (* unification of stypes *)
 
 exception Not_unifiable
@@ -123,11 +130,12 @@ let ttype: type a. Stype.t option -> a Ttype.t = function
   | Some s -> Obj.magic s (* Unification succeeded by instantiating type
                              variable with stype s. *)
 
-module U0 (A: T0) (B: T0) = struct
+module U0 (P: PARAM) (A: T0) (B: T0) = struct
   include A
+  include P
   type t' = B.t
   let eq : (t, t') TypEq.t =
-    match unify ~modulo_props:true 0 t B.t with
+    match unify ~modulo_props 0 t B.t with
     | [||] -> Obj.magic TypEq.refl
     | _ -> assert false
 end
@@ -137,23 +145,25 @@ let var i : var Ttype.t = Obj.magic (Stype.DT_var i)
 let v0 = var 0
 let v1 = var 1
 
-module U1 (A: T1) (B: T0) = struct
+module U1 (P: PARAM) (A: T1) (B: T0) = struct
   include A
+  include P
   type t' = B.t
   type a
   let (a_t : a Ttype.t), (eq : (a t, t') TypEq.t) =
-    match unify ~modulo_props:true 1 (t v0) B.t with
+    match unify ~modulo_props 1 (t v0) B.t with
     | [|a|] -> ttype a, Obj.magic TypEq.refl
     | _ -> assert false
 end
 
-module U2 (A: T2) (B: T0) = struct
+module U2 (P: PARAM) (A: T2) (B: T0) = struct
   include A
+  include P
   type t' = B.t
   type a
   type b
   let (a_t: a Ttype.t), (b_t: b Ttype.t), (eq: ((a, b) t, t') TypEq.t) =
-    match unify ~modulo_props:true 2 (t v0 v1) B.t with
+    match unify ~modulo_props 2 (t v0 v1) B.t with
     | [|a; b|] -> ttype a, ttype b, Obj.magic TypEq.refl
     | _ -> assert false
 end

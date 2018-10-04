@@ -223,7 +223,8 @@ let print_dynamic fmt (t, x) =
       | Object _ -> pp_print_string fmt "<object>"
       | Prop (_, {t;_}) -> print_dynamic t parens x
       | Abstract (name, _) ->
-        let (module B) = Unify.t0 t in
+        let (module B) = Unify.t0 t
+        and (module P) = Unify.init ~modulo_props:false in
         let rec use_first = function
           | [] ->
             pp_print_string fmt "<abstract: ";
@@ -231,25 +232,25 @@ let print_dynamic fmt (t, x) =
             pp_print_string fmt ">";
           | hd :: tl -> begin
               match hd with
-              | T0 (module P : PRINTABLE_0) -> begin
+              | T0 (module A : PRINTABLE_0) -> begin
                   try
-                    let module U = Unify.U0 (P) (B) in
-                    let TypEq.Eq = U.eq in P.printer fmt x
+                    let module U = Unify.U0 (P) (A) (B) in
+                    let TypEq.Eq = U.eq in A.printer fmt x
                   with Unify.Not_unifiable -> use_first tl end
-              | T1 (module P : PRINTABLE_1) -> begin
+              | T1 (module A : PRINTABLE_1) -> begin
                   try
-                    let module U = Unify.U1 (P) (B) in
+                    let module U = Unify.U1 (P) (A) (B) in
                     let TypEq.Eq = U.eq in
                     let pr _fmt x = print_dynamic U.a_t false x in
-                    P.printer pr fmt x
+                    A.printer pr fmt x
                   with Unify.Not_unifiable -> use_first tl end
-              | T2 (module P : PRINTABLE_2) -> begin
+              | T2 (module A : PRINTABLE_2) -> begin
                   try
-                    let module U = Unify.U2 (P) (B) in
+                    let module U = Unify.U2 (P) (A) (B) in
                     let TypEq.Eq = U.eq in
                     let pr1 _fmt x = print_dynamic U.a_t false x in
                     let pr2 _fmt x = print_dynamic U.b_t false x in
-                    P.printer pr1 pr2 fmt x
+                    A.printer pr1 pr2 fmt x
                   with Unify.Not_unifiable -> use_first tl end
             end
         in

@@ -101,30 +101,31 @@ let rec to_variant: type a. t: a Ttype.t -> a to_variant = fun ~t x ->
   | Object _ -> failwith "Objects cannot be variantized"
   | Function _ -> failwith "Functions cannot be variantized"
   | Abstract (name, _) ->
-    let (module B) = Unify.t0 t in
+    let (module B) = Unify.t0 t
+    and (module P) = Unify.init ~modulo_props:false in
     let rec use_first = function
       | [] ->
         failwith ("no suitable variantizer registered for abstract type "
                   ^ name)
       | hd :: tl -> begin
           match hd with
-          | T0 (module M : VARIANTIZABLE_0) -> begin
+          | T0 (module A : VARIANTIZABLE_0) -> begin
               try
-                let module U = Unify.U0 (M) (B) in
-                let TypEq.Eq = U.eq in M.to_variant x
+                let module U = Unify.U0 (P) (A) (B) in
+                let TypEq.Eq = U.eq in A.to_variant x
               with Unify.Not_unifiable -> use_first tl end
-          | T1 (module M : VARIANTIZABLE_1) -> begin
+          | T1 (module A : VARIANTIZABLE_1) -> begin
               try
-                let module U = Unify.U1 (M) (B) in
+                let module U = Unify.U1 (P) (A) (B) in
                 let t1 = to_variant ~t:U.a_t in
-                let TypEq.Eq = U.eq in M.to_variant t1 x
+                let TypEq.Eq = U.eq in A.to_variant t1 x
               with Unify.Not_unifiable -> use_first tl end
-          | T2 (module M : VARIANTIZABLE_2) -> begin
+          | T2 (module A : VARIANTIZABLE_2) -> begin
               try
-                let module U = Unify.U2 (M) (B) in
+                let module U = Unify.U2 (P) (A) (B) in
                 let t1 = to_variant ~t:U.a_t in
                 let t2 = to_variant ~t:U.b_t in
-                let TypEq.Eq = U.eq in M.to_variant t1 t2 x
+                let TypEq.Eq = U.eq in A.to_variant t1 t2 x
               with Unify.Not_unifiable -> use_first tl end
         end
     in
@@ -284,30 +285,31 @@ let rec of_variant: type a. t: a Ttype.t -> Stype.properties -> a of_variant =
         let props, t = Ttype.consume_outer_props t in
         of_variant props ~t v
       | Abstract (name, _), v ->
-        let (module B) = Unify.t0 t in
+        let (module B) = Unify.t0 t
+        and (module P) = Unify.init ~modulo_props:false in
         let rec use_first : variantizable list -> a = function
           | [] -> failwith (
               "no suitable variantizer registered for abstract type " ^ name)
           | hd :: tl -> begin
               let bad_variant = { failwith = bad_variant } in
               match hd with
-              | T0 (module M : VARIANTIZABLE_0) -> begin
+              | T0 (module A : VARIANTIZABLE_0) -> begin
                   try
-                    let module U = Unify.U0 (M) (B) in
-                    let TypEq.Eq = U.eq in M.of_variant bad_variant v
+                    let module U = Unify.U0 (P) (A) (B) in
+                    let TypEq.Eq = U.eq in A.of_variant bad_variant v
                   with Unify.Not_unifiable -> use_first tl end
-              | T1 (module M : VARIANTIZABLE_1) -> begin
+              | T1 (module A : VARIANTIZABLE_1) -> begin
                   try
-                    let module U = Unify.U1 (M) (B) in
+                    let module U = Unify.U1 (P) (A) (B) in
                     let t1 = of_variant [] ~t:U.a_t in
-                    let TypEq.Eq = U.eq in M.of_variant bad_variant t1 v
+                    let TypEq.Eq = U.eq in A.of_variant bad_variant t1 v
                   with Unify.Not_unifiable -> use_first tl end
-              | T2 (module M : VARIANTIZABLE_2) -> begin
+              | T2 (module A : VARIANTIZABLE_2) -> begin
                   try
-                    let module U = Unify.U2 (M) (B) in
+                    let module U = Unify.U2 (P) (A) (B) in
                     let t1 = of_variant [] ~t:U.a_t
                     and t2 = of_variant [] ~t:U.b_t in
-                    let TypEq.Eq = U.eq in M.of_variant bad_variant t1 t2 v
+                    let TypEq.Eq = U.eq in A.of_variant bad_variant t1 t2 v
                   with Unify.Not_unifiable -> use_first tl end
             end
         in

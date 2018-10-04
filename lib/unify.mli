@@ -17,25 +17,43 @@ end
 
 (** {2 Unification} *)
 
-exception Not_unifiable
+module type PARAM = sig
+  val modulo_props : bool
+end
 
-module U0 : functor (A: T0) (B: T0) -> sig
-  include (module type of A) with type t = A.t
+val init: modulo_props: bool -> (module PARAM)
+(** The unification algorithm can be parametrized. Currently, the only parameter
+    is [modulo_props]. It allows the user to specify whether properties are
+    ignored or interpreted as distinguishing feature of the types. *)
+
+exception Not_unifiable
+(** Is raised by the following functors whenever unification is not possible. *)
+
+module U0 : functor (P : PARAM) (A: T0) (B: T0) -> sig
+  include T0 with type t = A.t
   type t' = B.t
   val eq : (t, t') TypEq.t
 end
 
-module U1 : functor (A: T1) (B: T0) -> sig
-  include (module type of A) with type 'a t = 'a A.t
+module U1 : functor (P: PARAM) (A: T1) (B: T0) -> sig
+  include T1 with type 'a t = 'a A.t
   type t' = B.t
   type a [@@deriving t]
+
+  (** When [P.modulo_props] is true, we cannot guarantee that [a_t] carries the
+      expected properties. *)
+
   val eq : (a t, t') TypEq.t
 end
 
-module U2 : functor (A: T2) (B: T0) -> sig
-  include (module type of A) with type ('a, 'b) t = ('a, 'b) A.t
+module U2 : functor (P: PARAM) (A: T2) (B: T0) -> sig
+  include T2 with type ('a, 'b) t = ('a, 'b) A.t
   type t' = B.t
   type a [@@deriving t]
   type b [@@deriving t]
+
+  (** When [P.modulo_props] is true, we cannot guarantee that pa_t] and [b_t]
+      carry the expected properties. *)
+
   val eq : ((a, b) t, t') TypEq.t
 end

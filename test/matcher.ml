@@ -79,23 +79,24 @@ end = struct
 
   let apply : type res a. res t -> t: a Ttype.t -> a -> res =
     fun matcher ~t x ->
-      let (module B) = Unify.t0 t in
+      let (module B) = Unify.t0 t
+      and (module P) = Unify.init ~modulo_props:false in
       let rec loop = function
         | [] -> raise Not_found
-        | T0 (module C : C0 with type res = res) :: tl ->
+        | T0 (module A : C0 with type res = res) :: tl ->
           begin try
-              let module U = Unify.U0 (C) (B) in
-              let TypEq.Eq = U.eq in C.f x
+              let module U = Unify.U0 (P) (A) (B) in
+              let TypEq.Eq = U.eq in A.f x
             with Unify.Not_unifiable -> loop tl end
-        | T1 (module C : C1 with type res = res) :: tl ->
+        | T1 (module A : C1 with type res = res) :: tl ->
           begin try
-              let module U = Unify.U1 (C) (B) in
-              let TypEq.Eq = U.eq in C.f U.a_t x
+              let module U = Unify.U1 (P) (A) (B) in
+              let TypEq.Eq = U.eq in A.f U.a_t x
             with Unify.Not_unifiable -> loop tl end
-        | T2 (module C : C2 with type res = res) :: tl ->
+        | T2 (module A : C2 with type res = res) :: tl ->
           begin try
-              let module U = Unify.U2 (C) (B) in
-              let TypEq.Eq = U.eq in C.f U.a_t U.b_t x
+              let module U = Unify.U2 (P) (A) (B) in
+              let TypEq.Eq = U.eq in A.f U.a_t U.b_t x
             with Unify.Not_unifiable -> loop tl end
       in loop matcher
 end
