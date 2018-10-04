@@ -1,4 +1,4 @@
-(** Unification of dynamic types *)
+(** Unification of dynamic types. *)
 
 (** {2 Types with free variables} *)
 
@@ -20,6 +20,7 @@ end
 module type PARAM = sig
   val modulo_props : bool
 end
+(* TODO: might be part of the second argument (B: T0) *)
 
 val init: modulo_props: bool -> (module PARAM)
 (** The unification algorithm can be parametrized. Currently, the only parameter
@@ -52,7 +53,7 @@ module U2 : functor (P: PARAM) (A: T2) (B: T0) -> sig
   type a [@@deriving t]
   type b [@@deriving t]
 
-  (** When [P.modulo_props] is true, we cannot guarantee that pa_t] and [b_t]
+  (** When [P.modulo_props] is true, we cannot guarantee that [a_t] and [b_t]
       carry the expected properties. *)
 
   val eq : ((a, b) t, t') TypEq.t
