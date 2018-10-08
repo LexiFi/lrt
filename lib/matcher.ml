@@ -1,30 +1,3 @@
-module type C0 = sig
-  include Unify.T0
-  type res
-  val f: t -> res
-end
-
-module type C1 = sig
-  include Unify.T1
-  type res
-  val f: 'a Ttype.t -> 'a t -> res
-end
-
-module type C2 = sig
-  include Unify.T2
-  type res
-  val f: 'a Ttype.t -> 'b Ttype.t -> ('a, 'b) t -> res
-end
-
-type 'a candidate =
-  | T0 of (module C0 with type res = 'a)
-  | T1 of (module C1 with type res = 'a)
-  | T2 of (module C2 with type res = 'a)
-
-type 'a compiled = 'a candidate list
-
-type 'a t = 'a candidate list * ('a compiled Lazy.t)
-
 module Step : sig
   type t
   val compare : t -> t -> int
@@ -208,6 +181,33 @@ let%test _ =
     ; get (option_t string_t) t = Some 2
     ; get (option_t int_t) t = None
     ]
+
+module type C0 = sig
+  include Unify.T0
+  type res
+  val f: t -> res
+end
+
+module type C1 = sig
+  include Unify.T1
+  type res
+  val f: 'a Ttype.t -> 'a t -> res
+end
+
+module type C2 = sig
+  include Unify.T2
+  type res
+  val f: 'a Ttype.t -> 'b Ttype.t -> ('a, 'b) t -> res
+end
+
+type 'a candidate =
+  | T0 of (module C0 with type res = 'a)
+  | T1 of (module C1 with type res = 'a)
+  | T2 of (module C2 with type res = 'a)
+
+type 'a compiled = 'a candidate list
+
+type 'a t = 'a candidate list * ('a compiled Lazy.t)
 
 let compile : type res. res candidate list -> res t =
   fun candidates -> (candidates, lazy (List.rev candidates))
