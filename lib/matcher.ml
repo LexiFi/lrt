@@ -75,8 +75,10 @@ end = struct
   module Map = Map.Make(Step)
 
   type 'a tree =
-    | Leave of { value: 'a; n_free: int}
-    | Inner of { map: 'a tree Map.t; free: (int * 'a tree) option }
+    | Leave of { value: 'a; free_vars: (int * int) list }
+               (* free_vars maps DT_var in stype to id's of free nodes *)
+    | Inner of { map: 'a tree Map.t
+               ; free: (int * 'a tree) option }
 
   type 'a t = { modulo_props: bool
               ; tree: 'a tree
@@ -97,14 +99,20 @@ end = struct
     in
     let rec traverse stack subst tree =
       match stack, tree with
-      | [], Leave {value; _} -> Some value (* TODO: return substitution *)
+      | [], Leave {value; free_vars} ->
+        let () = List.iter (fun (dt_var, node_id) ->
+            let stype = List.assoc node_id subst in
+            Format.printf "DT_var %i: %a\n%!" dt_var Stype.print stype)
+            free_vars
+        in
+        Some value (* TODO: return substitution *)
       | hd :: tl, Inner node -> begin
           let step, children = get_step hd in
           match Map.find_opt step node.map with
           | Some tree -> traverse (children @ tl) subst tree
           | None -> match node.free with
             | None -> None
-            | Some (id, tree) -> traverse tl ((id, hd) :: subst) tree
+            | Some (node_id, tree) -> traverse tl ((node_id, hd) :: subst) tree
         end
       | [], _
       | _ :: _, Leave _ ->
@@ -120,23 +128,25 @@ end = struct
     let rec traverse stack free_vars tree =
       match stack, tree with
       | [], Leave _ -> raise (Invalid_argument "type already registered")
-      | [], Inner {map; free = _} ->
+      | [], Inner {map; free} ->
         assert (Map.is_empty map);
+        assert (free = None);
         (* TODO: store mapping between DT_var i and Free i' in Leave *)
-        Leave {value; n_free = List.length free_vars}
+        Leave {value; free_vars}
       | hd :: tl, Inner node -> begin
           match get_step hd with
-          | Var i ->
-            let free = match node.free with
-              | Some (id, tree) ->
-                let tree = traverse tl ((id ,i) :: free_vars) tree in
-                Some (id, tree)
+          | Var dt_var ->
+            let node_id, tree = match node.free with
+              | Some (node_id, tree) -> (node_id, tree)
               | None ->
-                let id = succ t.last_free in
-                t.last_free <- id;
+                let node_id = succ t.last_free in
+                t.last_free <- node_id;
                 let tree = Inner {map = Map.empty; free = None} in
-                let tree = traverse tl ((id ,i) :: free_vars) tree in
-                Some (id, tree)
+                (node_id, tree)
+            in
+            let free =
+                let tree = traverse tl ((dt_var, node_id) :: free_vars) tree in
+                Some (node_id, tree)
             in Inner {node with free}
           | Step (step, children) ->
             let tree =
@@ -168,6 +178,7 @@ let%test _ =
     ; get (list_t string_t) t = Some 4
     ; get (list_t int_t) t = Some 1
     ; get (option_t string_t) t = Some 2
+    ; get (list_t (array_t int_t)) t = Some 4
     ; get (option_t int_t) t = None (* TODO: Why is this not Some 42 *)
     ]
 
