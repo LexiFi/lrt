@@ -1,7 +1,12 @@
 module Step : sig
   type t
   val compare : t -> t -> int
-  val of_stype : modulo_props: bool -> Stype.t -> t * Stype.t list
+
+  type maybe_free =
+    | Step of t * Stype.t list
+    | Var of int (* DT_var *)
+
+  val of_stype : modulo_props: bool -> Stype.t -> maybe_free
 end = struct
   type base = | Int | Float | String | Array | List | Option | Arrow
   type t =
@@ -16,20 +21,24 @@ end = struct
         ((name, prop) :: flds, s :: stypes)) ([], []) flds
     in (name, repr, flds), stypes
 
-  let rec of_stype : modulo_props: bool -> Stype.t -> t * Stype.t list =
+  type maybe_free =
+    | Step of t * Stype.t list
+    | Var of int (* DT_var *)
+
+  let rec of_stype: modulo_props: bool -> Stype.t -> maybe_free =
     fun ~modulo_props -> function
-      | DT_int -> Base Int, []
-      | DT_float -> Base Float, []
-      | DT_string -> Base String, []
-      | DT_list a -> Base List, [a]
-      | DT_array a -> Base Array, [a]
-      | DT_option a -> Base Option, [a]
-      | DT_arrow (_, a, b) -> Base Arrow, [a; b]
+      | DT_int -> Step (Base Int, [])
+      | DT_float -> Step (Base Float, [])
+      | DT_string -> Step (Base String, [])
+      | DT_list a -> Step (Base List, [a])
+      | DT_array a -> Step (Base Array, [a])
+      | DT_option a -> Step (Base Option, [a])
+      | DT_arrow (_, a, b) -> Step (Base Arrow, [a; b])
       | DT_prop (_, s) when modulo_props -> of_stype ~modulo_props s
-      | DT_prop (p, s) -> Props p, [s]
-      | DT_tuple l -> Tuple (List.length l), l
+      | DT_prop (p, s) -> Step (Props p, [s])
+      | DT_tuple l -> Step (Tuple (List.length l), l)
       | DT_abstract (name, args) ->
-        Abstract (List.length args, name), args
+        Step (Abstract (List.length args, name), args)
       | DT_node { rec_descr = DT_record {record_fields; record_repr}
                 ; rec_name; _ } ->
         let (name, repr, flds), types =
@@ -41,73 +50,15 @@ end = struct
            [@@deriving t]. Or check what the existing rec_uid is doing.
            This would speed up comparison quite a bit, ie. only args need
            to be compared *)
-        Record (name, repr, flds), types
+        Step (Record (name, repr, flds), types)
       | DT_node _ -> failwith "TODO: handle variants"
       | DT_object _ -> failwith "TODO: handle objects"
-      | DT_var _i -> failwith "TODO: handle variables"
+      | DT_var i -> Var i
 
   let compare = compare
   (* TODO: A less naive compare may speed up things significantly. *)
 
 end
-
-module Trie : sig
-  type t
-  type key = Stype.t
-  val empty : modulo_props:bool -> t
-  val add : key -> t -> t
-  val mem : key -> t -> bool
-end = struct
-  module Map = Map.Make(Step)
-
-  type key = Stype.t
-
-  type t = { modulo_props: bool; map: node Map.t }
-  and node =
-  | Inner of t list
-  | Leave
-
-  let empty ~modulo_props = {modulo_props; map = Map.empty}
-
-  let rec add stype {modulo_props; map} =
-    let step, stypes = Step.of_stype ~modulo_props stype in
-    let node = match Map.find_opt step map with
-    | None ->
-      begin match stypes with
-        | [] -> Leave
-        | stypes -> Inner (
-            List.map (fun s -> add s (empty ~modulo_props)) stypes)
-      end
-    | Some Leave -> raise (Invalid_argument "type already registered")
-    | Some (Inner l) -> Inner (
-        List.map2 (fun s m -> add s m) stypes l)
-    in
-    { modulo_props; map = Map.add step node map }
-
-  let rec mem stype {modulo_props; map} =
-    let step, stypes = Step.of_stype ~modulo_props stype in
-    match Map.find_opt step map with
-    | None -> false
-    | Some Leave when stypes = [] -> true
-    | Some Leave -> false
-    | Some (Inner l) ->
-      List.for_all2 (fun s t -> mem s t) stypes l
-end
-
-let%test _ =
-  let add typ = Trie.add (Ttype.to_stype typ) in
-  let mem typ = Trie.mem (Ttype.to_stype typ) in
-  let open Std in
-  let t = Trie.empty ~modulo_props:true
-          |> add (list_t int_t)
-          |> add (option_t string_t)
-          |> add (int_t)
-  in
-  List.for_all (fun x -> x)
-    [ mem (list_t int_t) t
-    ; mem (option_t string_t) t
-    ; not (mem (option_t int_t) t)
-    ]
 
 module DicriminationTree : sig
   type 'a t
@@ -116,54 +67,89 @@ module DicriminationTree : sig
   val add : key -> 'a -> 'a t -> 'a t
   val get : key -> 'a t -> 'a option
 end = struct
-  (* On each level of the discrimination tree, we discriminate on on the
-     outermost structure of the stype (see [Step.of_stype]). When stype children
+  (* On each level of the discrimination tree, we discriminate on the
+     outermost structure of the stype using [Step.of_stype]. When stype children
      are present, they are used depth-first to further discriminate. *)
 
   type key = Stype.t
   module Map = Map.Make(Step)
 
   type 'a tree =
-    | Leave of 'a
-    | Inner of 'a tree Map.t
+    | Leave of { value: 'a; n_free: int}
+    | Inner of { map: 'a tree Map.t; free: (int * 'a tree) option }
 
-  type 'a t = { modulo_props: bool; tree: 'a tree }
-  let empty ~modulo_props = { modulo_props; tree = Inner Map.empty }
+  type 'a t = { modulo_props: bool
+              ; tree: 'a tree
+              ; mutable last_free: int }
 
-  let get stype {modulo_props; tree} =
-    let get_step = Step.of_stype ~modulo_props in
-    let rec traverse stack tree =
+  let empty ~modulo_props = { modulo_props
+                            ; tree = Inner { map = Map.empty
+                                           ; free = None }
+                            ; last_free = -1
+                            }
+
+  let get stype t =
+    let get_step s =
+      let modulo_props = t.modulo_props in
+      match Step.of_stype ~modulo_props s with
+      | Step.Step (s, l) -> (s, l)
+      | _ -> failwith "TODO: allow free variable in query"
+    in
+    let rec traverse stack subst tree =
       match stack, tree with
-      | [], Leave x -> Some x
-      | hd :: tl, Inner map -> begin
+      | [], Leave {value; _} -> Some value (* TODO: return substitution *)
+      | hd :: tl, Inner node -> begin
           let step, children = get_step hd in
-          match Map.find_opt step map with
-          | None -> None
-          | Some tree -> traverse (children @ tl) tree
+          match Map.find_opt step node.map with
+          | Some tree -> traverse (children @ tl) subst tree
+          | None -> match node.free with
+            | None -> None
+            | Some (id, tree) -> traverse tl ((id, hd) :: subst) tree
         end
-      | [], Inner _
+      | [], _
       | _ :: _, Leave _ ->
         assert false (* This should be impossible. [Step.of_stype] should
                         uniquely identify the number of children. *)
-    in traverse [stype] tree
+    in traverse [stype] [] t.tree
 
-  let add stype value {modulo_props; tree} =
-    let get_step = Step.of_stype ~modulo_props in
-    let rec traverse stack tree =
+  let add stype value t =
+    let get_step =
+      let modulo_props = t.modulo_props in
+      Step.of_stype ~modulo_props
+    in
+    let rec traverse stack free_vars tree =
       match stack, tree with
       | [], Leave _ -> raise (Invalid_argument "type already registered")
-      | [], Inner map ->
-        assert (Map.is_empty map); Leave value
-      | hd :: tl, Inner map ->
-        let step, children = get_step hd in
-        let tree =
-          match Map.find_opt step map with
-          | None -> Inner Map.empty
-          | Some tree -> tree
-        in
-        Inner (Map.add step (traverse (children @ tl) tree) map)
+      | [], Inner {map; free = _} ->
+        assert (Map.is_empty map);
+        (* TODO: store mapping between DT_var i and Free i' in Leave *)
+        Leave {value; n_free = List.length free_vars}
+      | hd :: tl, Inner node -> begin
+          match get_step hd with
+          | Var i ->
+            let free = match node.free with
+              | Some (id, tree) ->
+                let tree = traverse tl ((id ,i) :: free_vars) tree in
+                Some (id, tree)
+              | None ->
+                let id = succ t.last_free in
+                t.last_free <- id;
+                let tree = Inner {map = Map.empty; free = None} in
+                let tree = traverse tl ((id ,i) :: free_vars) tree in
+                Some (id, tree)
+            in Inner {node with free}
+          | Step (step, children) ->
+            let tree =
+              match Map.find_opt step node.map with
+              | None -> Inner {map = Map.empty; free = None}
+              | Some tree -> tree
+            in
+            let map =
+              Map.add step (traverse (children @ tl) free_vars tree) node.map
+            in Inner { node with map }
+        end
       | _ :: _ , Leave _ -> assert false
-    in {modulo_props; tree = traverse [stype] tree}
+    in {t with tree = traverse [stype] [] t.tree}
 end
 
 let%test _ =
@@ -174,12 +160,15 @@ let%test _ =
           |> add (list_t int_t) 1
           |> add (option_t string_t) 2
           |> add int_t 3
+          |> DicriminationTree.add (DT_list (DT_var 0)) 4
+          |> DicriminationTree.add (DT_var 0) 42
   in
   List.for_all (fun x -> x)
     [ get int_t t = Some 3
+    ; get (list_t string_t) t = Some 4
     ; get (list_t int_t) t = Some 1
     ; get (option_t string_t) t = Some 2
-    ; get (option_t int_t) t = None
+    ; get (option_t int_t) t = None (* TODO: Why is this not Some 42 *)
     ]
 
 module type C0 = sig
