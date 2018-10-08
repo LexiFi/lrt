@@ -28,112 +28,47 @@ type 'a t = 'a candidate list * ('a compiled Lazy.t)
 module Step : sig
   type t
   val compare : t -> t -> int
-  val register_stype : modulo_props: bool -> Stype.t -> t * Stype.t list
-  val find_stype : modulo_props: bool -> Stype.t -> t option * Stype.t list
+  val of_stype : modulo_props: bool -> Stype.t -> t * Stype.t list
 end = struct
-  type t = int
-  (* Do we need the mapping to int, or is it sufficient to place distinguishing
-     information in a variant and use polymorphic compare? *)
-
-  let last = ref 0
-  let fresh () = incr last; !last
-
-  let int = fresh ()
-  let float = fresh ()
-  let string = fresh ()
-  let array = fresh ()
-  let list = fresh ()
-  let option = fresh ()
-  let arrow = fresh ()
-
-  module PropMap = Map.Make (struct
-      type t = Stype.properties
-      let compare = compare
-    end)
-
-  module AbstractMap = Map.Make (struct
-      type t = int * string
-      let compare = compare
-    end)
-
-  module RecordMap = Map.Make (struct
-      type t = string * Stype.record_repr * (string * Stype.properties) list
-      let compare = compare
-    end)
-
-  let propMap = ref PropMap.empty
-  let abstractMap = ref AbstractMap.empty
-  let recordMap = ref RecordMap.empty
-
-  let identify: type m k. (k -> m -> int option) -> (k -> int -> m -> m)
-      -> m ref -> k -> int =
-    fun find add m x ->
-    match find x !m with
-    | Some id -> id
-    | None ->
-      let id = fresh () in
-      m := add x id !m; id
-
-  let identify_props =
-    identify PropMap.find_opt PropMap.add propMap
-
-  let identify_abstract =
-    identify AbstractMap.find_opt AbstractMap.add abstractMap
+  type base = | Int | Float | String | Array | List | Option | Arrow
+  type t =
+    | Base of base
+    | Tuple of int
+    | Props of Stype.properties
+    | Abstract of int * string (* arity, name *)
+    | Record of string * Stype.record_repr * ( string * Stype.properties) list
 
   let map_record name flds repr =
     let flds, stypes = List.fold_left (fun (flds, stypes) (name, prop, s) ->
         ((name, prop) :: flds, s :: stypes)) ([], []) flds
     in (name, repr, flds), stypes
 
-  let identify_record =
-    identify RecordMap.find_opt RecordMap.add recordMap
-
-  let rec register_stype : modulo_props: bool -> Stype.t -> t * Stype.t list =
+  let rec of_stype : modulo_props: bool -> Stype.t -> t * Stype.t list =
     fun ~modulo_props -> function
-      | DT_int -> int, []
-      | DT_float -> float, []
-      | DT_string -> string, []
-      | DT_list a -> list, [a]
-      | DT_array a -> array, [a]
-      | DT_option a -> option, [a]
-      | DT_arrow (_, a, b) -> arrow, [a; b]
-      | DT_prop (_, s) when modulo_props -> register_stype ~modulo_props s
-      | DT_prop (p, s) -> (identify_props p), [s]
-      | DT_tuple l -> -(List.length l), l
+      | DT_int -> Base Int, []
+      | DT_float -> Base Float, []
+      | DT_string -> Base String, []
+      | DT_list a -> Base List, [a]
+      | DT_array a -> Base Array, [a]
+      | DT_option a -> Base Option, [a]
+      | DT_arrow (_, a, b) -> Base Arrow, [a; b]
+      | DT_prop (_, s) when modulo_props -> of_stype ~modulo_props s
+      | DT_prop (p, s) -> Props p, [s]
+      | DT_tuple l -> Tuple (List.length l), l
       | DT_abstract (name, args) ->
-        identify_abstract (List.length args, name), args
+        Abstract (List.length args, name), args
       | DT_node { rec_descr = DT_record {record_fields; record_repr}
                 ; rec_name; _ } ->
-        let key, types = map_record rec_name record_fields record_repr in
+        let (name, repr, flds), types =
+          map_record rec_name record_fields record_repr
+        in
         (* TODO: verify, that rec_args are indeed irrelevant *)
         (* TODO: The same record can be defined twice in different modules
            and pass this comparison. Solution: insert unique ids on
            [@@deriving t]. Or check what the existing rec_uid is doing.
            This would speed up comparison quite a bit, ie. only args need
            to be compared *)
-        identify_record key, types
-      | DT_node _ -> failwith "TODO: handle variants"
-      | DT_object _ -> failwith "TODO: handle objects"
-      | DT_var _i -> failwith "TODO: handle variables"
-
-  let rec find_stype : modulo_props: bool -> Stype.t -> t option * Stype.t list
-    = fun ~modulo_props -> function
-      | DT_int -> Some int, []
-      | DT_float -> Some float, []
-      | DT_string -> Some string, []
-      | DT_list a -> Some list, [a]
-      | DT_array a -> Some array, [a]
-      | DT_option a -> Some option, [a]
-      | DT_arrow (_, a, b) -> Some arrow, [a; b]
-      | DT_prop (_, s) when modulo_props -> find_stype ~modulo_props s
-      | DT_prop (p, s) -> PropMap.find_opt p !propMap, [s]
-      | DT_tuple l -> Some (-(List.length l)), l
-      | DT_abstract (name, args) ->
-        AbstractMap.find_opt (List.length args, name) !abstractMap, args
-      | DT_node { rec_descr = DT_record {record_fields; record_repr}
-                ; rec_name; _ } ->
-        let key, types = map_record rec_name record_fields record_repr in
-        RecordMap.find_opt key !recordMap, types
+        Record (name, repr, flds), types
       | DT_node _ -> failwith "TODO: handle variants"
       | DT_object _ -> failwith "TODO: handle objects"
       | DT_var _i -> failwith "TODO: handle variables"
@@ -141,15 +76,65 @@ end = struct
   let compare = compare
 end
 
-module StepMap = Map.Make(Step)
+module Trie : sig
+  type t
+  type key = Stype.t
+  val empty : t
+  val add : modulo_props:bool -> key -> t -> t
+  (* TODO: modulo_props might be part of t *)
+  val mem : modulo_props:bool -> key -> t -> bool
+end = struct
+  module Map = Map.Make(Step)
 
-type 'a trie =
-  | Node of 'a trie StepMap.t
-  | Child of 'a
+  type key = Stype.t
 
-(* Ignore unfinished code. TODO: Continue here on Monday. *)
-let _ = Step.register_stype, Step.compare, Step.find_stype,
-        Node StepMap.empty, Child ()
+  type t = node Map.t
+  and node =
+  | Inner of t list
+  | Leave
+
+  let empty = Map.empty
+
+  let rec add ~modulo_props stype t =
+    let step, stypes = Step.of_stype ~modulo_props stype in
+    let node = match Map.find_opt step t with
+    | None ->
+      begin match stypes with
+        | [] -> Leave
+        | stypes -> Inner (
+            List.map (fun s -> add ~modulo_props s Map.empty) stypes)
+      end
+    | Some Leave -> raise (Invalid_argument "type already registered")
+    | Some (Inner l) -> Inner (
+        List.map2 (fun s m -> add ~modulo_props s m) stypes l)
+    in
+    Map.add step node t
+
+  let rec mem ~modulo_props stype t =
+    let step, stypes = Step.of_stype ~modulo_props stype in
+    match Map.find_opt step t with
+    | None -> false
+    | Some Leave when stypes = [] -> true
+    | Some Leave -> false
+    | Some (Inner l) ->
+      List.for_all2 (fun s t -> mem ~modulo_props s t) stypes l
+end
+
+let%test _ =
+  let modulo_props = true in
+  let add typ = Trie.add ~modulo_props (Ttype.to_stype typ) in
+  let mem typ = Trie.mem ~modulo_props (Ttype.to_stype typ) in
+  let open Std in
+  let t = Trie.empty
+          |> add (list_t int_t)
+          |> add (option_t string_t)
+          |> add (int_t)
+  in
+  List.for_all (fun x -> x)
+    [ mem (list_t int_t) t
+    ; mem (option_t string_t) t
+    ; not (mem (option_t int_t) t)
+    ]
 
 let compile : type res. res candidate list -> res t =
   fun candidates -> (candidates, lazy (List.rev candidates))
