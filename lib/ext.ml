@@ -243,6 +243,10 @@ module String = struct
 end
 
 module Option_ = struct
+  let bind f = function
+    | None -> None
+    | Some x -> f x
+
   let map f = function
     | None -> None
     | Some x -> Some (f x)

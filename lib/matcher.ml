@@ -91,9 +91,11 @@ end = struct
               ; tree: 'a tree
               ; mutable last_free: int }
 
+  let empty_tree =
+    Inner { map = Map.empty; free = None }
+
   let empty ~modulo_props = { modulo_props
-                            ; tree = Inner { map = Map.empty
-                                           ; free = None }
+                            ; tree = empty_tree
                             ; last_free = -1
                             }
 
@@ -123,11 +125,13 @@ end = struct
           with Not_unifiable -> None end
       | hd :: tl, Inner node -> begin
           let step, children = get_step hd in
-          match Map.find_opt step node.map with
-          | Some tree -> traverse (children @ tl) subst tree
+          Map.find_opt step node.map
+          |> Ext.Option.bind (traverse (children @ tl) subst)
+          |> function
+          | Some x -> Some x
           | None -> match node.free with
-            | None -> None
             | Some (node_id, tree) -> traverse tl ((node_id, hd) :: subst) tree
+            | None -> None
         end
       | [], _
       | _ :: _, Leave _ ->
@@ -142,7 +146,8 @@ end = struct
     in
     let rec traverse stack free_vars tree =
       match stack, tree with
-      | [], Leave _ -> raise (Invalid_argument "type already registered")
+      | [], Leave _ ->
+        raise (Invalid_argument "(congruent) type already registered")
       | [], Inner {map; free} ->
         (* TODO: can we avoid these asserts by shuffling the code? *)
         assert (Map.is_empty map);
@@ -156,8 +161,7 @@ end = struct
               | None ->
                 let node_id = succ t.last_free in
                 t.last_free <- node_id;
-                let tree = Inner {map = Map.empty; free = None} in
-                (node_id, tree)
+                (node_id, empty_tree)
             in
             let free =
                 let tree = traverse tl ((dt_var, node_id) :: free_vars) tree in
@@ -166,7 +170,7 @@ end = struct
           | Step (step, children) ->
             let tree =
               match Map.find_opt step node.map with
-              | None -> Inner {map = Map.empty; free = None}
+              | None -> empty_tree
               | Some tree -> tree
             in
             let map =
@@ -177,33 +181,52 @@ end = struct
     in {t with tree = traverse [stype] [] t.tree}
 
   let%test _ =
+    let open Stype in
+    let print_substitution fmt map =
+      IntMap.iter (fun i stype ->
+          Format.fprintf fmt " DT_var %i -> %a;" i Stype.print stype)
+        map
+    in
+    let print fmt = function
+      | None -> Format.fprintf fmt "None"
+      | Some (i, s) -> Format.fprintf fmt "Some (%i, %a)" i print_substitution s
+    in
     let tadd typ = add (Ttype.to_stype typ) in
-    let tget typ = get (Ttype.to_stype typ) in
     let open Std in
     let t = empty ~modulo_props:true
             |> tadd (list_t int_t) 1
             |> tadd (option_t string_t) 2
             |> tadd int_t 3
+            |> add (DT_var 0) 42
             |> add (DT_list (DT_var 0)) 4
             |> add (DT_tuple [DT_var 0; DT_var 0]) 5
-            (* TODO: this must work *)
+            (* TODO: this must work, since it is a fresh pattern *)
             (* |> add (DT_tuple [DT_var 1; DT_var 0]) 5 *)
-            |> add (DT_var 0) 42
-            (* this fails correctly *)
+            (* this fails as expected *)
             (* |> add (DT_var 1) 42 *)
     in
-    let open Stype in
-    List.for_all (fun x -> x)
-      [ tget int_t t = Some (3, IntMap.empty)
-      ; tget (list_t string_t) t = Some (4, IntMap.singleton 0 DT_string)
-      ; tget (list_t int_t) t = Some (1, IntMap.empty)
-      ; tget (option_t string_t) t = Some (2, IntMap.empty)
-      ; tget (list_t (array_t int_t)) t =
+    let s = Ttype.to_stype in
+    List.for_all
+      (fun (stype, expected) ->
+         let got = get stype t in
+         if got = expected then true
+         else
+         let () =
+           Format.printf "expected: %a\ngot: %a\n%!" print expected print got
+         in false
+      )
+      [ s int_t , Some (3, IntMap.empty)
+      ; s (list_t string_t), Some (4, IntMap.singleton 0 DT_string)
+      ; s (list_t int_t), Some (1, IntMap.empty)
+      ; s (option_t string_t) , Some (2, IntMap.empty)
+      ; s (list_t (array_t int_t)) ,
         Some (4, IntMap.singleton 0 (DT_array DT_int))
-      ; tget [%t: (int * int)] t =
+      ; s [%t: (int * int)],
         Some (5, IntMap.singleton 0 DT_int)
-      ; tget [%t: (int * bool)] t = None
-      ; tget (option_t int_t) t = None (* TODO: Why is this not Some 42 *)
+      ; s [%t: (int * bool)],
+        Some (42, IntMap.singleton 0 (s [%t: (int * bool)]))
+      ; s [%t: int option],
+        Some (42, IntMap.singleton 0 (DT_option DT_int))
       ]
 end
 
