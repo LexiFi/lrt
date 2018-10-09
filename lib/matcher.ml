@@ -74,32 +74,31 @@ module Tree : sig
 end = struct
   (* On each level of the discrimination tree, we discriminate on the
      outermost structure of the stype using [Step.of_stype]. When stype children
-     are present, they are used depth-first to further discriminate. *)
+     are present, they are used depth-first to further discriminate.
+
+     There are two different types of variables. On type corresponds to
+     DT_vars in stypes , the other to free spots in a path. The variables
+     in a path are enumerated starting from zero and constitute a normalized
+     renaming of the DT_vars. We do that, such that ('a * 'b) and ('b * 'a)
+     give the same path of features. During traversal of the tree, we maintain
+     a mapping between the two.
+  *)
 
   type key = Stype.t
   type substitution = Stype.t IntMap.t
 
-  module Map = Map.Make(Step)
+  module StepMap = Map.Make(Step)
 
   type 'a tree =
     | Leave of { value: 'a; free_vars: (int * int) list }
-               (* free_vars maps DT_var in stype to id's of free nodes *)
-    | Inner of { map: 'a tree Map.t
-               ; free: (int * 'a tree) option }
+               (* free_vars maps DT_var in stype to free vars in path *)
+    | Inner of { map: 'a tree StepMap.t; free: 'a tree IntMap.t }
 
-  type 'a t = { modulo_props: bool
-              ; tree: 'a tree
-              ; mutable last_free: int }
+  type 'a t = { modulo_props: bool; tree: 'a tree }
 
-  let empty_tree =
-    Inner { map = Map.empty; free = None }
+  let empty_tree = Inner { map = StepMap.empty; free = IntMap.empty }
 
-  let empty ~modulo_props = { modulo_props
-                            ; tree = empty_tree
-                            ; last_free = -1
-                            }
-
-  exception Not_unifiable
+  let empty ~modulo_props = { modulo_props ; tree = empty_tree }
 
   let get stype t =
     let modulo_props = t.modulo_props in
@@ -113,25 +112,38 @@ end = struct
     let rec traverse stack subst tree =
       match stack, tree with
       | [], Leave {value; free_vars} ->
-        begin try
-            let subst = List.fold_left (fun map (dt_var, node_id) ->
-                let stype = List.assoc node_id subst in
-                match IntMap.find_opt dt_var map with
-                | None -> IntMap.add dt_var stype map
-                | Some s ->
-                  if not (equal s stype) then raise Not_unifiable else map
-              ) IntMap.empty free_vars
-            in Some (value, subst)
-          with Not_unifiable -> None end
+        (* undo the variable name normalization *)
+        let subst = List.fold_left (fun map (dt_var, free_id) ->
+            IntMap.add dt_var (List.assoc free_id subst) map)
+            IntMap.empty free_vars
+        in Some (value, subst)
       | hd :: tl, Inner node -> begin
           let step, children = get_step hd in
-          Map.find_opt step node.map
-          |> Ext.Option.bind (traverse (children @ tl) subst)
-          |> function
-          | Some x -> Some x
-          | None -> match node.free with
-            | Some (node_id, tree) -> traverse tl ((node_id, hd) :: subst) tree
+          ( match StepMap.find_opt step node.map with
             | None -> None
+            | Some x -> traverse (children @ tl) subst x )
+          |>
+          (* Ordinary lookup using the outermost feature of the stype hd failed.
+             Now try to unifying with the free steps, starting the smallest.
+             By doing this, we guarantee (proof?!) that ('a * 'a) is preferred
+             over ('a * 'b).
+             Rationale: the smallest was bound further up in the path and thus
+             is the most restricting choice.
+          *)
+          ( function
+            | Some x -> Some x
+            | None ->
+              let rec loop seq =
+                match seq () with
+                | Seq.Nil -> None
+                | Seq.Cons ((free_id, tree), rest) ->
+                  match List.assoc_opt free_id subst with
+                  | None -> traverse tl ((free_id, hd) :: subst) tree
+                  | Some stype ->
+                    if equal stype hd
+                    then traverse tl subst tree
+                    else loop rest
+              in loop (IntMap.to_seq node.free))
         end
       | [], _
       | _ :: _, Leave _ ->
@@ -150,32 +162,40 @@ end = struct
         raise (Invalid_argument "(congruent) type already registered")
       | [], Inner {map; free} ->
         (* TODO: can we avoid these asserts by shuffling the code? *)
-        assert (Map.is_empty map);
-        assert (free = None);
+        assert (StepMap.is_empty map);
+        assert (IntMap.is_empty free);
         Leave {value; free_vars}
       | hd :: tl, Inner node -> begin
           match get_step hd with
-          | Var dt_var ->
-            let node_id, tree = match node.free with
-              | Some (node_id, tree) -> (node_id, tree)
-              | None ->
-                let node_id = succ t.last_free in
-                t.last_free <- node_id;
-                (node_id, empty_tree)
-            in
-            let free =
-                let tree = traverse tl ((dt_var, node_id) :: free_vars) tree in
-                Some (node_id, tree)
-            in Inner {node with free}
           | Step (step, children) ->
             let tree =
-              match Map.find_opt step node.map with
+              match StepMap.find_opt step node.map with
               | None -> empty_tree
               | Some tree -> tree
             in
             let map =
-              Map.add step (traverse (children @ tl) free_vars tree) node.map
+              StepMap.add step (traverse (children @ tl) free_vars tree)
+                node.map
             in Inner { node with map }
+          | Var dt_var ->
+            let free_id =
+              (* Was this dt_var already observed further up in the path?
+                 If so, reuse free_id, else bump free_id. *)
+              match List.assoc_opt dt_var free_vars with
+              | Some free_id -> free_id
+              | None ->
+                  let last =
+                    List.fold_left max (-1) (List.rev_map fst free_vars)
+                  in last + 1
+            in let tree =
+              match IntMap.find_opt free_id node.free with
+              | Some tree -> tree
+              | None -> empty_tree
+            in let free =
+                 IntMap.add free_id (
+                   traverse tl ((dt_var, free_id) :: free_vars) tree)
+                   node.free
+            in Inner {node with free}
         end
       | _ :: _ , Leave _ -> assert false
     in {t with tree = traverse [stype] [] t.tree}
@@ -200,8 +220,7 @@ end = struct
             |> add (DT_var 0) 42
             |> add (DT_list (DT_var 0)) 4
             |> add (DT_tuple [DT_var 0; DT_var 0]) 5
-            (* TODO: this must work, since it is a fresh pattern *)
-            (* |> add (DT_tuple [DT_var 1; DT_var 0]) 5 *)
+            |> add (DT_tuple [DT_var 1; DT_var 0]) 6
             (* this fails as expected *)
             (* |> add (DT_var 1) 42 *)
     in
@@ -224,7 +243,7 @@ end = struct
       ; s [%t: (int * int)],
         Some (5, IntMap.singleton 0 DT_int)
       ; s [%t: (int * bool)],
-        Some (42, IntMap.singleton 0 (s [%t: (int * bool)]))
+        Some (6, IntMap.(singleton 0 (s bool_t) |> add 1 (s int_t)))
       ; s [%t: int option],
         Some (42, IntMap.singleton 0 (DT_option DT_int))
       ]
