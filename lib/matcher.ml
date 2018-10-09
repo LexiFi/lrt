@@ -60,18 +60,22 @@ end = struct
 
 end
 
-module DicriminationTree : sig
+module Tree : sig
   type 'a t
   type key = Stype.t
+  type substitution = (int * Stype.t) list
   val empty : modulo_props: bool -> 'a t
   val add : key -> 'a -> 'a t -> 'a t
-  val get : key -> 'a t -> 'a option
+  val get : key -> 'a t -> ('a * substitution) option
 end = struct
   (* On each level of the discrimination tree, we discriminate on the
      outermost structure of the stype using [Step.of_stype]. When stype children
      are present, they are used depth-first to further discriminate. *)
 
   type key = Stype.t
+  type substitution = (int * Stype.t) list
+
+  module IntMap = Map.Make(struct type t = int let compare = compare end)
   module Map = Map.Make(Step)
 
   type 'a tree =
@@ -90,9 +94,13 @@ end = struct
                             ; last_free = -1
                             }
 
+  exception Not_unifiable
+
   let get stype t =
-    let get_step s =
-      let modulo_props = t.modulo_props in
+    let modulo_props = t.modulo_props in
+    let equal = if modulo_props then
+        Stype.equality_modulo_props else Stype.equality
+    and get_step s =
       match Step.of_stype ~modulo_props s with
       | Step.Step (s, l) -> (s, l)
       | _ -> failwith "TODO: allow free variable in query"
@@ -100,12 +108,16 @@ end = struct
     let rec traverse stack subst tree =
       match stack, tree with
       | [], Leave {value; free_vars} ->
-        let () = List.iter (fun (dt_var, node_id) ->
-            let stype = List.assoc node_id subst in
-            Format.printf "DT_var %i: %a\n%!" dt_var Stype.print stype)
-            free_vars
-        in
-        Some value (* TODO: return substitution *)
+        begin try
+            let subst = List.fold_left (fun assoc (dt_var, node_id) ->
+                let stype = List.assoc node_id subst in
+                match List.assoc_opt dt_var assoc with
+                | None -> (dt_var,stype) :: assoc
+                | Some s ->
+                  if not (equal s stype) then raise Not_unifiable else assoc
+              ) [] free_vars
+            in Some (value, subst)
+          with Not_unifiable -> None end
       | hd :: tl, Inner node -> begin
           let step, children = get_step hd in
           match Map.find_opt step node.map with
@@ -129,9 +141,9 @@ end = struct
       match stack, tree with
       | [], Leave _ -> raise (Invalid_argument "type already registered")
       | [], Inner {map; free} ->
+        (* TODO: can we avoid these asserts by shuffling the code? *)
         assert (Map.is_empty map);
         assert (free = None);
-        (* TODO: store mapping between DT_var i and Free i' in Leave *)
         Leave {value; free_vars}
       | hd :: tl, Inner node -> begin
           match get_step hd with
@@ -163,22 +175,29 @@ end = struct
 end
 
 let%test _ =
-  let add typ = DicriminationTree.add (Ttype.to_stype typ) in
-  let get typ = DicriminationTree.get (Ttype.to_stype typ) in
+  let add typ = Tree.add (Ttype.to_stype typ) in
+  let get typ = Tree.get (Ttype.to_stype typ) in
   let open Std in
-  let t = DicriminationTree.empty ~modulo_props:true
+  let t = Tree.empty ~modulo_props:true
           |> add (list_t int_t) 1
           |> add (option_t string_t) 2
           |> add int_t 3
-          |> DicriminationTree.add (DT_list (DT_var 0)) 4
-          |> DicriminationTree.add (DT_var 0) 42
+          |> Tree.add (DT_list (DT_var 0)) 4
+          |> Tree.add (DT_tuple [DT_var 0; DT_var 0]) 5
+          (* TODO: this must work *)
+          (* |> Tree.add (DT_tuple [DT_var 1; DT_var 0]) 5 *)
+          |> Tree.add (DT_var 0) 42
+          (* this fails correctly *)
+          (* |> Tree.add (DT_var 1) 42 *)
   in
   List.for_all (fun x -> x)
-    [ get int_t t = Some 3
-    ; get (list_t string_t) t = Some 4
-    ; get (list_t int_t) t = Some 1
-    ; get (option_t string_t) t = Some 2
-    ; get (list_t (array_t int_t)) t = Some 4
+    [ get int_t t = Some (3,[])
+    ; get (list_t string_t) t = Some (4, [0, DT_string])
+    ; get (list_t int_t) t = Some (1, [])
+    ; get (option_t string_t) t = Some (2, [])
+    ; get (list_t (array_t int_t)) t = Some (4, [0, DT_array DT_int])
+    ; get [%t: (int * int)] t = Some (5, [0, DT_int])
+    ; get [%t: (int * bool)] t = None
     ; get (option_t int_t) t = None (* TODO: Why is this not Some 42 *)
     ]
 
