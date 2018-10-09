@@ -9,7 +9,7 @@ and 'a e = 'a list
 
 let matcher =
   Matcher.(
-    empty
+    empty ~modulo_props:true
     |> add ~t:a_t ~f:(fun _ -> print_endline "a")
     |> add ~t:b_t ~f:(fun _ -> print_endline "b")
     |> add ~t:c_t ~f:(fun _ -> print_endline "c")

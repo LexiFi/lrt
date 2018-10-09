@@ -57,6 +57,8 @@ end = struct
 
   let compare = compare
   (* TODO: A less naive compare may speed up things significantly. *)
+  (* TODO: Trim stype, such that this compare reduces to comparison of
+     integers/uid *)
 
 end
 
@@ -172,34 +174,34 @@ end = struct
         end
       | _ :: _ , Leave _ -> assert false
     in {t with tree = traverse [stype] [] t.tree}
-end
 
-let%test _ =
-  let add typ = Tree.add (Ttype.to_stype typ) in
-  let get typ = Tree.get (Ttype.to_stype typ) in
-  let open Std in
-  let t = Tree.empty ~modulo_props:true
-          |> add (list_t int_t) 1
-          |> add (option_t string_t) 2
-          |> add int_t 3
-          |> Tree.add (DT_list (DT_var 0)) 4
-          |> Tree.add (DT_tuple [DT_var 0; DT_var 0]) 5
-          (* TODO: this must work *)
-          (* |> Tree.add (DT_tuple [DT_var 1; DT_var 0]) 5 *)
-          |> Tree.add (DT_var 0) 42
-          (* this fails correctly *)
-          (* |> Tree.add (DT_var 1) 42 *)
-  in
-  List.for_all (fun x -> x)
-    [ get int_t t = Some (3,[])
-    ; get (list_t string_t) t = Some (4, [0, DT_string])
-    ; get (list_t int_t) t = Some (1, [])
-    ; get (option_t string_t) t = Some (2, [])
-    ; get (list_t (array_t int_t)) t = Some (4, [0, DT_array DT_int])
-    ; get [%t: (int * int)] t = Some (5, [0, DT_int])
-    ; get [%t: (int * bool)] t = None
-    ; get (option_t int_t) t = None (* TODO: Why is this not Some 42 *)
-    ]
+  let%test _ =
+    let tadd typ = add (Ttype.to_stype typ) in
+    let tget typ = get (Ttype.to_stype typ) in
+    let open Std in
+    let t = empty ~modulo_props:true
+            |> tadd (list_t int_t) 1
+            |> tadd (option_t string_t) 2
+            |> tadd int_t 3
+            |> add (DT_list (DT_var 0)) 4
+            |> add (DT_tuple [DT_var 0; DT_var 0]) 5
+            (* TODO: this must work *)
+            (* |> add (DT_tuple [DT_var 1; DT_var 0]) 5 *)
+            |> add (DT_var 0) 42
+            (* this fails correctly *)
+            (* |> add (DT_var 1) 42 *)
+    in
+    List.for_all (fun x -> x)
+      [ tget int_t t = Some (3,[])
+      ; tget (list_t string_t) t = Some (4, [0, DT_string])
+      ; tget (list_t int_t) t = Some (1, [])
+      ; tget (option_t string_t) t = Some (2, [])
+      ; tget (list_t (array_t int_t)) t = Some (4, [0, DT_array DT_int])
+      ; tget [%t: (int * int)] t = Some (5, [0, DT_int])
+      ; tget [%t: (int * bool)] t = None
+      ; tget (option_t int_t) t = None (* TODO: Why is this not Some 42 *)
+      ]
+end
 
 module type C0 = sig
   include Unify.T0
@@ -224,57 +226,43 @@ type 'a candidate =
   | T1 of (module C1 with type res = 'a)
   | T2 of (module C2 with type res = 'a)
 
-type 'a compiled = 'a candidate list
+type 'a t = 'a candidate Tree.t
 
-type 'a t = 'a candidate list * ('a compiled Lazy.t)
+let empty ~modulo_props : 'a t = Tree.empty ~modulo_props
 
-let compile : type res. res candidate list -> res t =
-  fun candidates -> (candidates, lazy (List.rev candidates))
-(* This implies oldest added is tried first. What do we want? *)
-(* TODO: Build some efficient data structure. *)
+let add (type t res) ~(t: t Ttype.t) ~(f: t -> res) tree =
+  let c = T0 (module struct
+      type nonrec t = t [@@deriving t]
+      type nonrec res = res
+      let f = f end)
+  in Tree.add (Ttype.to_stype t) c tree
 
-let empty : 'a t = [], lazy []
+let add0 (type a) (module C : C0 with type res = a) tree =
+  Tree.add (Ttype.to_stype C.t) (T0 (module C)) tree
 
-let add (type t res) ~(t: t Ttype.t) ~(f: t -> res) (lst, _) =
-  T0 (module struct
-    type nonrec t = t [@@deriving t]
-    type nonrec res = res
-    let f = f end) :: lst
-  |> compile
+type var
+let var i : var Ttype.t = Obj.magic (Stype.DT_var i)
+let v0 = var 0
+let v1 = var 1
 
-let add0 (type a) (module C : C0 with type res = a) (lst, _) =
-  T0 (module C : C0 with type res = a) :: lst
-  |> compile
+let add1 (type a) (module C : C1 with type res = a) tree =
+  Tree.add (Ttype.to_stype (C.t v0)) (T1 (module C)) tree
 
-let add1 (type a) (module C : C1 with type res = a) (lst, _) =
-  T1 (module C : C1 with type res = a) :: lst
-  |> compile
-
-let add2 (type a) (module C : C2 with type res = a) (lst, _) =
-  T2 (module C : C2 with type res = a) :: lst
-  |> compile
+let add2 (type a) (module C : C2 with type res = a) tree =
+  Tree.add (Ttype.to_stype (C.t v0 v1)) (T2 (module C)) tree
 
 let apply' : type res. res t -> Ttype.dynamic -> res =
-  fun (_, lazy matcher) (Ttype.Dyn (t,x)) ->
-    let (module B) = Unify.t0 t
-    and (module P) = Unify.init ~modulo_props:false in
-    let rec loop = function
-      | [] -> raise Not_found
-      | T0 (module A : C0 with type res = res) :: tl ->
-        begin try
-            let module U = Unify.U0 (P) (A) (B) in
-            let TypEq.Eq = U.eq in A.f x
-          with Unify.Not_unifiable -> loop tl end
-      | T1 (module A : C1 with type res = res) :: tl ->
-        begin try
-            let module U = Unify.U1 (P) (A) (B) in
-            let TypEq.Eq = U.eq in A.f U.a_t x
-          with Unify.Not_unifiable -> loop tl end
-      | T2 (module A : C2 with type res = res) :: tl ->
-        begin try
-            let module U = Unify.U2 (P) (A) (B) in
-            let TypEq.Eq = U.eq in A.f U.a_t U.b_t x
-          with Unify.Not_unifiable -> loop tl end
-    in loop matcher
+  fun tree (Ttype.Dyn (t,x)) ->
+    let stype = Ttype.to_stype t in
+    match Tree.get stype tree with
+    | None -> raise Not_found
+    | Some (T0 (module M : C0 with type res = res), []) ->
+      M.f (Obj.magic x)
+    | Some (T1 (module M : C1 with type res = res), [(0,a)]) ->
+      (* TODO: handle type 'a t = int *)
+      M.f (Obj.magic a) (Obj.magic x)
+    | Some (T2 (module M : C2 with type res = res), [(0,a); (1,b)]) ->
+      M.f (Obj.magic a) (Obj.magic b) (Obj.magic x)
+    | _ -> failwith "substitution mismatch"
 
 let apply matcher ~t x = apply' matcher (Ttype.Dyn (t, x))

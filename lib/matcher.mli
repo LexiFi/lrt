@@ -2,7 +2,7 @@
 
 type 'res t
 
-val empty: 'res t
+val empty: modulo_props:bool -> 'res t
 (** The matcher without any registered pattern. *)
 
 val add: t: 'a Ttype.t -> f:('a -> 'res) -> 'res t -> 'res t
