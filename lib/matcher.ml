@@ -62,10 +62,12 @@ end = struct
 
 end
 
+module IntMap = Map.Make (struct type t = int let compare = compare end)
+
 module Tree : sig
   type 'a t
   type key = Stype.t
-  type substitution = (int * Stype.t) list
+  type substitution = Stype.t IntMap.t
   val empty : modulo_props: bool -> 'a t
   val add : key -> 'a -> 'a t -> 'a t
   val get : key -> 'a t -> ('a * substitution) option
@@ -75,9 +77,8 @@ end = struct
      are present, they are used depth-first to further discriminate. *)
 
   type key = Stype.t
-  type substitution = (int * Stype.t) list
+  type substitution = Stype.t IntMap.t
 
-  module IntMap = Map.Make(struct type t = int let compare = compare end)
   module Map = Map.Make(Step)
 
   type 'a tree =
@@ -105,19 +106,19 @@ end = struct
     and get_step s =
       match Step.of_stype ~modulo_props s with
       | Step.Step (s, l) -> (s, l)
-      | _ -> failwith "TODO: allow free variable in query"
+      | _ -> failwith "free variable in query"
     in
     let rec traverse stack subst tree =
       match stack, tree with
       | [], Leave {value; free_vars} ->
         begin try
-            let subst = List.fold_left (fun assoc (dt_var, node_id) ->
+            let subst = List.fold_left (fun map (dt_var, node_id) ->
                 let stype = List.assoc node_id subst in
-                match List.assoc_opt dt_var assoc with
-                | None -> (dt_var,stype) :: assoc
+                match IntMap.find_opt dt_var map with
+                | None -> IntMap.add dt_var stype map
                 | Some s ->
-                  if not (equal s stype) then raise Not_unifiable else assoc
-              ) [] free_vars
+                  if not (equal s stype) then raise Not_unifiable else map
+              ) IntMap.empty free_vars
             in Some (value, subst)
           with Not_unifiable -> None end
       | hd :: tl, Inner node -> begin
@@ -191,13 +192,16 @@ end = struct
             (* this fails correctly *)
             (* |> add (DT_var 1) 42 *)
     in
+    let open Stype in
     List.for_all (fun x -> x)
-      [ tget int_t t = Some (3,[])
-      ; tget (list_t string_t) t = Some (4, [0, DT_string])
-      ; tget (list_t int_t) t = Some (1, [])
-      ; tget (option_t string_t) t = Some (2, [])
-      ; tget (list_t (array_t int_t)) t = Some (4, [0, DT_array DT_int])
-      ; tget [%t: (int * int)] t = Some (5, [0, DT_int])
+      [ tget int_t t = Some (3, IntMap.empty)
+      ; tget (list_t string_t) t = Some (4, IntMap.singleton 0 DT_string)
+      ; tget (list_t int_t) t = Some (1, IntMap.empty)
+      ; tget (option_t string_t) t = Some (2, IntMap.empty)
+      ; tget (list_t (array_t int_t)) t =
+        Some (4, IntMap.singleton 0 (DT_array DT_int))
+      ; tget [%t: (int * int)] t =
+        Some (5, IntMap.singleton 0 DT_int)
       ; tget [%t: (int * bool)] t = None
       ; tget (option_t int_t) t = None (* TODO: Why is this not Some 42 *)
       ]
@@ -251,18 +255,27 @@ let add1 (type a) (module C : C1 with type res = a) tree =
 let add2 (type a) (module C : C2 with type res = a) tree =
   Tree.add (Ttype.to_stype (C.t v0 v1)) (T2 (module C)) tree
 
+let ttype: type a. int -> Stype.t IntMap.t -> a Ttype.t =
+  fun i map ->
+    match IntMap.find_opt i map with
+    | None -> Obj.magic Std.unit_t (* Unification succeeded, but type variable
+                                      was not used. *)
+    | Some s -> Obj.magic s (* Unification succeeded by instantiating type
+                               variable with stype s. *)
+
 let apply' : type res. res t -> Ttype.dynamic -> res =
   fun tree (Ttype.Dyn (t,x)) ->
     let stype = Ttype.to_stype t in
     match Tree.get stype tree with
     | None -> raise Not_found
-    | Some (T0 (module M : C0 with type res = res), []) ->
+    | Some (T0 (module M : C0 with type res = res), map) ->
+      assert (IntMap.cardinal map = 0);
       M.f (Obj.magic x)
-    | Some (T1 (module M : C1 with type res = res), [(0,a)]) ->
-      (* TODO: handle type 'a t = int *)
-      M.f (Obj.magic a) (Obj.magic x)
-    | Some (T2 (module M : C2 with type res = res), [(0,a); (1,b)]) ->
-      M.f (Obj.magic a) (Obj.magic b) (Obj.magic x)
-    | _ -> failwith "substitution mismatch"
+    | Some (T1 (module M : C1 with type res = res), map) ->
+      assert (IntMap.cardinal map < 2);
+      M.f (ttype 0 map) (Obj.magic x)
+    | Some (T2 (module M : C2 with type res = res), map) ->
+      assert (IntMap.cardinal map < 3);
+      M.f (ttype 0 map) (ttype 1 map) (Obj.magic x)
 
 let apply matcher ~t x = apply' matcher (Ttype.Dyn (t, x))
