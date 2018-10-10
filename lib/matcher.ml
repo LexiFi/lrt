@@ -1,4 +1,21 @@
 module Step : sig
+  (* A basic type language consist of symbols (with associated fixed arity) and
+     variables.
+
+     For such a language, [Step.t] corresponds to the set of symbols,
+     [Step.compare] to a total order on the set of symbols, and [Step.of_stype]
+     to the destruction of a term into a symbol and a list of arguments.
+
+     The total order on symbols, together with the invariant that each symbol
+     has a fixed arity, can be used to implement the discrimination tree below.
+
+     Unfortunately, [Stype.t] does not carry an identifier of the symbol, thus
+     things are a bit complicated. We attempt to read something symbol-like by
+     extracting relevant top-level information and return more stypes for
+     recursion than theoretically necessary. The recursion into the stype is
+     thereby delayed.
+  *)
+
   type t
   val compare : t -> t -> int
 
@@ -14,12 +31,27 @@ end = struct
     | Tuple of int
     | Props of Stype.properties
     | Abstract of int * string (* arity, name *)
-    | Record of string * Stype.record_repr * ( string * Stype.properties) list
+    | Record of string * Stype.record_repr * (string * Stype.properties) list
+    | Variant of string * Stype.variant_repr * (string * Stype.properties) list
+    | Object of string list (* method names *)
 
-  let map_record name flds repr =
+  let ignore_props modulo_props =
+    if modulo_props then fun _p -> [] else fun p -> p
+
+  let map_record ~modulo_props name flds repr =
+    let ig = ignore_props modulo_props in
     let flds, stypes = List.fold_left (fun (flds, stypes) (name, prop, s) ->
-        ((name, prop) :: flds, s :: stypes)) ([], []) flds
-    in (name, repr, flds), stypes
+        ((name, ig prop) :: flds, s :: stypes)) ([], []) flds
+    in Record (name, repr, flds), stypes
+
+  let map_variant ~modulo_props name cstrs repr =
+    let ig = ignore_props modulo_props in
+    let cstrs, tys = List.fold_left (fun (cstrs, tys) (name, prop, args) ->
+        let s = match ( args : _ Stype.variant_args ) with
+          | C_tuple stypes -> Stype.DT_tuple stypes
+          | C_inline stype -> stype
+        in ((name, ig prop) :: cstrs, s :: tys)) ([], []) cstrs
+    in Variant (name, repr, cstrs), tys
 
   type maybe_free =
     | Step of t * Stype.t list
@@ -41,24 +73,34 @@ end = struct
         Step (Abstract (List.length args, name), args)
       | DT_node { rec_descr = DT_record {record_fields; record_repr}
                 ; rec_name; _ } ->
-        let (name, repr, flds), types =
-          map_record rec_name record_fields record_repr
-        in
-        (* TODO: verify, that rec_args are indeed irrelevant *)
-        (* TODO: The same record can be defined twice in different modules
-           and pass this comparison. Solution: insert unique ids on
-           [@@deriving t]. Or check what the existing rec_uid is doing.
-           This would speed up comparison quite a bit, ie. only args need
-           to be compared *)
-        Step (Record (name, repr, flds), types)
-      | DT_node _ -> failwith "TODO: handle variants"
-      | DT_object _ -> failwith "TODO: handle objects"
+        let step, types = map_record ~modulo_props
+            rec_name record_fields record_repr
+        in Step (step, types)
+        (* TODO: We take all types of all fields and return them for recursion.
+           It would be smarter to return only rec_args. But how can we identify
+           the record without inspecting the types of all fields? *)
+        (* TODO: The same record can be defined twice in different modules.
+           This function then yield the same step and as a consequence the
+           two records would falsely unify. Solution: insert unique ids on
+           [@@deriving t] for (at least) variants, records and abstract types.
+           These ids should identify the symbol in the type language. Comparison
+           of steps would reduce two the comparison of two ids. Extraction of
+           stype arguments would reduce to returning rec_args. *)
+        (* The same argument/problems apply to abstract/variant/object. *)
+      | DT_node { rec_descr = DT_variant {variant_constrs; variant_repr}
+                ; rec_name; _ } ->
+        let step, types = map_variant ~modulo_props
+            rec_name variant_constrs variant_repr
+        in Step (step, types)
+      | DT_object l ->
+        let method_names, types = List.split l
+        in Step (Object method_names, types)
       | DT_var i -> Var i
 
   let compare = compare
   (* TODO: A less naive compare may speed up things significantly. *)
   (* TODO: Trim stype, such that this compare reduces to comparison of
-     integers/uid *)
+     integers/uid. Also see comment above.*)
 
 end
 
