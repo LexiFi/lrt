@@ -2,6 +2,11 @@
   (public_name dynt)
   (synopsis "Dynamic Types")
   (inline_tests)
-  (preprocess (pps ppx_expect dynt.ppx)))
+  (libraries landmarks)
+  (preprocess (pps ppx_expect dynt.ppx landmarks.ppx)))
 
-(ocamllex variant_lexer)
+(rule
+  (targets variant_lexer.ml)
+  (deps    variant_lexer.mll)
+  (action  (chdir %{workspace_root}
+            (run %{bin:ocamllex} -ml -q -o %{targets} %{deps}))))
