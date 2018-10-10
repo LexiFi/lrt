@@ -93,6 +93,8 @@ end
 
 module Float = struct
 
+  (* TODO: this float printing is very slow. *)
+
   (* from ocaml/typing/oprint.ml *)
   let valid_float_lexeme s =
     let l = String.length s in
