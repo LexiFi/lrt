@@ -486,7 +486,6 @@ let of_type_gen_sized: type a. UGen.t list -> t: a Ttype.t -> int -> a gen =
           let f (type a) (c : a constructor) : a gen Lazy.t option =
             if sz > 0 || is_leaf t
             then Some (lazy (match c with
-                (* TODO: SEGV by removing return *)
                 | Constant c -> return (Builder.constant_constructor c)
                 | Regular c ->
                   fields (Make.regular_constructor c) c.rc_flds (sz/2)

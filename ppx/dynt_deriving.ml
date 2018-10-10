@@ -309,7 +309,7 @@ let rec core_type ~rec_ ~free ({ ptyp_loc = loc ; _ } as ct) : expression =
                                        [%e rcs r]))]
     | Ptyp_object (l, _closed_flag) ->
       let fields = List.map (function
-            (* TODO properties could read for object fields.
+            (* TODO properties could be read for object fields.
              * But where should they be placed?
              * DT_prop (ct)?
              *)

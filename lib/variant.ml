@@ -74,8 +74,7 @@ let rec to_variant: type a. t: a Ttype.t -> a to_variant = fun ~t x ->
   | Nativeint -> String (Nativeint.to_string x)
   | Float -> Float x
   | String -> String x
-  (* TODO: old implementation stores char in string *)
-  | Char -> Int (int_of_char x)
+  | Char -> String (Printf.sprintf "%c" x)
   | List {t;_} -> List (List.map (to_variant ~t) x)
   | Array {t;_} -> Array (Array.map (to_variant ~t) x)
   | Option {t;_} -> Option (Ext.Option.map (to_variant ~t) x)
@@ -237,7 +236,9 @@ let rec of_variant: type a. t: a Ttype.t -> Stype.properties -> a of_variant =
       | Int64, String x -> conv bad_variant Int64.of_string x
       | Nativeint, String x -> conv bad_variant Nativeint.of_string x
       | String, String x -> x
-      | Char, Int x -> char_of_int x
+      | Char, String x ->
+          if String.length x = 1 then String.get x 0 else
+          bad_variant ("single character string expected")
       | List {t;_}, List x -> List.map (of_variant [] ~t) x
       | Array {t;_}, Array x -> Array.map (of_variant [] ~t) x
       | Option {t;_}, Option x -> Ext.Option.map (of_variant [] ~t) x
@@ -260,7 +261,7 @@ let rec of_variant: type a. t: a Ttype.t -> Stype.properties -> a of_variant =
              match old, List.assoc_opt "of_variant_old_name" props with
              | None, Some old_name when old_name = name -> Some constr
              | Some _, Some old_name when old_name = name ->
-               assert false (* TODO: old_name given twice. Recover or fail? *)
+               failwith "of_variant_old_name given twice"
              | x, _ -> x
         in let rec use_first old = function
             (* Find constructor, remember old_name and use as fallback. *)

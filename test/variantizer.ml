@@ -86,7 +86,7 @@ let%expect_test _ =
   showv e_t (C {i=Nativeint.zero});
   [%expect {|
     Constructor ("A", Some (String "a"))
-    Constructor ("B", Some (Tuple [Int 98; Int 98]))
+    Constructor ("B", Some (Tuple [String "b"; String "b"]))
     Constructor ("C", Some (Record [("i", String "0")])) |}]
 
 let%test _ =
