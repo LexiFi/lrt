@@ -11,7 +11,12 @@ let filename =
     exit 1
   end
 
-let x = Variant.value_of_variant_in_file ~t filename
-let v = Variant.to_variant ~t x
-let () = Variant.print_variant Format.std_formatter v
+let[@landmark "test"] () =
+  let[@landmark "read_file"] v = Variant.variant_of_file filename in
+  let[@landmark "of_variant"] x = Variant.of_variant ~t v in
+  let[@landmark "to_variant"] v = Variant.to_variant ~t x in
+  let[@landmark "printing"] () =
+    let fmt = Format.formatter_of_out_channel (open_out "/dev/null") in
+    Variant.print_variant fmt v
+  in ()
 
