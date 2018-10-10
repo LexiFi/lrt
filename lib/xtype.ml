@@ -382,34 +382,69 @@ end
 (* fast lookup for named elements *)
 
 module Lookup = struct
+  (* Memoize table in stype node *)
+  module M = struct
+    open Stype
+    type memoized_type_prop += Table of Ext.String.Tbl.t
 
-  let finder get_name (lst: 'a list) : (string -> 'a option)=
-    let tbl = lazy (
-      Ext.String.Tbl.prepare (List.map get_name lst))
-    in
-    let arr = Array.of_list lst in
-    fun n ->
-      let i = Ext.String.Tbl.lookup (Lazy.force tbl) n in
+    let rec search a n i =
+      if i = n then None
+      else match a.(i) with
+        | Table r -> Some r
+        | _ -> search a n (i + 1)
+
+    let is_memoized (node : node) : Ext.String.Tbl.t option =
+      search node.rec_memoized (Array.length node.rec_memoized) 0
+
+    let memoize: node -> Ext.String.Tbl.t -> Ext.String.Tbl.t =
+      fun node table ->
+      let s = Table table in
+      let old = node.rec_memoized in
+      let a = Array.make (Array.length old + 1) s in
+      Array.blit old 0 a 1 (Array.length old);
+      Internal.set_memoized node a;
+      table
+  end
+
+  let table (get_name : 's -> string) (lst : 's list) =
+    Ext.String.Tbl.prepare (List.map get_name lst)
+
+  let mtable ttype get_name lst =
+    let node =
+      match Ttype.to_stype ttype with
+      | DT_node node -> node
+      | _ -> failwith "ttype not a node"
+    in match M.is_memoized node with
+    | None -> M.memoize node (table get_name lst)
+    | Some t -> t
+
+  let finder tbl arr : (string -> 'a option)=
+    fun name ->
+      let i = Ext.String.Tbl.lookup tbl name in
       if i < 0 then None else Some arr.(i)
 
-  let record_field r =
-    let f = function f -> fst (fst f) in
-    finder f r.r_flds
+  let record_field t r =
+    let f = fun f -> fst (fst f)
+    and arr = Array.of_list r.r_flds
+    in finder (mtable t f r.r_flds) arr
 
   let constructor_field c =
-    let f = function f -> fst (fst f) in
-    finder f c.ic_flds
+    let f = fun f -> fst (fst f)
+    and arr = Array.of_list c.ic_flds
+    in finder (table f c.ic_flds) arr
 
-  let constructor s =
+  let constructor t s =
     let f = function
       | Constant {cc_label=(name, _); _}
       | Regular {rc_label=(name, _); _}
       | Inlined {ic_label=(name, _); _} -> name
-    in finder f s.cstrs
+    and arr = Array.of_list s.cstrs
+    in finder (mtable t f s.cstrs) arr
 
   let method_ o =
-    let f = function Method (name, _) -> name in
-    finder f o.methods
+    let f = function Method (name, _) -> name
+    and arr = Array.of_list o.methods
+    in finder (table f o.methods) arr
 end
 
 let constructor_by_value : type a. a sum -> a -> a constructor =
@@ -617,14 +652,14 @@ let rec project_path : type a b. a Ttype.t -> (a,b) Path.t -> b Ttype.t =
     | (_, meta) :: tl ->
       let t = match meta, xtype_of_ttype t with
         | Field {field_name}, Record r ->
-          (Lookup.record_field r field_name |> assert_some
+          (Lookup.record_field t r field_name |> assert_some
            |> function _, Field f -> cast f.typ)
         | Tuple {nth; _}, Tuple t ->
           (List.nth t.t_flds nth |> function Field f -> cast f.typ)
         | List _, List t -> cast t
         | Array _, Array t -> cast t
         | Constructor {name; arg}, Sum s ->
-          ( match arg, (Lookup.constructor s name |> assert_some) with
+          ( match arg, (Lookup.constructor t s name |> assert_some) with
             | Regular {nth;_}, Regular c ->
               (List.nth c.rc_flds nth |> function Field f -> cast f.typ)
             | Inline {field_name}, Inlined c ->

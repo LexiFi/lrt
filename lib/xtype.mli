@@ -116,11 +116,20 @@ end
 (** {2 Find elements} *)
 
 module Lookup : sig
-  val record_field: 'a record -> string -> 'a record_field option
-  val constructor: 'a sum -> string -> 'a constructor option
+  (** Providing the first two arguments yields a lookup table for the
+      fields/methods. The lookup table is constructed from the information in
+      the second argument and memoized in the first argument. *)
+
+  val record_field: 'a Ttype.t -> 'a record -> string -> 'a record_field option
+  val constructor: 'a Ttype.t -> 'a sum -> string -> 'a constructor option
+
   val constructor_field:
     ('a, 'b) inlined_constructor -> string -> 'b record_field option
+  (** No Ttype.t because memoization should go into the constructors node, not
+      the variants node. *)
+
   val method_: 'a object_ -> string -> 'a method_ option
+  (** No Ttype.t here because object ttype has no slot for memoization. *)
 end
 (** Find by name. *)
 
