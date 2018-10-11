@@ -1,4 +1,9 @@
 (executables
   (libraries dynt landmarks)
-  (names variant_roundtrip_gen variant_roundtrip_bench)
+  (names
+    variant_roundtrip_gen
+    variant_roundtrip_bench
+    json_roundtrip_gen
+    json_roundtrip_bench
+    )
   (preprocess (pps ppx_expect dynt.ppx landmarks.ppx)))

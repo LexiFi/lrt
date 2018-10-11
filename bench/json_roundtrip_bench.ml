@@ -11,11 +11,12 @@ let filename =
     exit 1
   end
 
-let x = Variant.value_of_variant_in_file ~t filename
+let value = Variant.value_of_variant_in_file ~t filename
 
 let[@landmark "test"] run () =
-  let[@landmark "to_variant"] v = Variant.to_variant ~t x in
-  let[@landmark "of_variant"] x' = Variant.of_variant ~t v in
-  ignore(x')
+  let[@landmark "to_json"] json = Json.to_json ~t value in
+  let[@landmark "of_json"] value' = Json.of_json ~t json in
+  ignore(value')
 
 let _ = List.init 10 (fun _ -> run ())
+

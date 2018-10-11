@@ -9,5 +9,5 @@ let _ =
   in
   print_endline "[";
   let _ = test n ~seed ~generator:(of_type_gen ~size [] ~t) (fun x ->
-      Format.printf "%a;\n" (Print.print ~t) x; true) in
+      Format.printf "%a;\n" Variant.print_variant (Variant.to_variant ~t x); true) in
   print_endline "]"
