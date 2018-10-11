@@ -281,7 +281,7 @@ let to_json ?(ctx=empty_ctx) ~t x =
       end
     | String -> String x
     | Option t ->
-      begin match xtype_of_ttype (Ttype.remove_outer_props t.t), x with
+      begin match Lazy.force (remove_outer_props t).xt, x with
         | Option _, None -> Object ["type", String "None"]
         | Option t, Some (Some x) ->
           Object ["type", String "Some"; "val", to_json t x]
@@ -316,11 +316,11 @@ let to_json ?(ctx=empty_ctx) ~t x =
     | Abstract _ ->
       failwith "TODO: abstract handling + fallback to variant"
 
-  and dyn (Ttype.Dyn (t,x)) =
-    to_json (of_ttype t) x
+  and dyn (Fields.Dyn (t,x)) =
+    to_json t x
 
-  and dyn_named ~name (Ttype.Dyn (t,x)) =
-    ctx.to_json_field name, to_json (of_ttype t) x
+  and dyn_named ~name (Fields.Dyn (t,x)) =
+    ctx.to_json_field name, to_json t x
 
   in to_json (Xtype.of_ttype t) x
 
@@ -346,7 +346,7 @@ let of_json ?(ctx=empty_ctx) ~t x =
     | Float, String "NaN" -> nan
     | String, String x -> x
     | Option t, x ->
-      begin match xtype_of_ttype (Ttype.remove_outer_props t.t) with
+      begin match Lazy.force (remove_outer_props t).xt with
         | Option _ ->
           begin match x with
             | Object l ->

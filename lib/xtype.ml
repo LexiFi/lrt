@@ -113,7 +113,7 @@ module M = struct
     xt
 end
 
-let rec xtype_of_ttype : type a. a Ttype.t -> a xtype = fun t ->
+let[@landmark] rec xtype_of_ttype : type a. a Ttype.t -> a xtype = fun t ->
   (* CAUTION: This must be consistent with core/std.ml *)
   match Ttype.to_stype t with
   | DT_int -> cast_xtype Int
@@ -208,6 +208,19 @@ and object_ methods : 'a object_ =
   let methods = List.mapi prepare methods in { methods }
 
 let of_ttype t = {t; xt = lazy (xtype_of_ttype t)}
+
+let rec remove_outer_props: 'a t -> 'a t = fun t ->
+  match Lazy.force t.xt with
+  | Prop (_, t) -> remove_outer_props t
+  | _ -> t
+
+let rec consume_outer_props acc t =
+  match Lazy.force t.xt with
+  | Prop (p, t) -> consume_outer_props (p @ acc) t
+  | _ -> acc, t
+
+let consume_outer_props : 'a t -> Stype.properties * 'a t =
+  fun t -> consume_outer_props [] t
 
 (* builders *)
 
@@ -357,24 +370,25 @@ module Fields = struct
       | Tag tag -> checked tag el.nth
       | Unboxed -> fun o -> Some (Obj.repr o))
 
+  type dynamic = | Dyn : 'a t * 'a -> dynamic
+
   let map_tuple tup f x =
-    let mapf (Field e) = f (Ttype.Dyn (e.typ.t, tuple tup e x)) in
+    let mapf (Field e) = f (Dyn (e.typ, tuple tup e x)) in
     List.map mapf tup.t_flds
 
   let map_record r f x =
-    let mapf ((name,_), Field e) = f ~name (Ttype.Dyn (e.typ.t, record r e x)) in
+    let mapf ((name,_), Field e) = f ~name (Dyn (e.typ, record r e x)) in
     List.map mapf r.r_flds
 
   let map_regular c f x =
     let mapf (Field e) =
-      f (Ttype.Dyn (e.typ.t, Ext.Option.value_exn (regular_constructor c e x)))
+      f (Dyn (e.typ, Ext.Option.value_exn (regular_constructor c e x)))
     in
     List.map mapf c.rc_flds
 
   let map_inlined c f x =
     let mapf ((name,_), Field e) =
-      f ~name (Ttype.Dyn (e.typ.t,
-                          Ext.Option.value_exn (inlined_constructor c e x)))
+      f ~name (Dyn (e.typ, Ext.Option.value_exn (inlined_constructor c e x)))
     in
     List.map mapf c.ic_flds
 end

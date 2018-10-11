@@ -95,6 +95,9 @@ and 's object_ = private
 val xtype_of_ttype: 'a Ttype.t -> 'a xtype
 val of_ttype: 'a Ttype.t -> 'a t
 
+val remove_outer_props: 'a t -> 'a t
+val consume_outer_props: 'a t -> Stype.properties * 'a t
+
 module Fields : sig
   val tuple : 'a tuple -> ('a, 'b) element -> 'a -> 'b
   val record : 'a record -> ('a, 'b) element -> 'a -> 'b
@@ -103,13 +106,16 @@ module Fields : sig
   val inlined_constructor :
     ('a, 'b) inlined_constructor -> ('b, 'c) element -> 'a -> 'c option
 
-  val map_tuple : 'a tuple -> (Ttype.dynamic -> 'b) -> 'a -> 'b list
+  (** TODO: move this to toplevel *)
+  type dynamic = | Dyn : 'a t * 'a -> dynamic
+
+  val map_tuple : 'a tuple -> (dynamic -> 'b) -> 'a -> 'b list
   val map_record :
-    'a record -> (name:string -> Ttype.dynamic -> 'b) -> 'a -> 'b list
+    'a record -> (name:string -> dynamic -> 'b) -> 'a -> 'b list
   val map_regular : ('a, 'b) regular_constructor ->
-    (Ttype.dynamic -> 'c) -> 'a -> 'c list
+    (dynamic -> 'c) -> 'a -> 'c list
   val map_inlined : ('a, 'b) inlined_constructor ->
-    (name:string -> Ttype.dynamic -> 'c) -> 'a -> 'c list
+    (name:string -> dynamic -> 'c) -> 'a -> 'c list
 end
 (** Read values from tuples, records and constructors. *)
 

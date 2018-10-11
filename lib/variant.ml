@@ -64,8 +64,8 @@ let add_abstract_2 (module M : VARIANTIZABLE_2) =
   | Some name -> Hashtbl.add abstract_variantizers name (T2 (module M))
   | _ -> raise (Invalid_argument "add_abstract: received non abstract type")
 
-let rec to_variant: type a. t: a Ttype.t -> a to_variant = fun ~t x ->
-  match xtype_of_ttype t with
+let rec to_variant: type a. t: a Xtype.t -> a to_variant = fun ~t x ->
+  match Lazy.force t.xt with
   | Unit -> Unit
   | Bool -> Bool x
   | Int -> Int x
@@ -75,10 +75,10 @@ let rec to_variant: type a. t: a Ttype.t -> a to_variant = fun ~t x ->
   | Float -> Float x
   | String -> String x
   | Char -> String (String.make 1 x)
-  | List {t;_} -> List (List.map (to_variant ~t) x)
-  | Array {t;_} -> Array (Array.map (to_variant ~t) x)
-  | Option {t;_} -> Option (Ext.Option.map (to_variant ~t) x)
-  | Lazy {t;_} -> Lazy (lazy (to_variant ~t (Lazy.force x)))
+  | List t -> List (List.map (to_variant ~t) x)
+  | Array t -> Array (Array.map (to_variant ~t) x)
+  | Option t -> Option (Ext.Option.map (to_variant ~t) x)
+  | Lazy t -> Lazy (lazy (to_variant ~t (Lazy.force x)))
   | Tuple tup ->
     Tuple (Fields.map_tuple tup dyn x)
   | Record r ->
@@ -86,7 +86,7 @@ let rec to_variant: type a. t: a Ttype.t -> a to_variant = fun ~t x ->
   | Sum s -> begin match constructor_by_value s x with
       | Constant c -> Constructor (fst c.cc_label, None)
       | Regular ({rc_label; rc_flds = [Field el]; _} as c) ->
-        let arg = to_variant ~t:el.typ.t
+        let arg = to_variant ~t:el.typ
             (Fields.regular_constructor c el x |> Ext.Option.value_exn)
         in Constructor (fst rc_label, Some arg)
       | Regular c ->
@@ -96,11 +96,11 @@ let rec to_variant: type a. t: a Ttype.t -> a to_variant = fun ~t x ->
         let l = Fields.map_inlined c dyn_named x in
         Constructor (fst c.ic_label, Some (Record l))
     end
-  | Prop (_,{t;_}) -> to_variant ~t x
+  | Prop (_,t) -> to_variant ~t x
   | Object _ -> failwith "Objects cannot be variantized"
   | Function _ -> failwith "Functions cannot be variantized"
   | Abstract (name, _) ->
-    let (module B) = Unify.t0 t
+    let (module B) = Unify.t0 t.t
     and (module P) = Unify.init ~modulo_props:false in
     let rec use_first = function
       | [] ->
@@ -116,22 +116,24 @@ let rec to_variant: type a. t: a Ttype.t -> a to_variant = fun ~t x ->
           | T1 (module A : VARIANTIZABLE_1) -> begin
               try
                 let module U = Unify.U1 (P) (A) (B) in
-                let t1 = to_variant ~t:U.a_t in
+                let t1 = to_variant ~t:(of_ttype U.a_t) in
                 let TypEq.Eq = U.eq in A.to_variant t1 x
               with Unify.Not_unifiable -> use_first tl end
           | T2 (module A : VARIANTIZABLE_2) -> begin
               try
                 let module U = Unify.U2 (P) (A) (B) in
-                let t1 = to_variant ~t:U.a_t in
-                let t2 = to_variant ~t:U.b_t in
+                let t1 = to_variant ~t:(of_ttype U.a_t) in
+                let t2 = to_variant ~t:(of_ttype U.b_t) in
                 let TypEq.Eq = U.eq in A.to_variant t1 t2 x
               with Unify.Not_unifiable -> use_first tl end
         end
     in
     use_first (Hashtbl.find_all abstract_variantizers name) ;
 
-and dyn = fun (Ttype.Dyn (t,x)) -> to_variant ~t x
-and dyn_named = fun ~name (Ttype.Dyn (t,x)) -> name, to_variant ~t x
+and dyn = fun (Fields.Dyn (t,x)) -> to_variant ~t x
+and dyn_named = fun ~name (Fields.Dyn (t,x)) -> name, to_variant ~t x
+
+let to_variant ~t v = to_variant ~t:(Xtype.of_ttype t) v
 
 exception Bad_type_for_variant of Stype.t * t * string
 
@@ -188,12 +190,12 @@ let assoc_consume key lst =
 let variant_of_string = Variant_lexer.variant_of_string
 let variant_of_file = Variant_lexer.variant_of_file
 
-let rec of_variant: type a. t: a Ttype.t -> Stype.properties -> a of_variant =
+let rec of_variant: type a. t: a Xtype.t -> Stype.properties -> a of_variant =
   fun ~t properties v ->
-    let fw_packed = bad_variant t v in
+    let fw_packed = bad_variant t.t v in
     let { failwith = bad_variant } = fw_packed in
     (* TODO: experiment, whether recursion on xtype is faster *)
-    try match xtype_of_ttype t, v with
+    try match Lazy.force t.xt, v with
       | Unit, Unit -> ()
       | Bool, Bool x -> x
       | Float, Float x -> x
@@ -205,10 +207,10 @@ let rec of_variant: type a. t: a Ttype.t -> Stype.properties -> a of_variant =
       | Char, String x ->
           if String.length x = 1 then String.get x 0 else
           bad_variant ("single character string expected")
-      | List {t;_}, List x -> List.map (of_variant [] ~t) x
-      | Array {t;_}, Array x -> Array.map (of_variant [] ~t) x
-      | Option {t;_}, Option x -> Ext.Option.map (of_variant [] ~t) x
-      | Lazy {t;_}, Lazy l -> lazy (of_variant [] ~t (Lazy.force l))
+      | List t, List x -> List.map (of_variant [] ~t) x
+      | Array t, Array x -> Array.map (of_variant [] ~t) x
+      | Option t, Option x -> Ext.Option.map (of_variant [] ~t) x
+      | Lazy t, Lazy l -> lazy (of_variant [] ~t (Lazy.force l))
       | Tuple tup, Tuple l ->
         Builder.tuple tup (field_builder fw_packed l)
       | Record r, Record l ->
@@ -250,10 +252,10 @@ let rec of_variant: type a. t: a Ttype.t -> Stype.properties -> a of_variant =
         in use_first None s.cstrs
       (* accumulate properties TODO: which order is correct?*)
       | Prop _, v ->
-        let props, t = Ttype.consume_outer_props t in
+        let props, t = Xtype.consume_outer_props t in
         of_variant props ~t v
       | Abstract (name, _), v ->
-        let (module B) = Unify.t0 t
+        let (module B) = Unify.t0 t.t
         and (module P) = Unify.init ~modulo_props:false in
         let rec use_first : variantizable list -> a = function
           | [] -> failwith (
@@ -268,14 +270,14 @@ let rec of_variant: type a. t: a Ttype.t -> Stype.properties -> a of_variant =
               | T1 (module A : VARIANTIZABLE_1) -> begin
                   try
                     let module U = Unify.U1 (P) (A) (B) in
-                    let t1 = of_variant [] ~t:U.a_t in
+                    let t1 = of_variant [] ~t:(of_ttype U.a_t) in
                     let TypEq.Eq = U.eq in A.of_variant fw_packed t1 v
                   with Unify.Not_unifiable -> use_first tl end
               | T2 (module A : VARIANTIZABLE_2) -> begin
                   try
                     let module U = Unify.U2 (P) (A) (B) in
-                    let t1 = of_variant [] ~t:U.a_t
-                    and t2 = of_variant [] ~t:U.b_t in
+                    let t1 = of_variant [] ~t:(of_ttype U.a_t)
+                    and t2 = of_variant [] ~t:(of_ttype U.b_t) in
                     let TypEq.Eq = U.eq in A.of_variant fw_packed t1 t2 v
                   with Unify.Not_unifiable -> use_first tl end
             end
@@ -307,7 +309,7 @@ let rec of_variant: type a. t: a Ttype.t -> Stype.properties -> a of_variant =
         | Some (uid, reduced_props) ->
           let open Custom_of in
           let Of_variant (t', custom, name_opt) = get uid in
-          match Ttype.equality_modulo_props t t' with
+          match Ttype.equality_modulo_props t.t t' with
           | None -> failwith "Broken invariant in of_variant_custom registry"
           | Some (TypEq.Eq) ->
             match custom v with
@@ -325,7 +327,7 @@ and field_builder: type a. failwith -> t list -> a Builder.t =
     let arr = Array.of_list lst in
     let len = Array.length arr in
     let mk {nth; typ} =
-      if nth < len then of_variant ~t:typ.t [] arr.(nth)
+      if nth < len then of_variant ~t:typ [] arr.(nth)
       else failwith "tuple length mismatch"
     in {mk}
 and record_field_builder:
@@ -335,7 +337,7 @@ and record_field_builder:
     let rec mk (name, props) el =
       (* When lst is in the correct order, it is traversed only once. *)
       match assoc_consume name !lref with
-      | Some (v, newlst) -> lref := newlst; of_variant [] ~t:el.typ.t v
+      | Some (v, newlst) -> lref := newlst; of_variant [] ~t:el.typ v
       | None ->
         (* Record field <name> not found in variant. Check old_name. *)
         match assoc_consume "of_variant_old_name" props with
@@ -346,7 +348,7 @@ and record_field_builder:
           match assoc_consume "of_variant_default" props with
           | Some (default, _reduced_props) -> begin
               try
-                of_variant [] ~t:el.typ.t (variant_of_string default)
+                of_variant [] ~t:el.typ (variant_of_string default)
               with
               | Variant_parser {msg; text; loc} ->
                 raise (Variant_parser
@@ -361,7 +363,7 @@ and record_field_builder:
 and bad_variant : type a. a Ttype.t -> t -> failwith = fun t v ->
   { failwith = fun s -> raise (Bad_type_for_variant(Ttype.to_stype t, v, s)) }
 
-let of_variant ~t x = of_variant ~t [] x
+let of_variant ~t x = of_variant ~t:(of_ttype t) [] x
 
 let of_variant_mapper ?name ~t mapper =
   let custom v =
