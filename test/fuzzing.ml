@@ -56,3 +56,33 @@ let () =
   | Succeed _ -> ()
   | Throw {backtrace;_} -> failwith backtrace
   | Fail _ -> print_endline "test failed"
+
+(* json *)
+
+let f : Ttype.dynamic -> bool =
+  function Ttype.Dyn (t,x) ->
+    let j = Json.to_json ~t x in
+    let () =
+      Format.printf "Value: %a\n%!" (Print.print ~t) x;
+      Format.printf "Json: %s\n%!" (Json.to_pretty_string j)
+    in
+    let x' = Json.of_json ~t j in
+    let s = Json.encode j in
+    let j' =
+      try Json.decode s
+      with r -> Printf.eprintf "Json.decode:\n%s\n%!" s; raise r
+    in
+    let x'' = Json.of_json ~t j' in
+    let r = compare x x' = 0 && compare x' x'' = 0 && compare j j' = 0 in
+    if not r then
+      Format.printf "Screwed:\nv': %s\nx'': %a\n%!"
+        (Json.to_pretty_string j')
+        (Print.print ~t) x''
+  ; r
+
+let () =
+  let seed = 3 * seed in
+  match test n ~seed ~generator:(dynamic ~size:22 []) f with
+  | Succeed _ -> ()
+  | Throw {backtrace;_} -> failwith backtrace
+  | Fail _ -> print_endline "test failed"

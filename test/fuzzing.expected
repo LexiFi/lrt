@@ -627,3 +627,352 @@ Value: 5.79025737941265186e-10
 Variant: 5.79025737941265186e-10
 Value: 1
 Variant: 1
+Value: true
+Json: true
+Value: [26633097.7901816368; 2.92901493608951593e-06; 0.00345516062341630478;
+         1770182.00047314167; 1643.79129186272621; nan;
+         6.93192749284207792e-20; 50626713782.5489044; 996.726831421256]
+Json: [
+  26633097.7901816368,
+  2.92901493608951593e-06,
+  0.00345516062341630478,
+  1770182.00047314167,
+  1643.79129186272621,
+  "NaN",
+  6.93192749284207792e-20,
+  50626713782.5489044,
+  996.726831421256
+]
+Value: ()
+Json: {}
+Value: MMMMMMM {m____ = "X"; m___ = (false, 5575032.06, -6); m = -10; m_ = 3}
+Json: {
+  type: "MMMMMMM",
+  m____: "X",
+  m___: [
+          false,
+          5575032.06,
+          -6
+        ],
+  m: -10,
+  m_: 3
+}
+Value: [1.2686396669596434e-17; 48962031.7704975531; 9.108968889340758e-15]
+Json: [
+  1.2686396669596434e-17,
+  48962031.7704975531,
+  9.108968889340758e-15
+]
+Value: Some false
+Json: false
+Value: false
+Json: false
+Value: "KM"
+Json: "KM"
+Value: "Y=Z??"
+Json: "Y=Z??"
+Value: L___
+Json: {
+  type: "L___"
+}
+Value: false
+Json: false
+Value: true
+Json: true
+Value: 5.95918454229831766e-10
+Json: 5.95918454229831766e-10
+Value: "YK?;b<RFO"
+Json: "YK?;b<RFO"
+Value: true
+Json: true
+Value: "@"
+Json: "@"
+Value: MMM ("QO", "RXVVV")
+Json: {
+  type: "MMM",
+  val: [
+         "QO",
+         "RXVVV"
+       ]
+}
+Value: L____
+Json: {
+  type: "L____"
+}
+Value: 66804909.3335866928
+Json: 66804909.3335866928
+Value: true
+Json: true
+Value: 12
+Json: 12
+Value: "RY"
+Json: "RY"
+Value: {pNNNNN = 48873.4298385679722; k____ = 0.365889506414532661}
+Json: {
+  pNNNNN: 48873.4298385679722,
+  k____: 0.365889506414532661
+}
+Value: 456246297806501.375
+Json: 456246297806501.375
+Value: -5
+Json: -5
+Value: 9.49637303128838472e-14
+Json: 9.49637303128838472e-14
+Value: false
+Json: false
+Value: -21
+Json: -21
+Value: "HZV"
+Json: "HZV"
+Value: false
+Json: false
+Value: 1.99349330738186838e-11
+Json: 1.99349330738186838e-11
+Value: false
+Json: false
+Value: 11
+Json: 11
+Value: "XG["
+Json: "XG["
+Value: 8.64289526827633357e+18
+Json: 8.64289526827633357e+18
+Value: true
+Json: true
+Value: Some 0
+Json: 0
+Value: true
+Json: true
+Value: "W\\\\LR"
+Json: "W\\\\LR"
+Value: false
+Json: false
+Value: 32292579300.7016182
+Json: 32292579300.7016182
+Value: -1
+Json: -1
+Value: (-2, 668637.482449412346)
+Json: [
+  -2,
+  668637.482449412346
+]
+Value: 5.56584011763334316e-14
+Json: 5.56584011763334316e-14
+Value: 19
+Json: 19
+Value: 4
+Json: 4
+Value: K
+        {t____ = "";
+        koooo = [|false; true; true; false; false|];
+        j44 = 2.605819385e-09;
+        jqqqq = true;
+        iOOOO = "KVNXI"}
+Json: {
+  type: "K",
+  t____: "",
+  koooo: [
+           false,
+           true,
+           true,
+           false,
+           false
+         ],
+  j44: 2.605819385e-09,
+  jqqqq: true,
+  iOOOO: "KVNXI"
+}
+Value: (true, false, infinity, 17)
+Json: [
+  true,
+  false,
+  "Infinity",
+  17
+]
+Value: "@JATD=>BSKG"
+Json: "@JATD=>BSKG"
+Value: 7298259735107422.
+Json: 7298259735107422.0
+Value: "B_"
+Json: "B_"
+Value: -16
+Json: -16
+Value: false
+Json: false
+Value: true
+Json: true
+Value: -20
+Json: -20
+Value: ()
+Json: {}
+Value: "HdWGX["
+Json: "HdWGX["
+Value: 13
+Json: 13
+Value: "H<^:bD"
+Json: "H<^:bD"
+Value: ()
+Json: {}
+Value: true
+Json: true
+Value: "KN[Q"
+Json: "KN[Q"
+Value: 0.0928188215941190831
+Json: 0.0928188215941190831
+Value: J_____ (false, 10, [||], 4, -5)
+Json: {
+  type: "J_____",
+  val: [
+         false,
+         10,
+         [],
+         4,
+         -5
+       ]
+}
+Value: true
+Json: true
+Value: 75093391165137.3
+Json: 75093391165137.3
+Value: {j = 6.7213739082217218e+19;
+        iooo = true;
+        gUUUUU = true;
+        e777 = false;
+        t2222 = 0.0042758971732109784}
+Json: {
+  j: 6.7213739082217218e+19,
+  iooo: true,
+  gUUUUU: true,
+  e777: false,
+  t2222: 0.0042758971732109784
+}
+Value: ()
+Json: {}
+Value: false
+Json: false
+Value: true
+Json: true
+Value: "b"
+Json: "b"
+Value: 1276912.71714866161
+Json: 1276912.71714866161
+Value: true
+Json: true
+Value: 6.04852897115051644e-15
+Json: 6.04852897115051644e-15
+Value: 2.20189846120774765e-15
+Json: 2.20189846120774765e-15
+Value: false
+Json: false
+Value: "X@bSFNaSL\\N"
+Json: "X@bSFNaSL\\N"
+Value: "<H[IOE^Z"
+Json: "<H[IOE^Z"
+Value: {tGG = false; mTT = ""}
+Json: {
+  tGG: false,
+  mTT: ""
+}
+Value: infinity
+Json: "Infinity"
+Value: Some None
+Json: {
+  type: "Some"
+}
+Value: "[]M:LXY"
+Json: "[]M:LXY"
+Value: None
+Json: null
+Value: 2.96909138560295034e-21
+Json: 2.96909138560295034e-21
+Value: -3
+Json: -3
+Value: 6.71291369944810954e-15
+Json: 6.71291369944810954e-15
+Value: SLLLL
+Json: {
+  type: "SLLLL"
+}
+Value: -6
+Json: -6
+Value: 16
+Json: 16
+Value: OQQQQQ
+        {h2222 = 10;
+        b = O__ [2];
+        tCCCC = [true; false];
+        m = false;
+        n = 7}
+Json: {
+  type: "OQQQQQ",
+  h2222: 10,
+  b: {
+       type: "O__",
+       val: [
+              [
+                2
+              ]
+            ]
+     },
+  tCCCC: [
+           true,
+           false
+         ],
+  m: false,
+  n: 7
+}
+Value: 2.42446005344390869
+Json: 2.42446005344390869
+Value: false
+Json: false
+Value: 8030862659.21592712
+Json: 8030862659.21592712
+Value: [false; true; false; false]
+Json: [
+  false,
+  true,
+  false,
+  false
+]
+Value: -19
+Json: -19
+Value: 21
+Json: 21
+Value: -15
+Json: -15
+Value: [|10; 4|]
+Json: [
+  10,
+  4
+]
+Value: -7
+Json: -7
+Value: false
+Json: false
+Value: 4.62985669262707185e-21
+Json: 4.62985669262707185e-21
+Value: 7.27751199156046e-16
+Json: 7.27751199156046e-16
+Value: 3.18317547440528871e-05
+Json: 3.18317547440528871e-05
+Value: true
+Json: true
+Value: Uaaa {w = 99984.2789; vhhhhhh = None; h______ = -3; mDDDDD = nan}
+Json: {
+  type: "Uaaa",
+  w: 99984.2789,
+  vhhhhhh: null,
+  h______: -3,
+  mDDDDD: "NaN"
+}
+Value: true
+Json: true
+Value: 11
+Json: 11
+Value: 0.0336226718500256538
+Json: 0.0336226718500256538
+Value: -20
+Json: -20
+Value: -19
+Json: -19
+Value: "bEDQ"
+Json: "bEDQ"

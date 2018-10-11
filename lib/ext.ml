@@ -12,6 +12,26 @@ module List_ = struct
       | ";" -> List.iter (fun e -> Format.pp_print_char ppf ';'; Format.pp_print_space ppf (); pp ppf e) es
       | _ -> List.iter (fun e -> Format.pp_print_string ppf sep; Format.pp_print_space ppf (); pp ppf e) es
 
+  let to_string sep f = function
+    | [] -> ""
+    | hd :: tl ->
+      let seplen = String.length sep in
+      let rec aux len = function
+        | [] -> Bytes.create len
+        | hd :: tl ->
+          let s = f hd in
+          let slen = String.length s in
+          let buf = aux (len + seplen + slen) tl in
+          Bytes.blit_string sep 0 buf len seplen;
+          Bytes.blit_string s 0 buf (len + seplen) slen;
+          buf
+      in
+      let s = f hd in
+      let slen = String.length s in
+      let buf = aux slen tl in
+      Bytes.blit_string s 0 buf 0 slen;
+      Bytes.to_string buf
+
   let rec fst_n acc n = function
     | [] -> List.rev acc, []
     | l when n = 0 -> List.rev acc, l
@@ -133,6 +153,177 @@ module String = struct
     let l = String.length s in
     if l <= i then ""
     else String.sub s 0 (l - i)
+
+  let rec sub_equal_aux_case_sensitive pat i s j n =
+    n = 0 || (String.unsafe_get pat i = String.unsafe_get s j && sub_equal_aux_case_sensitive pat (i + 1) s (j + 1) (n - 1))
+
+  let rec sub_equal_aux_case_insensitive pat i s j n =
+    n = 0 || (Char.uppercase_ascii (String.unsafe_get pat i) = Char.uppercase_ascii (String.unsafe_get s j) && sub_equal_aux_case_insensitive pat (i + 1) s (j + 1) (n - 1))
+
+  let sub_equal_aux ?(case_insensitive=false) pat i s j n =
+    if case_insensitive then sub_equal_aux_case_insensitive pat i s j n
+    else sub_equal_aux_case_sensitive pat i s j n
+
+  let sub_equal ?case_insensitive ~pattern s i =
+    0 <= i && i + String.length pattern <= String.length s && sub_equal_aux ?case_insensitive pattern 0 s i (String.length pattern)
+
+  let string_start ?case_insensitive ~pattern s = sub_equal ?case_insensitive ~pattern s 0
+
+  let string_end ?case_insensitive ~pattern s = sub_equal ?case_insensitive ~pattern s (String.length s - String.length pattern)
+
+  let buffer_add_unicode_escape =
+    let conv = "0123456789abcdef" in
+    fun b c ->
+      Buffer.add_char b '\\';
+      Buffer.add_char b 'u';
+      Buffer.add_char b conv.[(c lsr 12) land 0xf];
+      Buffer.add_char b conv.[(c lsr 8) land 0xf];
+      Buffer.add_char b conv.[(c lsr 4) land 0xf];
+      Buffer.add_char b conv.[c land 0xf]
+
+  (* Code taken from js_of_ocaml. *)
+  let js_string_escaping ?(utf8=false) s =
+    let l = String.length s in
+    let b = Buffer.create (4 * l) in
+    let i = ref 0 in
+    while !i < l do
+      let c = s.[!i] in
+      begin match c with
+        (*  '\000' when i = l - 1 || s.[i + 1] < '0' || s.[i + 1] > '9' ->
+            Buffer.add_string b "\\0" *)
+        | '\b' ->
+          Buffer.add_string b "\\b"
+        | '\t' ->
+          Buffer.add_string b "\\t"
+        | '\n' ->
+          Buffer.add_string b "\\n"
+        (* This escape sequence is not supported by IE < 9
+            | '\011' ->
+                Buffer.add_string b "\\v"
+        *)
+        | '\012' ->
+          Buffer.add_string b "\\f"
+        | '\r' ->
+          Buffer.add_string b "\\r"
+        | '\"' ->
+          Buffer.add_string b "\\\""
+        | '\\' ->
+          Buffer.add_string b "\\\\"
+        | '\000' .. '\031' | '\'' | '\127' .. '\255' ->
+          let c =
+            if utf8 then
+              let cp = Utf8.next s i in
+              decr i;
+              Uchar.to_int cp
+            else
+              Char.code c
+          in
+          if c <= 0xFFFF then
+            buffer_add_unicode_escape b c
+          else begin
+            let c = c - 0x1_0000 in
+            let high_surrogate = (c lsr 10) land 0b11_1111_1111 + 0xD800 in
+            let low_surrogate = c land 0b11_1111_1111 + 0xDC00 in
+            buffer_add_unicode_escape b high_surrogate;
+            buffer_add_unicode_escape b low_surrogate;
+          end
+        | _ ->
+          Buffer.add_char b c;
+      end;
+      incr i
+    done;
+    Buffer.contents b
+
+  let hex_digit = function
+    | '0'..'9' as c -> Char.code c - Char.code '0'
+    | 'a'..'f' as c -> 10 + (Char.code c - Char.code 'a')
+    | 'A'..'F' as c -> 10 + (Char.code c - Char.code 'A')
+    | _ -> raise (Invalid_argument "of_hex")
+
+  let char_to_hex_const =
+    [|
+      "00"; "01"; "02"; "03"; "04"; "05"; "06"; "07"; "08"; "09"; "0a"; "0b"; "0c"; "0d"; "0e"; "0f";
+      "10"; "11"; "12"; "13"; "14"; "15"; "16"; "17"; "18"; "19"; "1a"; "1b"; "1c"; "1d"; "1e"; "1f";
+      "20"; "21"; "22"; "23"; "24"; "25"; "26"; "27"; "28"; "29"; "2a"; "2b"; "2c"; "2d"; "2e"; "2f";
+      "30"; "31"; "32"; "33"; "34"; "35"; "36"; "37"; "38"; "39"; "3a"; "3b"; "3c"; "3d"; "3e"; "3f";
+      "40"; "41"; "42"; "43"; "44"; "45"; "46"; "47"; "48"; "49"; "4a"; "4b"; "4c"; "4d"; "4e"; "4f";
+      "50"; "51"; "52"; "53"; "54"; "55"; "56"; "57"; "58"; "59"; "5a"; "5b"; "5c"; "5d"; "5e"; "5f";
+      "60"; "61"; "62"; "63"; "64"; "65"; "66"; "67"; "68"; "69"; "6a"; "6b"; "6c"; "6d"; "6e"; "6f";
+      "70"; "71"; "72"; "73"; "74"; "75"; "76"; "77"; "78"; "79"; "7a"; "7b"; "7c"; "7d"; "7e"; "7f";
+      "80"; "81"; "82"; "83"; "84"; "85"; "86"; "87"; "88"; "89"; "8a"; "8b"; "8c"; "8d"; "8e"; "8f";
+      "90"; "91"; "92"; "93"; "94"; "95"; "96"; "97"; "98"; "99"; "9a"; "9b"; "9c"; "9d"; "9e"; "9f";
+      "a0"; "a1"; "a2"; "a3"; "a4"; "a5"; "a6"; "a7"; "a8"; "a9"; "aa"; "ab"; "ac"; "ad"; "ae"; "af";
+      "b0"; "b1"; "b2"; "b3"; "b4"; "b5"; "b6"; "b7"; "b8"; "b9"; "ba"; "bb"; "bc"; "bd"; "be"; "bf";
+      "c0"; "c1"; "c2"; "c3"; "c4"; "c5"; "c6"; "c7"; "c8"; "c9"; "ca"; "cb"; "cc"; "cd"; "ce"; "cf";
+      "d0"; "d1"; "d2"; "d3"; "d4"; "d5"; "d6"; "d7"; "d8"; "d9"; "da"; "db"; "dc"; "dd"; "de"; "df";
+      "e0"; "e1"; "e2"; "e3"; "e4"; "e5"; "e6"; "e7"; "e8"; "e9"; "ea"; "eb"; "ec"; "ed"; "ee"; "ef";
+      "f0"; "f1"; "f2"; "f3"; "f4"; "f5"; "f6"; "f7"; "f8"; "f9"; "fa"; "fb"; "fc"; "fd"; "fe"; "ff";
+    |]
+
+  let char_to_hex c = Array.unsafe_get char_to_hex_const (Char.code c)
+
+  let to_hex s =
+    let len = String.length s in
+    let res = Bytes.create (len * 2) in
+    for i = 0 to len - 1 do
+      Bytes.blit_string (char_to_hex s.[i]) 0 res (2 * i) 2
+    done;
+    Bytes.unsafe_to_string res
+
+  let hex_in_string s i =
+    Char.chr ((hex_digit s.[i] lsl 4) + hex_digit s.[i + 1])
+
+  let of_hex s =
+    let len = String.length s in
+    if len mod 2 = 1 then raise (Invalid_argument "of_hex");
+    let len = len / 2 in
+    let res = Bytes.create len in
+    for i = 0 to len - 1 do Bytes.set res i (hex_in_string s (2 * i)) done;
+    Bytes.unsafe_to_string res
+
+  let url_encode ?(is_uri_component=false) s =
+    let n = String.length s in
+    let b = Buffer.create (n * 2) in
+    for i = 0 to n - 1 do
+      match s.[i] with
+      | 'A'..'Z' | 'a'..'z' | '0'..'9'
+      | '-' | '_' | '.' | '~' (* url_special_chars *)
+      | '!' | '*' | '\'' | '(' | ')' as c  (* url_reserved_chars allowed in uri components*) ->  Buffer.add_char b c
+      | '$' | '&' | '+' | ',' | '/' | ':' | ';' | '=' | '?' | '@' | '#' | '[' | ']' as c (* url_reserved_chars encoded in uri_components*) when not is_uri_component-> Buffer.add_char b c
+      | c -> Buffer.add_string b (String.uppercase_ascii ("%" ^ char_to_hex c))
+    done;
+    Buffer.contents b
+
+  let url_decode ?(is_query_string_value=false) s =
+    let n = String.length s in
+    let rec simple_string i =
+      if i < n then begin
+        match s.[i] with
+        | '%' | '+' ->
+          let buf = Buffer.create n in
+          Buffer.add_substring buf s 0 i;
+          decode_string buf i
+        | _ -> simple_string (i+1)
+      end else s
+    and decode_string buf i =
+      if i < n then begin
+        match s.[i] with
+        | '+' when is_query_string_value ->
+          Buffer.add_char buf ' ';
+          decode_string buf (i + 1)
+        | '%' when i + 2 < n ->
+          begin match hex_in_string s (i + 1) with
+            | s ->
+              Buffer.add_char buf s;
+              decode_string buf (i + 3)
+            | exception (Invalid_argument _) ->
+              Buffer.add_char buf s.[i];
+              decode_string buf (i + 1)
+          end
+        | c -> Buffer.add_char buf c; decode_string buf (i + 1)
+      end else Buffer.contents buf
+    in
+    simple_string 0
 
   module Tbl = struct
     (* TODO: heuristic to delay building the dispatch table until N lookups occured

@@ -8,6 +8,7 @@ module Path = Path
 module Print = Print
 module Check = Check
 module Variant = Variant
+module Json = Json
 module Std = Std
 
 type stype = Stype.t

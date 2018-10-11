@@ -74,7 +74,7 @@ let rec to_variant: type a. t: a Ttype.t -> a to_variant = fun ~t x ->
   | Nativeint -> String (Nativeint.to_string x)
   | Float -> Float x
   | String -> String x
-  | Char -> String (Printf.sprintf "%c" x)
+  | Char -> String (String.make 1 x)
   | List {t;_} -> List (List.map (to_variant ~t) x)
   | Array {t;_} -> Array (Array.map (to_variant ~t) x)
   | Option {t;_} -> Option (Ext.Option.map (to_variant ~t) x)
@@ -192,6 +192,7 @@ let rec of_variant: type a. t: a Ttype.t -> Stype.properties -> a of_variant =
   fun ~t properties v ->
     let fw_packed = bad_variant t v in
     let { failwith = bad_variant } = fw_packed in
+    (* TODO: experiment, whether recursion on xtype is faster *)
     try match xtype_of_ttype t, v with
       | Unit, Unit -> ()
       | Bool, Bool x -> x
@@ -213,6 +214,7 @@ let rec of_variant: type a. t: a Ttype.t -> Stype.properties -> a of_variant =
       | Record r, Record l ->
         Builder.record r (record_field_builder fw_packed l)
       | Sum s, Constructor (name, args) ->
+        (* TODO: this might first try Xtype.Lookup *)
         let handle_constr c = match c, args with
           | Constant c, None -> Builder.constant_constructor c
           | Regular c, Some (Tuple l) ->
