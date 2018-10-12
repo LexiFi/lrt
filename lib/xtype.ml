@@ -437,17 +437,32 @@ module Fields = struct
     List.map mapf r.r_flds
 
   let map_regular c f x =
-    (* This one and the following check the Tag to often *)
-    let mapf (Field e) =
-      f (Dyn (e.typ, Ext.Option.value_exn (regular_constructor c e x)))
-    in
-    List.map mapf c.rc_flds
+    let o = Obj.repr x in
+    match c.rc_repr, c.rc_flds with
+    | Tag tag, flds ->
+      if check tag o then begin
+        let mapf i (Field e) =
+          f (Dyn (e.typ, Obj.magic (Obj.field o i)))
+        in List.mapi mapf flds
+      end else
+        raise (Invalid_argument
+                 "Fields.map_regular: value/constructor mismatch")
+    | Unboxed, [Field e] -> [f (Dyn (e.typ, Obj.magic x))]
+    | Unboxed, _ -> assert false
 
   let map_inlined c f x =
-    let mapf ((name,_), Field e) =
-      f ~name (Dyn (e.typ, Ext.Option.value_exn (inlined_constructor c e x)))
-    in
-    List.map mapf c.ic_flds
+    let o = Obj.repr x in
+    match c.ic_repr, c.ic_flds with
+    | Tag tag, flds ->
+      if check tag o then begin
+        let mapf i ((name,_), Field e) =
+          f ~name (Dyn (e.typ, Obj.magic (Obj.field o i)))
+        in List.mapi mapf flds
+      end else
+        raise (Invalid_argument
+                 "Fields.map_inlined: value/constructor mismatch")
+    | Unboxed, [(name,_), Field e] -> [f ~name (Dyn (e.typ, Obj.magic x))]
+    | Unboxed, _ -> assert false
 end
 
 let call_method: 'a object_ -> ('a, 'b) element -> 'a -> 'b =
