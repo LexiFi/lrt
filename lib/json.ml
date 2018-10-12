@@ -292,12 +292,6 @@ let to_json ?(ctx=empty_ctx) ~t x =
       end
     | List t -> Array (List.map (to_json t) x)
     | Array t -> Array (Ext.Array.map_to_list (to_json t) x)
-    | Lazy t -> to_json t (Lazy.force x)
-    (* TODO: avoid indirection via variant *)
-    | Char -> to_json variant_xt (Variant.to_variant ~t:[%t: char] x)
-    | Int32 -> to_json variant_xt (Variant.to_variant ~t:[%t: int32] x)
-    | Int64 -> to_json variant_xt (Variant.to_variant ~t:[%t: int64] x)
-    | Nativeint -> to_json variant_xt (Variant.to_variant ~t:[%t: nativeint] x)
     | Tuple tup -> Array (Fields.map_tuple tup dyn x)
     | Record r -> Object (Fields.map_record r dyn_named x)
     | Sum s ->
@@ -311,8 +305,14 @@ let to_json ?(ctx=empty_ctx) ~t x =
         | Inlined c ->
           fst c.ic_label, Fields.map_inlined c dyn_named x
       in Object (("type", String name) :: obj_flds)
-    | Object _ -> failwith "Json: objects not supported"
+    | Lazy t -> to_json t (Lazy.force x)
     | Function _ -> failwith "Json: functions not supported"
+    (* TODO: avoid indirection via variant *)
+    | Char -> to_json variant_xt (Variant.to_variant ~t:[%t: char] x)
+    | Int32 -> to_json variant_xt (Variant.to_variant ~t:[%t: int32] x)
+    | Int64 -> to_json variant_xt (Variant.to_variant ~t:[%t: int64] x)
+    | Nativeint -> to_json variant_xt (Variant.to_variant ~t:[%t: nativeint] x)
+    | Object _ -> failwith "Json: objects not supported"
     | Abstract _ ->
       failwith "TODO: abstract handling + fallback to variant"
 
