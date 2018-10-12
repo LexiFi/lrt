@@ -9,11 +9,18 @@ module Step : sig
      The total order on symbols, together with the invariant that each symbol
      has a fixed arity, can be used to implement the discrimination tree below.
 
-     Unfortunately, [Stype.t] does not carry an identifier of the symbol, thus
-     things are a bit complicated. We attempt to read something symbol-like by
-     extracting relevant top-level information and return more stypes for
-     recursion than theoretically necessary. The recursion into the stype is
-     thereby delayed.
+     This implements a total order on stypes. It assumes, that abstract names
+     and [rec_name] of [DT_node]'s are unique identifiers. Further, recursion
+     for [DT_node]'s happens only on [rec_args], not on all types of all fields.
+     This makes the implementation faster, but stands in contrast to
+     [Stype.equality].
+
+     TODO: reduce string comparison to int using [Ext.String.Tbl].
+     Therefore, accumulate names during construction of the tree. On unification
+     time, lookup the name in the table to obtain an integer. Use this integer
+     for the total order.
+
+     TODO: Extend stype with an integer symbol identifier to avoid all overhead.
   *)
 
   type t
@@ -26,32 +33,16 @@ module Step : sig
   val of_stype : modulo_props: bool -> Stype.t -> maybe_free
 end = struct
   type base = | Int | Float | String | Array | List | Option | Arrow
+
+  (* TODO: avoid construction of intermediate values and compare stypes
+     directly. *)
+
   type t =
     | Base of base
     | Tuple of int
     | Props of Stype.properties
-    | Abstract of int * string (* arity, name *)
-    | Record of string * Stype.record_repr * (string * Stype.properties) list
-    | Variant of string * Stype.variant_repr * (string * Stype.properties) list
+    | Named of string (* arity, name -- used for abstract & dt_node *)
     | Object of string list (* method names *)
-
-  let ignore_props modulo_props =
-    if modulo_props then fun _p -> [] else fun p -> p
-
-  let map_record ~modulo_props name flds repr =
-    let ig = ignore_props modulo_props in
-    let flds, stypes = List.fold_left (fun (flds, stypes) (name, prop, s) ->
-        ((name, ig prop) :: flds, s :: stypes)) ([], []) flds
-    in Record (name, repr, flds), stypes
-
-  let map_variant ~modulo_props name cstrs repr =
-    let ig = ignore_props modulo_props in
-    let cstrs, tys = List.fold_left (fun (cstrs, tys) (name, prop, args) ->
-        let s = match ( args : _ Stype.variant_args ) with
-          | C_tuple stypes -> Stype.DT_tuple stypes
-          | C_inline stype -> stype
-        in ((name, ig prop) :: cstrs, s :: tys)) ([], []) cstrs
-    in Variant (name, repr, cstrs), tys
 
   type maybe_free =
     | Step of t * Stype.t list
@@ -69,29 +60,9 @@ end = struct
       | DT_prop (_, s) when modulo_props -> of_stype ~modulo_props s
       | DT_prop (p, s) -> Step (Props p, [s])
       | DT_tuple l -> Step (Tuple (List.length l), l)
-      | DT_abstract (name, args) ->
-        Step (Abstract (List.length args, name), args)
-      | DT_node { rec_descr = DT_record {record_fields; record_repr}
-                ; rec_name; _ } ->
-        let step, types = map_record ~modulo_props
-            rec_name record_fields record_repr
-        in Step (step, types)
-        (* TODO: We take all types of all fields and return them for recursion.
-           It would be smarter to return only rec_args. But how can we identify
-           the record without inspecting the types of all fields? *)
-        (* TODO: The same record can be defined twice in different modules.
-           This function then yield the same step and as a consequence the
-           two records would falsely unify. Solution: insert unique ids on
-           [@@deriving t] for (at least) variants, records and abstract types.
-           These ids should identify the symbol in the type language. Comparison
-           of steps would reduce two the comparison of two ids. Extraction of
-           stype arguments would reduce to returning rec_args. *)
-        (* The same argument/problems apply to abstract/variant/object. *)
-      | DT_node { rec_descr = DT_variant {variant_constrs; variant_repr}
-                ; rec_name; _ } ->
-        let step, types = map_variant ~modulo_props
-            rec_name variant_constrs variant_repr
-        in Step (step, types)
+      | DT_abstract (rec_name, rec_args)
+      | DT_node {rec_name; rec_args; _} ->
+        Step (Named rec_name, rec_args)
       | DT_object l ->
         let method_names, types = List.split l
         in Step (Object method_names, types)
@@ -99,8 +70,6 @@ end = struct
 
   let compare = compare
   (* TODO: A less naive compare may speed up things significantly. *)
-  (* TODO: Trim stype, such that this compare reduces to comparison of
-     integers/uid. Also see comment above.*)
 
 end
 
@@ -363,3 +332,13 @@ let apply' : type res. res t -> Ttype.dynamic -> res =
       M.f (ttype 0 map) (ttype 1 map) (Obj.magic x)
 
 let apply matcher ~t x = apply' matcher (Ttype.Dyn (t, x))
+
+let apply_opt m ~t x =
+  match apply m ~t x with
+  | x -> Some x
+  | exception Not_found -> None
+
+let apply_opt' m d =
+  match apply' m d with
+  | x -> Some x
+  | exception Not_found -> None

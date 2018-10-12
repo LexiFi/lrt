@@ -21,6 +21,9 @@ val apply': 'a t -> Ttype.dynamic -> 'a
     Returns [f x] if such a [f] is present and otherwise raises [Not_found].
 *)
 
+val apply_opt: 'a t -> t: 'b Ttype.t -> 'b -> 'a option
+val apply_opt': 'a t -> Ttype.dynamic -> 'a option
+
 (** {2 Match types with free variables} *)
 
 module type C0 = sig

@@ -22,7 +22,7 @@ let () =
 
 (*
  * Automatically generate names for abstract types
- *
+ * TODO: use this to fill rec_name of variant/records
  *)
 
 let abstract_name ~path name =

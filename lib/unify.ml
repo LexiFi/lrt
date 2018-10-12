@@ -46,6 +46,8 @@ let variant_constrs_iter2 (f: Stype.t -> Stype.t -> unit)
   | C_tuple _, _ -> raise Not_unifiable
 
 (* iterate over all stypes in a node *)
+(* TODO: This is a much stricter compare than the one in Matcher.
+   Perhaps, one might relax this a bit and document the assumptions. *)
 let node_iter2 (f: Stype.t -> Stype.t -> unit)
     ({rec_descr = descr1; rec_name = name1; rec_args = args1; _}: Stype.node)
     ({rec_descr = descr2; rec_name = name2; rec_args = args2; _}: Stype.node) =
