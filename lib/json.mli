@@ -151,26 +151,28 @@ val register_custom: t:'a Ttype.t ->
     [None] case).
 *)
 
+type 'a custom =
+  { to_json: ?ctx:ctx -> 'a -> value
+  ; of_json: ?ctx:ctx -> value -> 'a
+  }
+
 module type CUSTOM_0 = sig
   include Unify.T0
-  val to_json: ?ctx:ctx -> t -> value
-  val of_json: ?ctx:ctx -> value -> t
+  val custom : t custom
 end
 
 (* val register_custom_0: (module CUSTOM_0) -> unit *)
 
 module type CUSTOM_1 = sig
   include Unify.T1
-  val to_json: t:'a Ttype.t -> ?ctx:ctx -> 'a t -> value
-  val of_json: t:'a Ttype.t -> ?ctx:ctx -> value -> 'a t
+  val custom: 'a Ttype.t -> 'a t custom
 end
 
 (* val register_custom_1: (module CUSTOM_1) -> unit *)
 
 module type CUSTOM_2 = sig
   include Unify.T2
-  val to_json: 'a Ttype.t -> 'b Ttype.t -> ?ctx:ctx -> ('a, 'b) t -> value
-  val of_json: 'a Ttype.t -> 'b Ttype.t -> ?ctx:ctx -> value -> ('a, 'b) t
+  val custom: 'a Ttype.t -> 'b Ttype.t -> ('a, 'b) t custom
 end
 
 (* val register_custom_2: (module CUSTOM_2) -> unit *)
