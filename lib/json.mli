@@ -136,29 +136,44 @@ val of_json: ?ctx:ctx -> t:'a Ttype.t -> value -> 'a
 
 (* TODO: support passing local custom conversions to to_json/of_json. *)
 
-(* val register_conversion: t:'a Ttype.t -> to_json:('a -> value) -> of_json:(value -> 'a) -> unit *)
+val register_custom: t:'a Ttype.t ->
+  to_json:('a -> value) -> of_json:(value -> 'a) -> unit
 
 (** [register_conversion] registers a global custom mapping between
     OCaml values and JSON trees for a specific closed *abstract* type.
 
+    TODO: Bring this documentation up to date. Especially, we support
+    non-abstract things now.
+
     It is not allowed to use [null] in the JSON representation of
     values, at least if the type is used under the option type
-    constructor ([null] is reserved for reprensenting the
+    constructor ([null] is reserved for representing the
     [None] case).
 *)
 
-(* module type ABSTRACT_1_CONVERSION =
-sig
-  type 'a t
-  val t: unit t Ttype.t
+module type CUSTOM_0 = sig
+  include Unify.T0
+  val to_json: ?ctx:ctx -> t -> value
+  val of_json: ?ctx:ctx -> value -> t
+end
+
+(* val register_custom_0: (module CUSTOM_0) -> unit *)
+
+module type CUSTOM_1 = sig
+  include Unify.T1
   val to_json: t:'a Ttype.t -> ?ctx:ctx -> 'a t -> value
   val of_json: t:'a Ttype.t -> ?ctx:ctx -> value -> 'a t
 end
 
-val register_parametric_conversion: (module ABSTRACT_1_CONVERSION) -> unit *)
-(** [register_parametric_conversion] registers a global custom
-    mapping for a parametric abstract type.
-*)
+(* val register_custom_1: (module CUSTOM_1) -> unit *)
+
+module type CUSTOM_2 = sig
+  include Unify.T2
+  val to_json: 'a Ttype.t -> 'b Ttype.t -> ?ctx:ctx -> ('a, 'b) t -> value
+  val of_json: 'a Ttype.t -> 'b Ttype.t -> ?ctx:ctx -> value -> ('a, 'b) t
+end
+
+(* val register_custom_2: (module CUSTOM_2) -> unit *)
 
 (* TODO: move somewhere else *)
 val of_get_params: ?utf8:bool -> (string * string) list -> value

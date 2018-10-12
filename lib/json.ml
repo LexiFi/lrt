@@ -254,11 +254,39 @@ let empty_ctx = ctx ()
 
 let json_unit = Object []
 
+module type CUSTOM_0 = sig
+  include Unify.T0
+  val to_json: ?ctx:ctx -> t -> value
+  val of_json: ?ctx:ctx -> value -> t
+end
+
+module type CUSTOM_1 = sig
+  include Unify.T1
+  val to_json: t:'a Ttype.t -> ?ctx:ctx -> 'a t -> value
+  val of_json: t:'a Ttype.t -> ?ctx:ctx -> value -> 'a t
+end
+
+module type CUSTOM_2 = sig
+  include Unify.T2
+  val to_json: 'a Ttype.t -> 'b Ttype.t -> ?ctx:ctx -> ('a, 'b) t -> value
+  val of_json: 'a Ttype.t -> 'b Ttype.t -> ?ctx:ctx -> value -> ('a, 'b) t
+end
+
+let (custom_to : value Matcher.t ref) = ref (Matcher.empty ~modulo_props:true)
+
+type custom_of = { of_json: 'a. value -> 'a }
+let (custom_of : custom_of Matcher.t ref) =
+  ref (Matcher.empty ~modulo_props:true)
+
+let register_custom: t:'a Ttype.t ->
+  to_json:('a -> value) -> of_json:(value -> 'a) -> unit =
+  fun ~t ~to_json ~of_json ->
+    (* TODO: The matcher interface is not capable enough *)
+    let of_json = Obj.magic of_json in
+    custom_of := Matcher.add ~t ~f:(fun _ -> { of_json }) !custom_of;
+    custom_to := Matcher.add ~t ~f:(fun v -> to_json v) !custom_to
+
 (* OPTIMs:
-
-   - also optimize the check against variant/value (to
-     be treated as part of the standard proxy stuff?)
-
    - memoize the function (for a given set of flags)
      in DT_node
 *)
@@ -267,7 +295,12 @@ let variant_xt = Xtype.of_ttype [%t: Variant.t]
 
 let to_json ?(ctx=empty_ctx) ~t x =
   let rec to_json: type a. a Xtype.t -> a -> value = fun t x ->
-    match Lazy.force t.xt with
+    match Matcher.apply_opt !custom_to ~t:(t.t) x with
+    | Some v -> v
+    | None -> to_json_xtype (Lazy.force t.xt) x
+
+  and to_json_xtype: type a. a xtype -> a -> value = fun t x ->
+    match t with
     | Unit -> json_unit
     | Prop (_, t) -> to_json t x
     | Bool -> Bool x
@@ -346,17 +379,16 @@ end = struct
         with Not_found -> default
 end
 
-let of_json_error t (x : value) =
-  Print.show ~t:value_t x;
-  Format.printf "TYPE = %a@." Ttype.print t;
-  failwith "Type/value mismatch"
-
 let of_json ?(ctx=empty_ctx) ~t x =
-  let rec of_json_ttype: type t. t: t Ttype.t -> value -> t = fun ~t x ->
-    of_json (of_ttype t) [] x
+  let rec of_json: type a. a Xtype.t -> string list -> value -> a =
+    fun t path x ->
+      (* TODO: The current matcher interface only works for to_json *)
+      match Matcher.apply_opt !custom_of ~t:t.t (Obj.magic ()) with
+      | None -> of_json_xt (Lazy.force t.xt) path x
+      | Some {of_json} -> of_json x
 
-  and of_json: type t. t Xtype.t -> string list -> value -> t = fun t path v ->
-    match Lazy.force t.xt, v with
+  and of_json_xt: type t. t xtype -> string list -> value -> t = fun t path v ->
+    match t, v with
     | Unit, Object _ -> ()
     | Bool, Bool b -> b
     | Int, Number (I x) -> x
@@ -434,7 +466,7 @@ let of_json ?(ctx=empty_ctx) ~t x =
     | Function _, _ -> failwith "Mlfi_json: functions not supported"
     | Abstract _, _ ->
       failwith "TODO: abstract handling with variant fallback"
-    | _ -> of_json_error t.t v
+    | _ -> failwith "mismatch"
 
   and field_builder: type a. string list -> value list -> a Builder.t =
     fun path lst ->
@@ -465,7 +497,7 @@ let of_json ?(ctx=empty_ctx) ~t x =
       Print.show ~t:[%t: (string * value) list] l;
       failwith "'type' field is not a string"
 
-  in of_json_ttype ~t x
+  in of_json (of_ttype t) [] x
 
 open Buffer
 
