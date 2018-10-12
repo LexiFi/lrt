@@ -109,6 +109,32 @@ module Array_ = struct
       let t = Array.make !i hd in
       List.iter (fun e -> decr i; t.(!i) <- e) l;
       t
+
+  let of_list_map f = function
+    | [] -> [||]
+    | x :: xs ->
+      let n = List.length xs in
+      let a = Array.make (n + 1) (f x) in
+      let rec aux i = function
+        | [] -> a
+        | x :: xs ->
+          Array.unsafe_set a i (f x);
+          aux (i + 1) xs
+      in
+      aux 1 xs
+
+  let of_list_mapi f = function
+    | [] -> [||]
+    | x :: xs ->
+      let n = List.length xs in
+      let a = Array.make (n + 1) (f 0 x) in
+      let rec aux i = function
+        | [] -> a
+        | x :: xs ->
+          Array.unsafe_set a i (f i x);
+          aux (i + 1) xs
+      in
+      aux 1 xs
 end
 
 module Float = struct

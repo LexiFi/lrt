@@ -39,7 +39,9 @@ and 's field = private
   | Field: ('s, 't) element -> 's field
 
 and 's tuple = private
-  { t_flds : 's field list }
+  { t_flds: 's field list
+  ; t_len: int
+  }
 
 and label = string * Stype.properties
 
@@ -47,7 +49,9 @@ and 's record_field = label * 's field
 
 and 's record = private
   { r_flds: 's record_field list
+  ; r_len: int
   ; r_repr: record_repr
+  ; r_lookup : string -> 's record_field option
   }
 
 and 's constant_constructor = private
@@ -55,16 +59,19 @@ and 's constant_constructor = private
   ; cc_nr: int
   }
 
-and ('s, 't) regular_constructor  = private
+and ('s, 't) regular_constructor = private
   { rc_label: label
   ; rc_flds: 't field list
+  ; rc_len: int
   ; rc_repr: constr_repr
   }
 
-and ('s, 't) inlined_constructor  = private
+and ('s, 't) inlined_constructor = private
   { ic_label: label
   ; ic_flds: 't record_field list
+  ; ic_len: int
   ; ic_repr: constr_repr
+  ; ic_lookup : string -> 't record_field option
   }
 
 and 's constructor = private
@@ -73,7 +80,10 @@ and 's constructor = private
   | Inlined : ('s, 't) inlined_constructor -> 's constructor
 
 and 's sum = private
-  { cstrs : 's constructor list }
+  { s_cstrs : 's constructor list
+  ; s_lookup : string -> 's constructor option
+  ; s_cstr_by_value: 's -> 's constructor
+  }
 
 and ('s, 't) arrow = private
   { arg_label : string option
@@ -85,7 +95,9 @@ and 's method_ = private
   | Method: string * ('s, 't) element -> 's method_
 
 and 's object_ = private
-  { methods : 's method_ list }
+  { o_methods : 's method_ list
+  ; o_lookup : string -> 's method_ option
+  }
 
 (** There was a [ttype_of_xtype] function before. I think this encourages bad
     style, i.e. forcing an xtype too early and then going back to ttype.
@@ -118,29 +130,6 @@ module Fields : sig
     (name:string -> dynamic -> 'c) -> 'a -> 'c list
 end
 (** Read values from tuples, records and constructors. *)
-
-(** {2 Find elements} *)
-
-module Lookup : sig
-  (** Providing the first two arguments yields a lookup table for the
-      fields/methods. The lookup table is constructed from the information in
-      the second argument and memoized in the first argument. *)
-
-  val record_field: 'a Ttype.t -> 'a record -> string -> 'a record_field option
-  val constructor: 'a Ttype.t -> 'a sum -> string -> 'a constructor option
-
-  val constructor_field:
-    ('a, 'b) inlined_constructor -> string -> 'b record_field option
-  (** No Ttype.t because memoization should go into the constructors node, not
-      the variants node. *)
-
-  val method_: 'a object_ -> string -> 'a method_ option
-  (** No Ttype.t here because object ttype has no slot for memoization. *)
-end
-(** Find by name. *)
-
-val constructor_by_value: 'a sum -> 'a -> 'a constructor
-(** Find by value. *)
 
 (** {2 Object call method} *)
 

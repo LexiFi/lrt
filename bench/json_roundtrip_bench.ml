@@ -19,4 +19,3 @@ let[@landmark "test"] run () =
   ignore(value')
 
 let _ = List.init 10 (fun _ -> run ())
-

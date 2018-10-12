@@ -402,7 +402,7 @@ let is_leaf: type a . a Ttype.t -> bool =
               | Constant _ -> true
               | Regular c -> loop_fields c.rc_flds
               | Inlined c -> loop_fields (fields_of_record_fields c.ic_flds)
-            ) sum.cstrs
+            ) sum.s_cstrs
 
         | Tuple tup -> replace t; loop_fields tup.t_flds
         | Record r -> replace t; loop_fields (fields_of_record_fields r.r_flds)
@@ -494,7 +494,7 @@ let of_type_gen_sized: type a. UGen.t list -> t: a Ttype.t -> int -> a gen =
                     (fields_of_record_fields c.ic_flds) (sz/2)))
             else None
           in
-          oneof_lazy (Ext.List.choose f sum.cstrs)
+          oneof_lazy (Ext.List.choose f sum.s_cstrs)
         | Lazy {t;_} -> lazy_ (of_type_sized ~t szp)
         | Prop (_, {t;_}) -> of_type_sized ~t szp
         | Object _ ->

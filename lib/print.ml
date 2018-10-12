@@ -171,7 +171,7 @@ let print_dynamic fmt (t, x) =
         pp_close_box fmt ()
       | Sum s ->
         pp_may_left_paren fmt parens;
-        ( match constructor_by_value s x with
+        ( match s.s_cstr_by_value x with
           | Constant c -> pp_print_string fmt (fst c.cc_label);
           | Regular ({rc_flds=[Field e];_} as c)->
             pp_open_box fmt 1;

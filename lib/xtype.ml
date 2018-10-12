@@ -37,7 +37,9 @@ and 's field =
   | Field: ('s, 't) element -> 's field
 
 and 's tuple =
-  { t_flds : 's field list }
+  { t_flds: 's field list
+  ; t_len: int
+  }
 
 and label = string * Stype.properties
 
@@ -45,7 +47,9 @@ and 's record_field = label * 's field
 
 and 's record =
   { r_flds: 's record_field list
+  ; r_len: int
   ; r_repr: record_repr
+  ; r_lookup : string -> 's record_field option
   }
 
 and 's constant_constructor =
@@ -53,16 +57,19 @@ and 's constant_constructor =
   ; cc_nr: int
   }
 
-and ('s, 't) regular_constructor  =
+and ('s, 't) regular_constructor =
   { rc_label: label
   ; rc_flds: 't field list
+  ; rc_len: int
   ; rc_repr: constr_repr
   }
 
-and ('s, 't) inlined_constructor  =
+and ('s, 't) inlined_constructor =
   { ic_label: label
   ; ic_flds: 't record_field list
+  ; ic_len: int
   ; ic_repr: constr_repr
+  ; ic_lookup : string -> 't record_field option
   }
 
 and 's constructor =
@@ -71,7 +78,10 @@ and 's constructor =
   | Inlined : ('s, 't) inlined_constructor -> 's constructor
 
 and 's sum =
-  { cstrs : 's constructor list }
+  { s_cstrs: 's constructor list
+  ; s_lookup: string -> 's constructor option
+  ; s_cstr_by_value: 's -> 's constructor
+  }
 
 and ('s, 't) arrow =
   { arg_label : string option
@@ -83,7 +93,9 @@ and 's method_ =
   | Method: string * ('s, 't) element -> 's method_
 
 and 's object_ =
-  { methods : 's method_ list }
+  { o_methods : 's method_ list
+  ; o_lookup : string -> 's method_ option
+  }
 
 (* internal Helpers *)
 let cast_ttype: Stype.t -> 'a Ttype.t = Obj.magic
@@ -113,6 +125,38 @@ module M = struct
     xt
 end
 
+(* prepare fast lookup for named elements *)
+let lookup : ('a -> string) -> 'a list -> string -> 'a option =
+  fun get_name lst ->
+    let tbl = lazy (Ext.String.Tbl.prepare (List.map get_name lst))
+    and arr = lazy (Array.of_list lst)
+    in fun name ->
+      let i = Ext.String.Tbl.lookup (Lazy.force tbl) name
+      in if i < 0 then None else Some (Lazy.force arr).(i)
+
+(* prepare finding a constructor by value *)
+let cstr_by_value : type a. a constructor list -> a -> a constructor =
+  fun cstrs ->
+    let aux = lazy (
+      let cst, ncst = ref [], ref [] in
+      List.iteri (fun i -> function
+          | Constant _ -> cst := i :: !cst
+          | Regular _
+          | Inlined _ -> ncst := i :: !ncst
+        ) cstrs;
+      let cstrs = Array.of_list cstrs in
+      let cst = Ext.Array.of_list_rev !cst in
+      let ncst = Ext.Array.of_list_rev !ncst in
+      (cstrs, cst, ncst)
+    ) in
+    fun x ->
+      let cstrs, constant, nonconstant = Lazy.force aux in
+      let i =
+        let x = Obj.repr x in
+        if Obj.is_int x then Array.get constant (Obj.magic x)
+        else Array.get nonconstant (Obj.tag x)
+      in cstrs.(i)
+
 let[@landmark] rec xtype_of_ttype : type a. a Ttype.t -> a xtype = fun t ->
   (* CAUTION: This must be consistent with core/std.ml *)
   match Ttype.to_stype t with
@@ -134,7 +178,7 @@ let[@landmark] rec xtype_of_ttype : type a. a Ttype.t -> a xtype = fun t ->
       | "" -> None
       | s -> Some s
     in cast_xtype (Function {arg_label; arg_t = bundle t1; res_t = bundle t2})
-  | DT_tuple l -> cast_xtype (Tuple {t_flds=fields l})
+  | DT_tuple l -> cast_xtype (Tuple {t_flds = fields l; t_len = List.length l})
   | DT_node ({rec_descr = DT_record r; _} as node) ->
     begin match M.is_memoized node with
     | None -> M.memoize node (cast_xtype (Record (record r)))
@@ -172,7 +216,9 @@ and record (r: Stype.record_descr) : 'a record =
     | Record_float -> Float
     | Record_regular -> Regular
     | Record_inline _ -> assert false
-  in {r_flds; r_repr}
+  and r_len = List.length r.record_fields
+  and r_lookup = lookup (fun f -> fst (fst f)) r_flds
+  in {r_flds; r_repr; r_len; r_lookup}
 
 and sum (v: Stype.variant_descr) : 'a sum =
   let repr = match v.variant_repr with
@@ -181,7 +227,7 @@ and sum (v: Stype.variant_descr) : 'a sum =
   in
   let pincr i = let r = !i in incr i; r in (* post increment *)
   let cst_i, ncst_i = ref 0, ref 0 in
-  let cstrs = List.map (fun (name, props, arg) ->
+  let s_cstrs = List.map (fun (name, props, arg) ->
       let lbl = name, props in
       let open Stype in
       match arg with
@@ -190,22 +236,34 @@ and sum (v: Stype.variant_descr) : 'a sum =
         let tag = pincr ncst_i in
         Regular { rc_label = lbl
                 ; rc_flds = fields l
+                ; rc_len = List.length l
                 ; rc_repr = repr tag }
       | C_inline (DT_node {rec_descr = DT_record r; _}) ->
         let tag = pincr ncst_i in
+        let ic_flds = record_fields r.record_fields in
         Inlined { ic_label = lbl
-                ; ic_flds = record_fields r.record_fields
-                ; ic_repr = repr tag }
+                ; ic_flds
+                ; ic_len = List.length r.record_fields
+                ; ic_repr = repr tag
+                ; ic_lookup = lookup (fun f -> fst (fst f)) ic_flds
+                }
       | C_inline _ -> assert false
-    ) v.variant_constrs
-  in { cstrs }
+    ) v.variant_constrs in
+  let s_lookup = lookup (function
+      | Constant {cc_label=(name, _); _}
+      | Regular {rc_label=(name, _); _}
+      | Inlined {ic_label=(name, _); _} -> name) s_cstrs
+  and s_cstr_by_value = cstr_by_value s_cstrs
+  in { s_cstrs; s_lookup; s_cstr_by_value }
 
 and object_ methods : 'a object_ =
   let prepare (type a) nth (name, stype) =
     let typ = (bundle stype : a t) in
     Method (name, {typ; nth})
   in
-  let methods = List.mapi prepare methods in { methods }
+  let o_methods = List.mapi prepare methods in
+  let o_lookup = lookup (function Method (name, _) -> name) o_methods in
+  { o_methods; o_lookup }
 
 let of_ttype t = {t; xt = lazy (xtype_of_ttype t)}
 
@@ -229,32 +287,29 @@ module Builder = struct
   type 'a t = { mk: 't. ('a, 't) element -> 't } [@@unboxed]
   type 's t' = { mk: 't. label -> ('s, 't) element -> 't } [@@unboxed]
 
-  let fields : type a. a field list -> a t -> a =
-    fun flds b ->
-      let arity = List.length flds in
+  let fields : type a. int -> a field list -> a t -> a =
+    fun arity flds b ->
       let o = Obj.new_block 0 arity in
       List.iteri (fun i -> function Field f ->
           Obj.set_field o i (Obj.repr (b.mk f))
         ) flds;
       Obj.magic o
 
-  let record_fields : type a. a record_field list -> a t' -> a =
-    fun flds b ->
-      let arity = List.length flds in
+  let record_fields : type a. int -> a record_field list -> a t' -> a =
+    fun arity flds b ->
       let o = Obj.new_block 0 arity in
       List.iteri (fun i -> function l, Field f ->
           Obj.set_field o i (Obj.repr (b.mk l f))
         ) flds;
       Obj.magic o
 
-  let tuple t = fields t.t_flds
+  let tuple t = fields t.t_len t.t_flds
 
   let record : type a. a record -> a t' -> a =
-    fun {r_flds; r_repr} b -> match r_repr with
-      | Regular -> record_fields r_flds b
+    fun {r_flds; r_repr; r_len; _} b -> match r_repr with
+      | Regular -> record_fields r_len r_flds b
       | Float ->
-        let arity = List.length r_flds in
-        let o = Obj.new_block Obj.double_array_tag arity in
+        let o = Obj.new_block Obj.double_array_tag r_len in
         List.iteri (fun i -> function l, Field f ->
             Obj.set_double_field o i (Obj.magic (b.mk l f))
           ) r_flds ;
@@ -268,19 +323,19 @@ module Builder = struct
     fun {cc_nr;_} -> Obj.magic cc_nr
 
   let regular_constructor : type a b. (a, b) regular_constructor -> b t -> a =
-    fun {rc_flds; rc_repr;_} b ->
+    fun {rc_flds; rc_repr; rc_len; _} b ->
       match rc_repr, rc_flds with
       | Tag tag, _ ->
-        let o = Obj.repr (fields rc_flds b) in
+        let o = Obj.repr (fields rc_len rc_flds b) in
         Obj.set_tag o tag; Obj.magic o
       | Unboxed, [Field f] -> Obj.magic (b.mk f)
       | Unboxed, _ -> assert false
 
   let inlined_constructor : type a b. (a, b) inlined_constructor -> b t' -> a =
-    fun {ic_flds; ic_repr; _} b ->
+    fun {ic_flds; ic_repr; ic_len; _} b ->
       match ic_repr, ic_flds with
       | Tag tag, _ ->
-        let o = Obj.repr (record_fields ic_flds b) in
+        let o = Obj.repr (record_fields ic_len ic_flds b) in
         Obj.set_tag o tag; Obj.magic o
       | Unboxed, [l, Field f] -> Obj.magic (b.mk l f)
       | Unboxed, _ -> assert false
@@ -322,22 +377,22 @@ module Make = struct
       in init arr; {mk}
 
   let tuple: 'a tuple -> ('a t -> unit) -> 'a =
-    fun {t_flds} f ->
-      Builder.fields t_flds (builder f (List.length t_flds))
+    fun {t_flds; t_len} f ->
+      Builder.fields t_len t_flds (builder f t_len)
 
   let record: 'a record -> ('a t -> unit) -> 'a =
     fun r f ->
-      Builder.record r (named_builder f (List.length r.r_flds))
+      Builder.record r (named_builder f r.r_len)
 
   let regular_constructor: type a b.
     (a, b) regular_constructor -> (b t -> unit) -> a =
     fun c f ->
-      Builder.regular_constructor c (builder f (List.length c.rc_flds))
+      Builder.regular_constructor c (builder f c.rc_len)
 
   let inlined_constructor: type a b.
     (a, b) inlined_constructor -> (b t -> unit) -> a =
     fun c f ->
-      Builder.inlined_constructor c (named_builder f (List.length c.ic_flds))
+      Builder.inlined_constructor c (named_builder f c.ic_len)
 end
 
 module Fields = struct
@@ -355,6 +410,7 @@ module Fields = struct
       | Unboxed -> fun o -> Obj.repr o)
 
   let cast: (Obj.t -> Obj.t option) -> 'a -> 'b option = Obj.magic
+
   let checked tag i o =
       if check tag o then Some (Obj.field o i) else None
 
@@ -381,6 +437,7 @@ module Fields = struct
     List.map mapf r.r_flds
 
   let map_regular c f x =
+    (* This one and the following check the Tag to often *)
     let mapf (Field e) =
       f (Dyn (e.typ, Ext.Option.value_exn (regular_constructor c e x)))
     in
@@ -393,95 +450,9 @@ module Fields = struct
     List.map mapf c.ic_flds
 end
 
-(* fast lookup for named elements *)
-
-module Lookup = struct
-  (* Memoize table in stype node *)
-  module M = struct
-    open Stype
-    type memoized_type_prop += Table of Ext.String.Tbl.t
-
-    let rec search a n i =
-      if i = n then None
-      else match a.(i) with
-        | Table r -> Some r
-        | _ -> search a n (i + 1)
-
-    let is_memoized (node : node) : Ext.String.Tbl.t option =
-      search node.rec_memoized (Array.length node.rec_memoized) 0
-
-    let memoize: node -> Ext.String.Tbl.t -> Ext.String.Tbl.t =
-      fun node table ->
-      let s = Table table in
-      let old = node.rec_memoized in
-      let a = Array.make (Array.length old + 1) s in
-      Array.blit old 0 a 1 (Array.length old);
-      Internal.set_memoized node a;
-      table
-  end
-
-  let table (get_name : 's -> string) (lst : 's list) =
-    Ext.String.Tbl.prepare (List.map get_name lst)
-
-  let mtable ttype get_name lst =
-    let node =
-      match Ttype.to_stype ttype with
-      | DT_node node -> node
-      | _ -> failwith "ttype not a node"
-    in match M.is_memoized node with
-    | None -> M.memoize node (table get_name lst)
-    | Some t -> t
-
-  let finder tbl arr : (string -> 'a option)=
-    fun name ->
-      let i = Ext.String.Tbl.lookup tbl name in
-      if i < 0 then None else Some arr.(i)
-
-  let record_field t r =
-    let f = fun f -> fst (fst f)
-    and arr = Array.of_list r.r_flds
-    in finder (mtable t f r.r_flds) arr
-
-  let constructor_field c =
-    let f = fun f -> fst (fst f)
-    and arr = Array.of_list c.ic_flds
-    in finder (table f c.ic_flds) arr
-
-  let constructor t s =
-    let f = function
-      | Constant {cc_label=(name, _); _}
-      | Regular {rc_label=(name, _); _}
-      | Inlined {ic_label=(name, _); _} -> name
-    and arr = Array.of_list s.cstrs
-    in finder (mtable t f s.cstrs) arr
-
-  let method_ o =
-    let f = function Method (name, _) -> name
-    and arr = Array.of_list o.methods
-    in finder (table f o.methods) arr
-end
-
-let constructor_by_value : type a. a sum -> a -> a constructor =
-  fun sum ->
-    let cst, ncst = ref [], ref [] in
-    List.iteri (fun i -> function
-        | Constant _ -> cst := i :: !cst
-        | Regular _
-        | Inlined _ -> ncst := i :: !ncst
-      ) sum.cstrs;
-    let constructors = Array.of_list sum.cstrs in
-    let cst = Ext.Array.of_list_rev !cst in
-    let ncst = Ext.Array.of_list_rev !ncst in
-    fun x ->
-      let i =
-        let x = Obj.repr x in
-        if Obj.is_int x then Array.get cst (Obj.magic x)
-        else Array.get ncst (Obj.tag x)
-      in constructors.(i)
-
 let call_method: 'a object_ -> ('a, 'b) element -> 'a -> 'b =
   fun o e ->
-    let Method (name,_) = List.nth o.methods (e.nth) in
+    let Method (name,_) = List.nth o.o_methods (e.nth) in
     let label = CamlinternalOO.public_method_label name in
     fun x -> Obj.magic (CamlinternalOO.send (Obj.magic x) label)
 
@@ -495,7 +466,6 @@ module Step = struct
 
   let tuple: 'a tuple -> ('a, 'b) element-> ('a,'b) Path.step =
     fun tup f ->
-      let arity = List.length tup.t_flds in
       let nth = f.nth in
       let get = (fun o -> Some (Obj.field o nth)) in
       let set =
@@ -503,7 +473,7 @@ module Step = struct
            let o = Obj.dup o in
            Obj.set_field o nth (Obj.repr v); Some o)
       in
-      cast { get ; set }, StepMeta.tuple ~nth ~arity
+      cast { get ; set }, StepMeta.tuple ~nth ~arity:tup.t_len
 
   let record: 'a record -> ('a, 'b) element -> ('a,'b) Path.step =
     fun r f ->
@@ -529,7 +499,7 @@ module Step = struct
   let regular_constructor:
     ('a, 'b) regular_constructor -> ('b,'c) element -> ('a,'c) Path.step =
     fun c f ->
-      let arity = List.length c.rc_flds in
+      let arity = c.rc_len in
       let nth = f.nth in
       let get, set = match c.rc_repr with
       | Unboxed ->
@@ -603,7 +573,7 @@ let rec all_paths: type a b. a Ttype.t -> b Ttype.t -> (a, b) Path.t list =
              | Constant _ -> []
              | Regular c -> regular_constructor ~target c
              | Inlined c -> inlined_constructor ~target c
-          ) sum.cstrs
+          ) sum.s_cstrs
         |> List.concat
       | Prop (_, {t;_}) -> all_paths t target
       | Object _ -> []
@@ -666,18 +636,18 @@ let rec project_path : type a b. a Ttype.t -> (a,b) Path.t -> b Ttype.t =
     | (_, meta) :: tl ->
       let t = match meta, xtype_of_ttype t with
         | Field {field_name}, Record r ->
-          (Lookup.record_field t r field_name |> assert_some
+          (r.r_lookup field_name |> assert_some
            |> function _, Field f -> cast f.typ)
         | Tuple {nth; _}, Tuple t ->
           (List.nth t.t_flds nth |> function Field f -> cast f.typ)
         | List _, List t -> cast t
         | Array _, Array t -> cast t
         | Constructor {name; arg}, Sum s ->
-          ( match arg, (Lookup.constructor t s name |> assert_some) with
+          ( match arg, (s.s_lookup name |> assert_some) with
             | Regular {nth;_}, Regular c ->
               (List.nth c.rc_flds nth |> function Field f -> cast f.typ)
             | Inline {field_name}, Inlined c ->
-              (Lookup.constructor_field c field_name |> assert_some
+              (c.ic_lookup field_name |> assert_some
                |> function _, Field f -> cast f.typ)
             | Regular _, _
             | Inline _, _ -> assert false

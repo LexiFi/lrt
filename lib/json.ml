@@ -303,7 +303,7 @@ let to_json ?(ctx=empty_ctx) ~t x =
     | Sum s ->
       (* TODO: mlfi_json has special handling for Variant.t and Json.t at
          this point. This might be mirrored using the new Matcher module. *)
-      let name, obj_flds = match constructor_by_value s x with
+      let name, obj_flds = match s.s_cstr_by_value x with
         | Constant c -> fst c.cc_label, []
         | Regular c ->
           let l = Fields.map_regular c dyn x
@@ -323,6 +323,28 @@ let to_json ?(ctx=empty_ctx) ~t x =
     ctx.to_json_field name, to_json t x
 
   in to_json (Xtype.of_ttype t) x
+
+module Reader: sig
+  type 'a t
+  val mk: (string * 'a) list -> 'a t
+  val get: 'a t -> string -> 'a -> 'a
+end = struct
+  type 'a t = (string * 'a) list ref
+
+  let mk l = ref l
+
+  (* Optimized lookup for record fields, for the case where the ordering
+     match between the JSON value and the OCaml record definition. *)
+
+  let get (r : 'a t) s default =
+    match !r with
+    | (t, v) :: rest when t = s -> r := rest; v
+    | [] -> default
+    | _ :: rest ->
+        (* could fallback to building a lookup table here... *)
+        try List.assoc s rest
+        with Not_found -> default
+end
 
 let of_json_error t (x : value) =
   Print.show ~t:value_t x;
@@ -377,8 +399,7 @@ let of_json ?(ctx=empty_ctx) ~t x =
           end
       end
     | List t, Array l -> List.map (of_json t ("(_)" :: path)) l
-    | Array t, Array l -> Array.map (of_json t ("[_]" :: path))
-                            (Array.of_list l)
+    | Array t, Array l -> Ext.Array.of_list_map (of_json t ("[_]" :: path)) l
     | Tuple tup, Array l ->
       Builder.tuple tup (field_builder ("(_/_)" :: path) l)
     | Record r, Object l ->
@@ -395,7 +416,7 @@ let of_json ?(ctx=empty_ctx) ~t x =
           try List.assoc "val" l
           with Not_found -> Object (List.remove_assoc "type" l)
       in
-      let c = match Lookup.constructor t.t sum name with
+      let c = match sum.s_lookup name with
         | Some c -> c
         | None -> failwith (Printf.sprintf "Unexpected constructor %S" name)
       in begin match c, arg with
@@ -417,24 +438,21 @@ let of_json ?(ctx=empty_ctx) ~t x =
 
   and field_builder: type a. string list -> value list -> a Builder.t =
     fun path lst ->
-      (* TODO: assuming the calls to mk happen in correct order, one could
-         safe some cycles here. See mlfi_json. *)
-      let arr = Array.of_list lst in
-      let len = Array.length arr in
-      let mk {nth; typ} =
-        if nth < len then of_json typ path arr.(nth)
-        else failwith "tuple length mismatch"
+      (* we assume that the calls to mk happen in correct order *)
+      let lref = ref lst in
+      let mk {typ; _} =
+        match !lref with
+        | [] -> failwith "tuple length mismatch"
+        | hd :: tl -> lref := tl; of_json typ path hd
       in {mk}
 
   and record_field_builder:
     type a. string list -> (string * value) list -> a Builder.t' =
     fun path lst ->
-      let lref = ref lst in
+      let r = Reader.mk lst in
       let mk (name, _) el =
-        (* When lst is in the correct order, it is traversed only once. *)
-        match assoc_consume (ctx.to_json_field name) !lref with
-        | Some (v, tl) -> lref := tl; of_json el.typ (name :: path) v
-        | None -> of_json el.typ (name :: path) Null
+        of_json el.typ (name :: path)
+          (Reader.get r (ctx.to_json_field name) Null)
       in {mk}
 
   and get_constr l =
@@ -447,15 +465,7 @@ let of_json ?(ctx=empty_ctx) ~t x =
       Print.show ~t:[%t: (string * value) list] l;
       failwith "'type' field is not a string"
 
-  and assoc_consume key lst =
-    let rec f acc = function
-      | [] -> None
-      | (k,v) :: tl when k = key -> Some (v, List.rev_append acc tl)
-      | hd :: tl -> f (hd :: acc) tl
-    in f [] lst
-
-  in
-  of_json_ttype ~t x
+  in of_json_ttype ~t x
 
 open Buffer
 

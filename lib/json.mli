@@ -25,7 +25,7 @@ type value =
 *)
 
 
-(** {2 Mapping between JSON trees and their textual representation. *)
+(** {2 Mapping between JSON trees and their textual representation.} *)
 
 val encode: ?utf8:bool -> value -> string
 (** Encode JSON tree into a compact JSON text (single line,  etc). *)
@@ -52,7 +52,7 @@ val ctx:
   unit ->
   ctx
 
-(** {2 Typeful generic mapping between JSON trees and OCaml values. *)
+(** {2 Typeful generic mapping between JSON trees and OCaml values.} *)
 
 val to_json: ?ctx:ctx -> t:'a Ttype.t -> 'a -> value
 (**

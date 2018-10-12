@@ -83,7 +83,7 @@ let rec to_variant: type a. t: a Xtype.t -> a to_variant = fun ~t x ->
     Tuple (Fields.map_tuple tup dyn x)
   | Record r ->
     Record (Fields.map_record r dyn_named x)
-  | Sum s -> begin match constructor_by_value s x with
+  | Sum s -> begin match s.s_cstr_by_value x with
       | Constant c -> Constructor (fst c.cc_label, None)
       | Regular ({rc_label; rc_flds = [Field el]; _} as c) ->
         let arg = to_variant ~t:el.typ
@@ -249,7 +249,7 @@ let rec of_variant: type a. t: a Xtype.t -> Stype.properties -> a of_variant =
             | [] -> match old with
               | Some c -> handle_constr c
               | None -> bad_variant "constructor does not exist"
-        in use_first None s.cstrs
+        in use_first None s.s_cstrs
       (* accumulate properties TODO: which order is correct?*)
       | Prop _, v ->
         let props, t = Xtype.consume_outer_props t in
