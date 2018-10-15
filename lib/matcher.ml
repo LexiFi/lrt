@@ -1,9 +1,9 @@
-module Step : sig
+module Symbol : sig
   (* A basic type language consist of symbols (with associated fixed arity) and
      variables.
 
-     For such a language, [Step.t] corresponds to the set of symbols,
-     [Step.compare] to a total order on the set of symbols, and [Step.of_stype]
+     For such a language, [Symbol.t] corresponds to the set of symbols,
+     [Symbol.compare] to a total order on the set of symbols, and [Symbol.of_stype]
      to the destruction of a term into a symbol and a list of arguments.
 
      The total order on symbols, together with the invariant that each symbol
@@ -27,8 +27,8 @@ module Step : sig
   val compare : t -> t -> int
 
   type maybe_free =
-    | Step of t * Stype.t list
-    | Var of int (* DT_var *)
+    | Symbol of t * Stype.t list (** symbol, arguments *)
+    | Var of int (** DT_var *)
 
   val of_stype : modulo_props: bool -> Stype.t -> maybe_free
 end = struct
@@ -45,32 +45,31 @@ end = struct
     | Object of string list (* method names *)
 
   type maybe_free =
-    | Step of t * Stype.t list
+    | Symbol of t * Stype.t list
     | Var of int (* DT_var *)
 
   let rec of_stype: modulo_props: bool -> Stype.t -> maybe_free =
     fun ~modulo_props -> function
-      | DT_int -> Step (Base Int, [])
-      | DT_float -> Step (Base Float, [])
-      | DT_string -> Step (Base String, [])
-      | DT_list a -> Step (Base List, [a])
-      | DT_array a -> Step (Base Array, [a])
-      | DT_option a -> Step (Base Option, [a])
-      | DT_arrow (_, a, b) -> Step (Base Arrow, [a; b])
+      | DT_int -> Symbol (Base Int, [])
+      | DT_float -> Symbol (Base Float, [])
+      | DT_string -> Symbol (Base String, [])
+      | DT_list a -> Symbol (Base List, [a])
+      | DT_array a -> Symbol (Base Array, [a])
+      | DT_option a -> Symbol (Base Option, [a])
+      | DT_arrow (_, a, b) -> Symbol (Base Arrow, [a; b])
       | DT_prop (_, s) when modulo_props -> of_stype ~modulo_props s
-      | DT_prop (p, s) -> Step (Props p, [s])
-      | DT_tuple l -> Step (Tuple (List.length l), l)
+      | DT_prop (p, s) -> Symbol (Props p, [s])
+      | DT_tuple l -> Symbol (Tuple (List.length l), l)
       | DT_abstract (rec_name, rec_args)
       | DT_node {rec_name; rec_args; _} ->
-        Step (Named rec_name, rec_args)
+        Symbol (Named rec_name, rec_args)
       | DT_object l ->
         let method_names, types = List.split l
-        in Step (Object method_names, types)
+        in Symbol (Object method_names, types)
       | DT_var i -> Var i
 
   let compare = compare
   (* TODO: A less naive compare may speed up things significantly. *)
-
 end
 
 module IntMap = Map.Make (struct type t = int let compare = compare end)
@@ -84,8 +83,12 @@ module Tree : sig
   val get : key -> 'a t -> ('a * substitution) option
 end = struct
   (* On each level of the discrimination tree, we discriminate on the
-     outermost structure of the stype using [Step.of_stype]. When stype children
-     are present, they are used depth-first to further discriminate.
+     on the first symbol on the stack. Arguments returned by [Symbol.of_stype]
+     are pushed back to the stack.
+
+     The set of paths from root to leaves in the resulting tree is homomorphic
+     to the set of stypes (modulo Symbol.of_stype). Each path in the tree
+     corresponds to one stype and vice versa.
 
      There are two different types of variables. On type corresponds to
      DT_vars in stypes , the other to free spots in a path. The variables
@@ -98,16 +101,16 @@ end = struct
   type key = Stype.t
   type substitution = Stype.t IntMap.t
 
-  module StepMap = Map.Make(Step)
+  module SymbolMap = Map.Make(Symbol)
 
   type 'a tree =
     | Leave of { value: 'a; free_vars: (int * int) list }
                (* free_vars maps DT_var in stype to free vars in path *)
-    | Inner of { map: 'a tree StepMap.t; free: 'a tree IntMap.t }
+    | Inner of { map: 'a tree SymbolMap.t; free: 'a tree IntMap.t }
 
   type 'a t = { modulo_props: bool; tree: 'a tree }
 
-  let empty_tree = Inner { map = StepMap.empty; free = IntMap.empty }
+  let empty_tree = Inner { map = SymbolMap.empty; free = IntMap.empty }
 
   let empty ~modulo_props = { modulo_props ; tree = empty_tree }
 
@@ -116,8 +119,8 @@ end = struct
     let equal = if modulo_props then
         Stype.equality_modulo_props else Stype.equality
     and get_step s =
-      match Step.of_stype ~modulo_props s with
-      | Step.Step (s, l) -> (s, l)
+      match Symbol.of_stype ~modulo_props s with
+      | Symbol.Symbol (s, l) -> (s, l)
       | _ -> failwith "free variable in query"
     in
     let rec traverse stack subst tree =
@@ -130,7 +133,7 @@ end = struct
         in Some (value, subst)
       | hd :: tl, Inner node -> begin
           let step, children = get_step hd in
-          ( match StepMap.find_opt step node.map with
+          ( match SymbolMap.find_opt step node.map with
             | None -> None
             | Some x -> traverse (children @ tl) subst x )
           |>
@@ -158,14 +161,14 @@ end = struct
         end
       | [], _
       | _ :: _, Leave _ ->
-        assert false (* This should be impossible. [Step.of_stype] should
+        assert false (* This should be impossible. [Symbol.of_stype] should
                         uniquely identify the number of children. *)
     in traverse [stype] [] t.tree
 
   let add stype value t =
     let get_step =
       let modulo_props = t.modulo_props in
-      Step.of_stype ~modulo_props
+      Symbol.of_stype ~modulo_props
     in
     let rec traverse stack free_vars tree =
       match stack, tree with
@@ -173,19 +176,19 @@ end = struct
         raise (Invalid_argument "(congruent) type already registered")
       | [], Inner {map; free} ->
         (* TODO: can we avoid these asserts by shuffling the code? *)
-        assert (StepMap.is_empty map);
+        assert (SymbolMap.is_empty map);
         assert (IntMap.is_empty free);
         Leave {value; free_vars}
       | hd :: tl, Inner node -> begin
           match get_step hd with
-          | Step (step, children) ->
+          | Symbol (step, children) ->
             let tree =
-              match StepMap.find_opt step node.map with
+              match SymbolMap.find_opt step node.map with
               | None -> empty_tree
               | Some tree -> tree
             in
             let map =
-              StepMap.add step (traverse (children @ tl) free_vars tree)
+              SymbolMap.add step (traverse (children @ tl) free_vars tree)
                 node.map
             in Inner { node with map }
           | Var dt_var ->
@@ -260,85 +263,201 @@ end = struct
       ]
 end
 
-module type C0 = sig
-  include Unify.T0
-  type res
-  val f: t -> res
+module type S = sig
+  type t
+  type 'a data
+
+  val empty: modulo_props:bool -> t
+  (** The matcher without any registered pattern. *)
+
+  val add: t: 'a Ttype.t -> 'a data -> t -> t
+  (** Add a case to the matcher. *)
+
+  (** {2 Match types with free variables} *)
+
+  module type C0 = sig
+    include Unify.T0
+    val data : t data
+  end
+
+  val add0: (module C0) -> t -> t
+  (** Add a case to the matcher. Equivalent to {!add}. *)
+
+  module type C1 = sig
+    include Unify.T1
+    val data : 'a Ttype.t -> 'a t data
+  end
+
+  val add1: (module C1) -> t -> t
+  (** Add a case to the matcher. One free variable.*)
+
+  module type C2 = sig
+    include Unify.T2
+    val data : 'a Ttype.t -> 'b Ttype.t -> ('a, 'b) t data
+  end
+
+  val add2: (module C2) -> t -> t
+  (** Add a case to the matcher. Two free variables. *)
+
+  (** {2 Matching Result} *)
+
+  module type M0 = sig
+    include Unify.T0
+    type matched
+    val data : t data
+    val eq : (t, matched) TypEq.t
+  end
+
+  module type M1 = sig
+    include Unify.T1
+    type matched
+    type a
+    val data : a t data
+    val eq : (a t, matched) TypEq.t
+  end
+
+  module type M2 = sig
+    include Unify.T2
+    type matched
+    type a
+    type b
+    val data : (a, b) t data
+    val eq : ((a, b) t, matched) TypEq.t
+  end
+
+  type 'a matched =
+    | M0 of (module M0 with type matched = 'a)
+    | M1 of (module M1 with type matched = 'a)
+    | M2 of (module M2 with type matched = 'a)
+
+  (** {2 Executing the Matcher} *)
+
+  val apply: t -> t: 'a Ttype.t -> 'a matched option
+  val apply_exn: t -> t: 'a Ttype.t -> 'a matched
 end
 
-module type C1 = sig
-  include Unify.T1
-  type res
-  val f: 'a Ttype.t -> 'a t -> res
-end
+module Make (Data: sig type 'a t end) : S with type 'a data = 'a Data.t = struct
+  (* TODO: How can I avoid this duplication of signatures? *)
+  type 'a data = 'a Data.t
 
-module type C2 = sig
-  include Unify.T2
-  type res
-  val f: 'a Ttype.t -> 'b Ttype.t -> ('a, 'b) t -> res
-end
+  module type C0 = sig
+    include Unify.T0
+    val data : t data
+  end
 
-type 'a candidate =
-  | T0 of (module C0 with type res = 'a)
-  | T1 of (module C1 with type res = 'a)
-  | T2 of (module C2 with type res = 'a)
+  module type C1 = sig
+    include Unify.T1
+    val data : 'a Ttype.t -> 'a t data
+  end
 
-type 'a t = 'a candidate Tree.t
+  module type C2 = sig
+    include Unify.T2
+    val data : 'a Ttype.t -> 'b Ttype.t -> ('a, 'b) t data
+  end
 
-let empty ~modulo_props : 'a t = Tree.empty ~modulo_props
+  module type M0 = sig
+    include Unify.T0
+    type matched
+    val data : t data
+    val eq : (t, matched) TypEq.t
+  end
 
-let add (type t res) ~(t: t Ttype.t) ~(f: t -> res) tree =
-  let c = T0 (module struct
-      type nonrec t = t [@@deriving t]
-      type nonrec res = res
-      let f = f end)
-  in Tree.add (Ttype.to_stype t) c tree
+  module type M1 = sig
+    include Unify.T1
+    type matched
+    type a
+    val data : a t data
+    val eq : (a t, matched) TypEq.t
+  end
 
-let add0 (type a) (module C : C0 with type res = a) tree =
-  Tree.add (Ttype.to_stype C.t) (T0 (module C)) tree
+  module type M2 = sig
+    include C2
+    type matched
+    type a
+    type b
+    val data : (a, b) t data
+    val eq : ((a, b) t, matched) TypEq.t
+  end
 
-type var
-let var i : var Ttype.t = Obj.magic (Stype.DT_var i)
-let v0 = var 0
-let v1 = var 1
+  type 'a matched =
+    | M0 of (module M0 with type matched = 'a)
+    | M1 of (module M1 with type matched = 'a)
+    | M2 of (module M2 with type matched = 'a)
 
-let add1 (type a) (module C : C1 with type res = a) tree =
-  Tree.add (Ttype.to_stype (C.t v0)) (T1 (module C)) tree
+  type candidate =
+    | C0 of (module C0)
+    | C1 of (module C1)
+    | C2 of (module C2)
 
-let add2 (type a) (module C : C2 with type res = a) tree =
-  Tree.add (Ttype.to_stype (C.t v0 v1)) (T2 (module C)) tree
+  type t = candidate Tree.t
 
-let ttype: type a. int -> Stype.t IntMap.t -> a Ttype.t =
-  fun i map ->
-    match IntMap.find_opt i map with
-    | None -> Obj.magic Std.unit_t (* Unification succeeded, but type variable
-                                      was not used. *)
-    | Some s -> Obj.magic s (* Unification succeeded by instantiating type
-                               variable with stype s. *)
+  let empty ~modulo_props : t = Tree.empty ~modulo_props
 
-let apply' : type res. res t -> Ttype.dynamic -> res =
-  fun tree (Ttype.Dyn (t,x)) ->
-    let stype = Ttype.to_stype t in
-    match Tree.get stype tree with
+  let add (type a) ~(t: a Ttype.t) (data: a data) tree =
+    let c = C0 (module struct
+        type t = a
+        let t = t
+        let data = data end)
+    in Tree.add (Ttype.to_stype t) c tree
+
+  let add0 (module C : C0) tree =
+    Tree.add (Ttype.to_stype C.t) (C0 (module C)) tree
+
+  type var
+  let var i : var Ttype.t = Obj.magic (Stype.DT_var i)
+  let v0 = var 0
+  let v1 = var 1
+
+  let add1 (module C : C1) tree =
+    Tree.add (Ttype.to_stype (C.t v0)) (C1 (module C)) tree
+
+  let add2 (module C : C2) tree =
+    Tree.add (Ttype.to_stype (C.t v0 v1)) (C2 (module C)) tree
+
+  let ttype: type a. int -> Tree.substitution -> a Ttype.t =
+    fun i map ->
+      match IntMap.find_opt i map with
+      | None -> Obj.magic Std.unit_t (* Unification succeeded, but type variable
+                                        was not used. *)
+      | Some s -> Obj.magic s (* Unification succeeded by instantiating type
+                                 variable with stype s. *)
+
+  let apply : type a. t -> t:a Ttype.t -> a matched option =
+    fun tree ~t ->
+      let stype = Ttype.to_stype t in
+      match Tree.get stype tree with
+      | None -> None
+      | Some (C0 (module C : C0), map) ->
+        assert (IntMap.cardinal map = 0);
+        let module M : M0 with type matched = a = struct
+          include C
+          type matched = a
+          let eq = Obj.magic TypEq.refl
+        end
+        in Some (M0 (module M))
+      | Some (C1 (module C : C1), map) ->
+        assert (IntMap.cardinal map < 2);
+        let module M : M1 with type matched = a = struct
+          include C
+          type matched = a
+          type a
+          let eq = Obj.magic TypEq.refl
+          let data = data (ttype 0 map)
+        end
+        in Some (M1 (module M))
+      | Some (C2 (module C : C2), map) ->
+        assert (IntMap.cardinal map < 3);
+        let module M : M2 with type matched = a = struct
+          include C
+          type matched = a
+          type a type b
+          let eq = Obj.magic TypEq.refl
+          let data = data (ttype 0 map) (ttype 1 map)
+        end
+        in Some (M2 (module M))
+
+  let apply_exn tree ~t =
+    match apply tree ~t with
     | None -> raise Not_found
-    | Some (T0 (module M : C0 with type res = res), map) ->
-      assert (IntMap.cardinal map = 0);
-      M.f (Obj.magic x)
-    | Some (T1 (module M : C1 with type res = res), map) ->
-      assert (IntMap.cardinal map < 2);
-      M.f (ttype 0 map) (Obj.magic x)
-    | Some (T2 (module M : C2 with type res = res), map) ->
-      assert (IntMap.cardinal map < 3);
-      M.f (ttype 0 map) (ttype 1 map) (Obj.magic x)
-
-let apply matcher ~t x = apply' matcher (Ttype.Dyn (t, x))
-
-let apply_opt m ~t x =
-  match apply m ~t x with
-  | x -> Some x
-  | exception Not_found -> None
-
-let apply_opt' m d =
-  match apply' m d with
-  | x -> Some x
-  | exception Not_found -> None
+    | Some m -> m
+end

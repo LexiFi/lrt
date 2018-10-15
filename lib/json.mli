@@ -137,7 +137,8 @@ val of_json: ?ctx:ctx -> t:'a Ttype.t -> value -> 'a
 (* TODO: support passing local custom conversions to to_json/of_json. *)
 
 val register_custom: t:'a Ttype.t ->
-  to_json:('a -> value) -> of_json:(value -> 'a) -> unit
+  to_json:(?ctx:ctx -> 'a -> value) ->
+  of_json:(?ctx:ctx -> value -> 'a) -> unit
 
 (** [register_conversion] registers a global custom mapping between
     OCaml values and JSON trees for a specific closed *abstract* type.
@@ -151,31 +152,18 @@ val register_custom: t:'a Ttype.t ->
     [None] case).
 *)
 
-type 'a custom =
+type 'a custom_json =
   { to_json: ?ctx:ctx -> 'a -> value
   ; of_json: ?ctx:ctx -> value -> 'a
   }
 
-module type CUSTOM_0 = sig
-  include Unify.T0
-  val custom : t custom
-end
+module Matcher : Matcher.S with type 'a data := 'a custom_json
 
-(* val register_custom_0: (module CUSTOM_0) -> unit *)
+val register_custom_0: (module Matcher.C0) -> unit
 
-module type CUSTOM_1 = sig
-  include Unify.T1
-  val custom: 'a Ttype.t -> 'a t custom
-end
+val register_custom_1: (module Matcher.C1) -> unit
 
-(* val register_custom_1: (module CUSTOM_1) -> unit *)
-
-module type CUSTOM_2 = sig
-  include Unify.T2
-  val custom: 'a Ttype.t -> 'b Ttype.t -> ('a, 'b) t custom
-end
-
-(* val register_custom_2: (module CUSTOM_2) -> unit *)
+val register_custom_2: (module Matcher.C2) -> unit
 
 (* TODO: move somewhere else *)
 val of_get_params: ?utf8:bool -> (string * string) list -> value

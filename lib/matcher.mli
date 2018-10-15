@@ -1,23 +1,20 @@
 (** Pattern matching on dynamic types. *)
 
-module type CASE = sig
-  type 'a payload
-end
-
-module Make : functor (C: CASE) -> sig
+module type S = sig
   type t
+  type 'a data
 
   val empty: modulo_props:bool -> t
   (** The matcher without any registered pattern. *)
 
-  val add: t: 'a Ttype.t -> 'a C.payload -> t -> t
+  val add: t: 'a Ttype.t -> 'a data -> t -> t
   (** Add a case to the matcher. *)
 
   (** {2 Match types with free variables} *)
 
   module type C0 = sig
     include Unify.T0
-    val payload : t C.payload
+    val data : t data
   end
 
   val add0: (module C0) -> t -> t
@@ -25,7 +22,7 @@ module Make : functor (C: CASE) -> sig
 
   module type C1 = sig
     include Unify.T1
-    val payload : 'a Ttype.t -> 'a t C.payload
+    val data : 'a Ttype.t -> 'a t data
   end
 
   val add1: (module C1) -> t -> t
@@ -33,40 +30,50 @@ module Make : functor (C: CASE) -> sig
 
   module type C2 = sig
     include Unify.T2
-    val payload : 'a Ttype.t -> 'b Ttype.t -> ('a, 'b) t C.payload
+    val data : 'a Ttype.t -> 'b Ttype.t -> ('a, 'b) t data
   end
 
   val add2: (module C2) -> t -> t
   (** Add a case to the matcher. Two free variables. *)
 
-  (** {2 Executing the Matcher} *)
+  (** {2 Matching Result} *)
 
   module type M0 = sig
-    include C0
+    include Unify.T0
     type matched
+    val data : t data
     val eq : (t, matched) TypEq.t
   end
 
   module type M1 = sig
-    include C1
+    include Unify.T1
     type matched
-    type a [@@deriving t]
+    type a
+    val data : a t data
     val eq : (a t, matched) TypEq.t
   end
 
   module type M2 = sig
-    include C2
+    include Unify.T2
     type matched
-    type a [@@deriving t]
-    type b [@@deriving t]
+    type a
+    type b
+    val data : (a, b) t data
     val eq : ((a, b) t, matched) TypEq.t
   end
 
   type 'a matched =
-    | U0 of (module M0 with type matched = 'a)
-    | U1 of (module M1 with type matched = 'a)
-    | U2 of (module M2 with type matched = 'a)
+    | M0 of (module M0 with type matched = 'a)
+    | M1 of (module M1 with type matched = 'a)
+    | M2 of (module M2 with type matched = 'a)
 
+  (** {2 Executing the Matcher} *)
 
   val apply: t -> t: 'a Ttype.t -> 'a matched option
+
+  val apply_exn: t -> t: 'a Ttype.t -> 'a matched
+  (** raise Not_found *)
+
 end
+
+module Make (Data: sig type 'a t end) : S with type 'a data = 'a Data.t

@@ -7,33 +7,40 @@ and d = (int * (int * string))
 and 'a e = 'a list
 [@@deriving t]
 
+module Matcher = Matcher.Make (struct type 'a t = unit -> unit end)
+
 let matcher =
   Matcher.(
     empty ~modulo_props:true
-    |> add ~t:a_t ~f:(fun _ -> print_endline "a")
-    |> add ~t:b_t ~f:(fun _ -> print_endline "b")
-    |> add ~t:c_t ~f:(fun _ -> print_endline "c")
+    |> add ~t:a_t (fun _ -> print_endline "a")
+    |> add ~t:b_t (fun _ -> print_endline "b")
+    |> add ~t:c_t (fun _ -> print_endline "c")
     |> add0 (module struct
-      type res = unit
       type t = d [@@deriving t]
-      let f _ = print_endline "d" end)
+      let data = fun () -> print_endline "d" end)
     |> add1 (module struct
-      type res = unit
       type 'a t = 'a e [@@deriving t]
-      let f _ _ = print_endline "e" end)
+      let data _a_t = fun () -> print_endline "e" end)
     |> add2 (module struct
-      type res = unit
-      type ('a,'b) t = ('a,'b) Hashtbl.t [@patch hashtbl_t] [@@deriving t]
-      let f _ _ _ = print_endline "f" end)
+      type ('a, 'b) t = ('a, 'b) Hashtbl.t [@patch hashtbl_t] [@@deriving t]
+      let data _a_t _b_t = fun () -> print_endline "f" end)
   )
 
+let apply: type a. Matcher.t -> t:a Ttype.t -> unit = fun matcher ~t ->
+  let open Matcher in
+  match apply matcher ~t with
+  | None -> print_endline "Not found"
+  | Some (M0 (module M : M0 with type matched = a)) -> M.data ()
+  | Some (M1 (module M : M1 with type matched = a)) -> M.data ()
+  | Some (M2 (module M : M2 with type matched = a)) -> M.data ()
+
 let%expect_test _ =
-  Matcher.apply matcher ~t:a_t (1,1) ;
-  Matcher.apply matcher ~t:b_t None ;
-  Matcher.apply matcher ~t:c_t ["string";"list"] ;
-  Matcher.apply matcher ~t:d_t (1,(1,"")) ;
-  Matcher.apply matcher ~t:(e_t float_t) [1.] ;
-  Matcher.apply matcher ~t:(hashtbl_t int_t float_t) (Hashtbl.create 1);
+  apply matcher ~t:a_t;
+  apply matcher ~t:b_t;
+  apply matcher ~t:c_t;
+  apply matcher ~t:d_t;
+  apply matcher ~t:(e_t float_t);
+  apply matcher ~t:(hashtbl_t int_t float_t);
   [%expect {|
     a
     b

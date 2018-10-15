@@ -254,37 +254,22 @@ let empty_ctx = ctx ()
 
 let json_unit = Object []
 
-module type CUSTOM_0 = sig
-  include Unify.T0
-  val to_json: ?ctx:ctx -> t -> value
-  val of_json: ?ctx:ctx -> value -> t
-end
 
-module type CUSTOM_1 = sig
-  include Unify.T1
-  val to_json: t:'a Ttype.t -> ?ctx:ctx -> 'a t -> value
-  val of_json: t:'a Ttype.t -> ?ctx:ctx -> value -> 'a t
-end
+type 'a custom_json =
+  { to_json: ?ctx:ctx -> 'a -> value
+  ; of_json: ?ctx:ctx -> value -> 'a
+  }
 
-module type CUSTOM_2 = sig
-  include Unify.T2
-  val to_json: 'a Ttype.t -> 'b Ttype.t -> ?ctx:ctx -> ('a, 'b) t -> value
-  val of_json: 'a Ttype.t -> 'b Ttype.t -> ?ctx:ctx -> value -> ('a, 'b) t
-end
+module Matcher = Matcher.Make (struct type 'a t = 'a custom_json end)
 
-let (custom_to : value Matcher.t ref) = ref (Matcher.empty ~modulo_props:true)
+let matcher = ref (Matcher.empty ~modulo_props:true)
 
-type custom_of = { of_json: 'a. value -> 'a }
-let (custom_of : custom_of Matcher.t ref) =
-  ref (Matcher.empty ~modulo_props:true)
+let register_custom ~t ~to_json ~of_json =
+  matcher := Matcher.add ~t {to_json; of_json} !matcher
 
-let register_custom: t:'a Ttype.t ->
-  to_json:('a -> value) -> of_json:(value -> 'a) -> unit =
-  fun ~t ~to_json ~of_json ->
-    (* TODO: The matcher interface is not capable enough *)
-    let of_json = Obj.magic of_json in
-    custom_of := Matcher.add ~t ~f:(fun _ -> { of_json }) !custom_of;
-    custom_to := Matcher.add ~t ~f:(fun v -> to_json v) !custom_to
+let register_custom_0 m = matcher := Matcher.add0 m !matcher
+let register_custom_1 m = matcher := Matcher.add1 m !matcher
+let register_custom_2 m = matcher := Matcher.add2 m !matcher
 
 (* OPTIMs:
    - memoize the function (for a given set of flags)
@@ -295,8 +280,14 @@ let variant_xt = Xtype.of_ttype [%t: Variant.t]
 
 let to_json ?(ctx=empty_ctx) ~t x =
   let rec to_json: type a. a Xtype.t -> a -> value = fun t x ->
-    match Matcher.apply_opt !custom_to ~t:(t.t) x with
-    | Some v -> v
+    let open Matcher in
+    match apply !matcher ~t:(t.t) with
+    | Some (M0 (module M : M0 with type matched = a)) ->
+      let TypEq.Eq = M.eq in M.data.to_json x
+    | Some (M1 (module M : M1 with type matched = a)) ->
+      let TypEq.Eq = M.eq in M.data.to_json x
+    | Some (M2 (module M : M2 with type matched = a)) ->
+      let TypEq.Eq = M.eq in M.data.to_json x
     | None -> to_json_xtype (Lazy.force t.xt) x
 
   and to_json_xtype: type a. a xtype -> a -> value = fun t x ->
@@ -382,10 +373,15 @@ end
 let of_json ?(ctx=empty_ctx) ~t x =
   let rec of_json: type a. a Xtype.t -> string list -> value -> a =
     fun t path x ->
-      (* TODO: The current matcher interface only works for to_json *)
-      match Matcher.apply_opt !custom_of ~t:t.t (Obj.magic ()) with
+      let open Matcher in
+      match apply !matcher ~t:(t.t) with
+      | Some (M0 (module M : M0 with type matched = a)) ->
+        let TypEq.Eq = M.eq in M.data.of_json x
+      | Some (M1 (module M : M1 with type matched = a)) ->
+        let TypEq.Eq = M.eq in M.data.of_json x
+      | Some (M2 (module M : M2 with type matched = a)) ->
+        let TypEq.Eq = M.eq in M.data.of_json x
       | None -> of_json_xt (Lazy.force t.xt) path x
-      | Some {of_json} -> of_json x
 
   and of_json_xt: type t. t xtype -> string list -> value -> t = fun t path v ->
     match t, v with
