@@ -3,8 +3,9 @@ module Symbol : sig
      variables.
 
      For such a language, [Symbol.t] corresponds to the set of symbols,
-     [Symbol.compare] to a total order on the set of symbols, and [Symbol.of_stype]
-     to the destruction of a term into a symbol and a list of arguments.
+     [Symbol.compare] to a total order on the set of symbols, and
+     [Symbol.of_stype] to the destruction of a term into a symbol and a list of
+     arguments.
 
      The total order on symbols, together with the invariant that each symbol
      has a fixed arity, can be used to implement the discrimination tree below.
@@ -16,21 +17,27 @@ module Symbol : sig
      [Stype.equality].
 
      TODO: reduce string comparison to int using [Ext.String.Tbl].
-     Therefore, accumulate names during construction of the tree. On unification
-     time, lookup the name in the table to obtain an integer. Use this integer
-     for the total order.
+     Therefore, accumulate names during construction of the tree. On
+     unification, lookup the name in the table to obtain an integer. Use this
+     integer for the total order.
 
      TODO: Extend stype with an integer symbol identifier to avoid all overhead.
+     Serialization of stype would strip this identifier, deserialization would
+     lookup the identifier in a registry [Stype.equality] / create a new one.
   *)
 
   type t
   val compare : t -> t -> int
 
+  type registry
+  val empty: registry
+
   type maybe_free =
     | Symbol of t * Stype.t list (** symbol, arguments *)
     | Var of int (** DT_var *)
 
-  val of_stype : modulo_props: bool -> Stype.t -> maybe_free
+  val of_stype: registry -> modulo_props: bool -> Stype.t -> maybe_free option
+  val of_stype_register: registry -> modulo_props: bool -> Stype.t -> maybe_free
 end = struct
   type base = | Int | Float | String | Array | List | Option | Arrow
 
@@ -38,35 +45,81 @@ end = struct
      directly. *)
 
   type t =
-    | Base of base
+    | Base of base (* TODO: Base could be int too *)
     | Tuple of int
     | Props of Stype.properties
-    | Named of string (* arity, name -- used for abstract & dt_node *)
-    | Object of string list (* method names *)
+    | Named of int
+    | Object of string list (* method names. TODO: may be insufficient *)
+
+  type registry = { mutable n: int
+                  ; mutable names: string list
+                  ; mutable table: Ext.String.Tbl.t
+                  }
+
+  let empty = { n = 0; names = []; table = Ext.String.Tbl.prepare [] }
+  let add r name =
+    let names = name :: r.names in
+    r.n <- r.n + 1;
+    r.names <- names;
+    r.table <- Ext.String.Tbl.prepare (List.rev names);
+    r.n - 1
+
+  let register r s =
+    let i = Ext.String.Tbl.lookup r.table s in
+    if i >= 0 then i
+    else add r s
+
+  let lookup r s =
+    let i = Ext.String.Tbl.lookup r.table s in
+    if i >= 0 then Some i
+    else None
 
   type maybe_free =
     | Symbol of t * Stype.t list
     | Var of int (* DT_var *)
 
-  let rec of_stype: modulo_props: bool -> Stype.t -> maybe_free =
-    fun ~modulo_props -> function
-      | DT_int -> Symbol (Base Int, [])
-      | DT_float -> Symbol (Base Float, [])
-      | DT_string -> Symbol (Base String, [])
-      | DT_list a -> Symbol (Base List, [a])
-      | DT_array a -> Symbol (Base Array, [a])
-      | DT_option a -> Symbol (Base Option, [a])
-      | DT_arrow (_, a, b) -> Symbol (Base Arrow, [a; b])
-      | DT_prop (_, s) when modulo_props -> of_stype ~modulo_props s
-      | DT_prop (p, s) -> Symbol (Props p, [s])
-      | DT_tuple l -> Symbol (Tuple (List.length l), l)
-      | DT_abstract (rec_name, rec_args)
-      | DT_node {rec_name; rec_args; _} ->
-        Symbol (Named rec_name, rec_args)
-      | DT_object l ->
-        let method_names, types = List.split l
-        in Symbol (Object method_names, types)
-      | DT_var i -> Var i
+  let rec of_stype: registry -> modulo_props: bool -> Stype.t -> maybe_free
+      option = fun r ~modulo_props -> function
+    | DT_int -> Some (Symbol (Base Int, []))
+    | DT_float -> Some (Symbol (Base Float, []))
+    | DT_string -> Some (Symbol (Base String, []))
+    | DT_list a -> Some (Symbol (Base List, [a]))
+    | DT_array a -> Some (Symbol (Base Array, [a]))
+    | DT_option a -> Some (Symbol (Base Option, [a]))
+    | DT_arrow (_, a, b) -> Some (Symbol (Base Arrow, [a; b]))
+    | DT_prop (_, s) when modulo_props -> of_stype r ~modulo_props s
+    | DT_prop (p, s) -> Some (Symbol (Props p, [s]))
+    | DT_tuple l -> Some (Symbol (Tuple (List.length l), l))
+    | DT_abstract (rec_name, rec_args)
+    | DT_node {rec_name; rec_args; _} ->
+      begin match lookup r rec_name with
+        | None -> None
+        | Some i -> Some (Symbol (Named i, rec_args))
+      end
+    | DT_object l ->
+      let method_names, types = List.split l
+      in Some (Symbol (Object method_names, types))
+    | DT_var i -> Some (Var i)
+
+  let rec of_stype_register: registry -> modulo_props: bool -> Stype.t ->
+    maybe_free = fun r ~modulo_props -> function
+    | DT_int -> Symbol (Base Int, [])
+    | DT_float -> Symbol (Base Float, [])
+    | DT_string -> Symbol (Base String, [])
+    | DT_list a -> Symbol (Base List, [a])
+    | DT_array a -> Symbol (Base Array, [a])
+    | DT_option a -> Symbol (Base Option, [a])
+    | DT_arrow (_, a, b) -> Symbol (Base Arrow, [a; b])
+    | DT_prop (_, s) when modulo_props -> of_stype_register r ~modulo_props s
+    | DT_prop (p, s) -> Symbol (Props p, [s])
+    | DT_tuple l -> Symbol (Tuple (List.length l), l)
+    | DT_abstract (rec_name, rec_args)
+    | DT_node {rec_name; rec_args; _} ->
+      Symbol (Named (register r rec_name), rec_args)
+    | DT_object l ->
+      let method_names, types = List.split l
+      in Symbol (Object method_names, types)
+    | DT_var i -> Var i
 
   let compare = compare
   (* TODO: A less naive compare may speed up things significantly. *)
@@ -108,19 +161,24 @@ end = struct
                (* free_vars maps DT_var in stype to free vars in path *)
     | Inner of { map: 'a tree SymbolMap.t; free: 'a tree IntMap.t }
 
-  type 'a t = { modulo_props: bool; tree: 'a tree }
+  type 'a t = { modulo_props: bool
+              ; tree: 'a tree
+              ; registry: Symbol.registry }
 
   let empty_tree = Inner { map = SymbolMap.empty; free = IntMap.empty }
 
-  let empty ~modulo_props = { modulo_props ; tree = empty_tree }
+  let empty ~modulo_props = { modulo_props ;
+                              tree = empty_tree ;
+                              registry = Symbol.empty}
 
   let get stype t =
     let modulo_props = t.modulo_props in
     let equal = if modulo_props then
         Stype.equality_modulo_props else Stype.equality
     and get_step s =
-      match Symbol.of_stype ~modulo_props s with
-      | Symbol.Symbol (s, l) -> (s, l)
+      match Symbol.of_stype t.registry ~modulo_props s with
+      | Some (Symbol.Symbol (s, l)) -> Some (s, l)
+      | None -> None
       | _ -> failwith "free variable in query"
     in
     let rec traverse stack subst tree =
@@ -132,10 +190,12 @@ end = struct
             IntMap.empty free_vars
         in Some (value, subst)
       | hd :: tl, Inner node -> begin
-          let step, children = get_step hd in
-          ( match SymbolMap.find_opt step node.map with
+          ( match get_step hd with
             | None -> None
-            | Some x -> traverse (children @ tl) subst x )
+            | Some (step, children) ->
+              ( match SymbolMap.find_opt step node.map with
+                | None -> None
+                | Some x -> traverse (children @ tl) subst x ))
           |>
           (* Ordinary lookup using the outermost feature of the stype hd failed.
              Now try to unifying with the free steps, starting the smallest.
@@ -168,7 +228,7 @@ end = struct
   let add stype value t =
     let get_step =
       let modulo_props = t.modulo_props in
-      Symbol.of_stype ~modulo_props
+      Symbol.of_stype_register t.registry ~modulo_props
     in
     let rec traverse stack free_vars tree =
       match stack, tree with
