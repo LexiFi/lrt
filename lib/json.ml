@@ -275,7 +275,7 @@ let register_custom_2 m = Matcher.add2 matcher m
 
 let variant_xt = Xtype.of_ttype [%t: Variant.t]
 
-let to_json ?(ctx=empty_ctx) ~t =
+let[@landmark] to_json ?(ctx=empty_ctx) ~t =
   let rec to_json: type a. a Xtype.t -> a -> value = fun t ->
     let open Matcher in
     match apply matcher ~t:(t.t) with
@@ -376,7 +376,7 @@ end = struct
         with Not_found -> default
 end
 
-let of_json ?(ctx=empty_ctx) ~t =
+let[@landmark] of_json ?(ctx=empty_ctx) ~t =
   let rec of_json: type a. a Xtype.t -> value -> a = fun t ->
     let open Matcher in
     match apply matcher ~t:(t.t) with

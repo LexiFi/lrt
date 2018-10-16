@@ -13,9 +13,12 @@ let filename =
 
 let value = Variant.value_of_variant_in_file ~t filename
 
+let of_json = Json.of_json ~t ?ctx:None
+and to_json = Json.to_json ~t ?ctx:None
+
 let[@landmark "test"] run () =
-  let[@landmark "to_json"] json = Json.to_json ~t value in
-  let[@landmark "of_json"] value' = Json.of_json ~t json in
+  let[@landmark "to_json"] json = to_json value in
+  let[@landmark "of_json"] value' = of_json json in
   ignore(value')
 
 let _ = List.init 10 (fun _ -> run ())

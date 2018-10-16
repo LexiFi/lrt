@@ -453,14 +453,16 @@ module Fields = struct
           fun (o: Obj.t) -> f (Obj.magic o))
 
   let[@landmark] map_tuple (type a b) (tup: a tuple) (mapf: b mapf) =
-    let farr = fun_arr_of_fields tup.t_len tup.t_flds mapf in
+    let farr = lazy (fun_arr_of_fields tup.t_len tup.t_flds mapf) in
     fun (x:a) ->
+      let farr = Lazy.force farr in
       let o = Obj.repr x in
       List.init (Obj.size o) (fun i -> farr.(i) (Obj.field o i))
 
   let[@landmark] map_record (type a b) (r: a record) (mapf: b mapf') =
-    let farr = fun_arr_of_fields' r.r_len r.r_flds mapf in
+    let farr = lazy (fun_arr_of_fields' r.r_len r.r_flds mapf) in
     fun (x:a) ->
+      let farr = Lazy.force farr in
       let o = Obj.repr x in
       List.init (Obj.size o) (fun i -> farr.(i) (Obj.field o i))
 
@@ -472,24 +474,27 @@ module Fields = struct
   let[@landmark] map_sum :
     type a b c. a sum -> b mapf -> c mapf' -> a -> (b, c) mapped_sum =
     fun sum mapf mapf' ->
-      let cstrs, fnd = cstr_table sum.s_cstrs in
-      let farr: (Obj.t -> (b, c) mapped_sum) array =
-        Array.init (Array.length cstrs) (fun i ->
-            match cstrs.(i) with
-            | Constant c -> fun _ -> Constant (fst c.cc_label)
-            | Regular c ->
-              let farr' = fun_arr_of_fields c.rc_len  c.rc_flds mapf in
-              fun o -> Regular (
-                  fst c.rc_label,
-                  List.init (Obj.size o) (fun i -> farr'.(i) (Obj.field o i)))
-            | Inlined c ->
-              let farr' = fun_arr_of_fields' c.ic_len  c.ic_flds mapf' in
-              fun o -> Inlined (
-                  fst c.ic_label,
-                  List.init (Obj.size o) (fun i -> farr'.(i) (Obj.field o i)))
-          )
+      let aux = lazy (
+        let cstrs, fnd = cstr_table sum.s_cstrs in
+        let farr =
+          Array.init (Array.length cstrs) (fun i ->
+              match cstrs.(i) with
+              | Constant c -> fun _ -> Constant (fst c.cc_label)
+              | Regular c ->
+                let farr' = fun_arr_of_fields c.rc_len  c.rc_flds mapf in
+                fun o -> Regular (
+                    fst c.rc_label,
+                    List.init (Obj.size o) (fun i -> farr'.(i) (Obj.field o i)))
+              | Inlined c ->
+                let farr' = fun_arr_of_fields' c.ic_len  c.ic_flds mapf' in
+                fun o -> Inlined (
+                    fst c.ic_label,
+                    List.init (Obj.size o) (fun i -> farr'.(i) (Obj.field o i)))
+            )
+        in farr, fnd)
       in
       fun (x:a) ->
+        let farr, fnd = Lazy.force aux in
         let o = Obj.repr x
         in farr.(fnd x) o
 end

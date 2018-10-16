@@ -580,7 +580,7 @@ module Make (Data: sig type 'a t end) : S with type 'a data = 'a Data.t = struct
       | Some s -> Obj.magic s (* Unification succeeded by instantiating type
                                  variable with stype s. *)
 
-  let apply : type a. t -> t:a Ttype.t -> a matched option =
+  let[@landmark] apply : type a. t -> t:a Ttype.t -> a matched option =
     fun tree ~t ->
       let stype = Ttype.to_stype t in
       match Tree.get tree stype with
