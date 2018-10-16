@@ -11,19 +11,20 @@ module Matcher = Matcher.Make (struct type 'a t = unit -> unit end)
 
 let matcher =
   Matcher.(
-    empty ~modulo_props:true
-    |> add ~t:a_t (fun _ -> print_endline "a")
-    |> add ~t:b_t (fun _ -> print_endline "b")
-    |> add ~t:c_t (fun _ -> print_endline "c")
-    |> add0 (module struct
+    let m = create ~modulo_props:true in
+    add m ~t:a_t (fun _ -> print_endline "a");
+    add m ~t:b_t (fun _ -> print_endline "b");
+    add m ~t:c_t (fun _ -> print_endline "c");
+    add0 m (module struct
       type t = d [@@deriving t]
-      let data = fun () -> print_endline "d" end)
-    |> add1 (module struct
+      let data = fun () -> print_endline "d" end);
+    add1 m (module struct
       type 'a t = 'a e [@@deriving t]
-      let data _a_t = fun () -> print_endline "e" end)
-    |> add2 (module struct
+      let data _a_t = fun () -> print_endline "e" end);
+    add2 m (module struct
       type ('a, 'b) t = ('a, 'b) Hashtbl.t [@patch hashtbl_t] [@@deriving t]
-      let data _a_t _b_t = fun () -> print_endline "f" end)
+      let data _a_t _b_t = fun () -> print_endline "f" end);
+    m
   )
 
 let apply: type a. Matcher.t -> t:a Ttype.t -> unit = fun matcher ~t ->

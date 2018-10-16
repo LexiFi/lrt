@@ -145,6 +145,70 @@ module Symbol (Unit: sig end) : SYMBOL = struct
     | DT_object _ ->
       failwith "object not supported"
     | DT_var i -> Var i
+
+end
+
+let%expect_test _ =
+  let module A = Symbol (struct end) in
+  let open A in
+  let open Stype in
+  let print = function
+    | Var i -> Printf.printf "Var %i\n%!" i
+    | Symbol (i,_) -> Printf.printf "Symbol %i\n%!" i
+  and modulo_props = true in
+  let print' = function
+    | None -> Printf.printf "not registered\n%!"
+    | Some x -> print x
+  in
+  print (of_stype_register ~modulo_props DT_int);
+  print (of_stype_register ~modulo_props (DT_array DT_int));
+  print (of_stype_register ~modulo_props (DT_abstract ("a",[])));
+  print (of_stype_register ~modulo_props (DT_abstract ("c",[])));
+  print (of_stype_register ~modulo_props (DT_abstract ("d",[])));
+  print' (of_stype ~modulo_props DT_int);
+  print' (of_stype ~modulo_props (DT_tuple [DT_int; DT_int]));
+  print' (of_stype ~modulo_props (DT_tuple []));
+  print' (of_stype ~modulo_props (DT_abstract ("a",[])));
+  print' (of_stype ~modulo_props (DT_abstract ("b",[])));
+  print' (of_stype ~modulo_props (DT_abstract ("c",[])));
+  print' (of_stype ~modulo_props (DT_abstract ("d",[])));
+  print (of_stype_register ~modulo_props (DT_abstract ("b",[])));
+  print' (of_stype ~modulo_props (DT_abstract ("b",[])));
+  let module B = Symbol (struct end) in
+  let open B in
+  let print = function
+    | Var i -> Printf.printf "Var %i\n%!" i
+    | Symbol (i,_) -> Printf.printf "Symbol %i\n%!" i
+  and modulo_props = true in
+  let print' = function
+    | None -> Printf.printf "not registered\n%!"
+    | Some x -> print x
+  in
+  print' (of_stype ~modulo_props (DT_abstract ("b",[])));
+  [%expect {|
+    Symbol -1
+    Symbol -4
+    Symbol 0
+    Symbol 1
+    Symbol 2
+    Symbol -1
+    Symbol -10
+    Symbol -8
+    Symbol 0
+    not registered
+    Symbol 1
+    Symbol 2
+    Symbol 3
+    Symbol 3
+    not registered |}]
+
+module IntTable = struct
+  type 'a t = (int, 'a) Hashtbl.t
+  open Hashtbl
+  let create () = create 5
+  let set = replace
+  let get = find_opt
+  let fold = fold
 end
 
 module IntMap = Map.Make (struct type t = int let compare = compare end)
@@ -153,9 +217,9 @@ module Tree (Symbol : SYMBOL) : sig
   type 'a t
   type key = Stype.t
   type substitution = Stype.t IntMap.t
-  val empty : modulo_props: bool -> 'a t
-  val add : key -> 'a -> 'a t -> 'a t
-  val get : key -> 'a t -> ('a * substitution) option
+  val create : modulo_props: bool -> 'a t
+  val add : 'a t -> key -> 'a -> unit
+  val get : 'a t -> key -> ('a * substitution) option
 end = struct
   (* On each level of the discrimination tree, we discriminate on the
      on the first symbol on the stack. Arguments returned by [Symbol.of_stype]
@@ -176,22 +240,20 @@ end = struct
   type key = Stype.t
   type substitution = Stype.t IntMap.t
 
-  module SymbolMap = IntMap
-
   type 'a tree =
     | Leave of { value: 'a; free_vars: (int * int) list }
                (* free_vars maps DT_var in stype to free vars in path *)
-    | Inner of { map: 'a tree SymbolMap.t; free: 'a tree IntMap.t }
+    | Inner of { steps: 'a tree IntTable.t; free: 'a tree IntTable.t }
 
   type 'a t = { modulo_props: bool
               ; tree: 'a tree }
 
-  let empty_tree = Inner { map = SymbolMap.empty; free = IntMap.empty }
+  let create_node () =
+    Inner { steps = IntTable.create (); free = IntTable.create () }
 
-  let empty ~modulo_props = { modulo_props ;
-                              tree = empty_tree }
+  let create ~modulo_props = { modulo_props ; tree = create_node () }
 
-  let get stype t =
+  let get t stype =
     let modulo_props = t.modulo_props in
     let equal = if modulo_props then
         Stype.equality_modulo_props else Stype.equality
@@ -212,13 +274,13 @@ end = struct
       | hd :: tl, Inner node -> begin
           ( match get_step hd with
             | None -> None
-            | Some (step, children) ->
-              ( match SymbolMap.find_opt step node.map with
+            | Some (symbol, children) ->
+              ( match IntTable.get node.steps symbol with
                 | None -> None
                 | Some x -> traverse (children @ tl) subst x ))
           |>
           (* Ordinary lookup using the outermost feature of the stype hd failed.
-             Now try to unifying with the free steps, starting the smallest.
+             Now try to unify with the free vars, starting with the smallest.
              By doing this, we guarantee (proof?!) that ('a * 'a) is preferred
              over ('a * 'b).
              Rationale: the smallest was bound further up in the path and thus
@@ -237,40 +299,45 @@ end = struct
                     if equal stype hd
                     then traverse tl subst tree
                     else loop rest
-              in loop (IntMap.to_seq node.free))
+              in
+              (* TODO: change type of node.free to something ordered *)
+              let sorted =
+                IntTable.fold (fun k v acc -> IntMap.add k v acc)
+                  node.free IntMap.empty
+              in
+              loop (IntMap.to_seq sorted))
         end
       | [], _
       | _ :: _, Leave _ ->
         assert false (* This should be impossible. [Symbol.of_stype] should
-                        uniquely identify the number of children. *)
+                        uniquely identify the number of children on each step.
+                     *)
     in traverse [stype] [] t.tree
 
-  let add stype value t =
+  let add t stype value =
     let get_step =
       let modulo_props = t.modulo_props in
       Symbol.of_stype_register ~modulo_props
     in
     let rec traverse stack free_vars tree =
-      match stack, tree with
-      | [], Leave _ ->
+      match tree, stack with
+      | Leave _, [] ->
         raise (Invalid_argument "(congruent) type already registered")
-      | [], Inner {map; free} ->
-        (* TODO: can we avoid these asserts by shuffling the code? *)
-        assert (SymbolMap.is_empty map);
-        assert (IntMap.is_empty free);
-        Leave {value; free_vars}
-      | hd :: tl, Inner node -> begin
-          match get_step hd with
-          | Symbol (step, children) ->
-            let tree =
-              match SymbolMap.find_opt step node.map with
-              | None -> empty_tree
-              | Some tree -> tree
-            in
-            let map =
-              SymbolMap.add step (traverse (children @ tl) free_vars tree)
-                node.map
-            in Inner { node with map }
+      | Inner node, hd :: tl ->
+        begin match get_step hd with
+          | Symbol (symbol, children) -> begin
+            let nstack = children @ tl in
+            match IntTable.get node.steps symbol with
+            | None -> begin match nstack with
+                | [] ->
+                  IntTable.set node.steps symbol (Leave {value; free_vars})
+                | _ ->
+                  let tree = create_node () in
+                  IntTable.set node.steps symbol tree;
+                  traverse nstack free_vars tree
+              end
+            | Some tree -> traverse nstack free_vars tree
+          end
           | Var dt_var ->
             let free_id =
               (* Was this dt_var already observed further up in the path?
@@ -278,79 +345,84 @@ end = struct
               match List.assoc_opt dt_var free_vars with
               | Some free_id -> free_id
               | None ->
-                  let last =
+                  let last = (* TODO: check first element might be enough *)
                     List.fold_left max (-1) (List.rev_map fst free_vars)
                   in last + 1
-            in let tree =
-              match IntMap.find_opt free_id node.free with
-              | Some tree -> tree
-              | None -> empty_tree
-            in let free =
-                 IntMap.add free_id (
-                   traverse tl ((dt_var, free_id) :: free_vars) tree)
-                   node.free
-            in Inner {node with free}
+            in let free_vars = (dt_var, free_id) :: free_vars in
+            begin
+              match IntTable.get node.free free_id with
+              | Some tree ->
+                traverse tl free_vars tree
+              | None -> match tl with
+                | [] ->
+                  IntTable.set node.free free_id (Leave {value; free_vars})
+                | _ ->
+                  let tree = create_node () in
+                  IntTable.set node.free free_id tree;
+                  traverse tl free_vars tree
+            end
         end
-      | _ :: _ , Leave _ -> assert false
-    in {t with tree = traverse [stype] [] t.tree}
+      | _, _ -> failwith "inconsistent tree"
+    in traverse [stype] [] t.tree
+end
 
-  let%test _ =
-    let open Stype in
-    let print_substitution fmt map =
-      IntMap.iter (fun i stype ->
-          Format.fprintf fmt " DT_var %i -> %a;" i Stype.print stype)
-        map
-    in
-    let print fmt = function
-      | None -> Format.fprintf fmt "None"
-      | Some (i, s) -> Format.fprintf fmt "Some (%i, %a)" i print_substitution s
-    in
-    let tadd typ = add (Ttype.to_stype typ) in
-    let open Std in
-    let t = empty ~modulo_props:true
-            |> tadd (list_t int_t) 1
-            |> tadd (option_t string_t) 2
-            |> tadd int_t 3
-            |> add (DT_var 0) 42
-            |> add (DT_list (DT_var 0)) 4
-            |> add (DT_tuple [DT_var 0; DT_var 0]) 5
-            |> add (DT_tuple [DT_var 1; DT_var 0]) 6
-            (* this fails as expected *)
-            (* |> add (DT_var 1) 42 *)
-    in
-    let s = Ttype.to_stype in
-    List.for_all
-      (fun (stype, expected) ->
-         let got = get stype t in
-         if got = expected then true
-         else
+let%test _ =
+  let module A = Tree (Symbol (struct end)) in
+  let open A in
+  let open Stype in
+  let print_substitution fmt map =
+    IntMap.iter (fun i stype ->
+        Format.fprintf fmt " DT_var %i -> %a;" i Stype.print stype)
+      map
+  in
+  let print fmt = function
+    | None -> Format.fprintf fmt "None"
+    | Some (i, s) -> Format.fprintf fmt "Some (%i, %a)" i print_substitution s
+  in
+  let table = create ~modulo_props:true in
+  let tadd typ = add table (Ttype.to_stype typ) in
+  let open Std in
+  tadd (list_t int_t) 1;
+  tadd (option_t string_t) 2;
+  tadd int_t 3;
+  add table (DT_var 0) 42;
+  add table (DT_list (DT_var 0)) 4;
+  add table (DT_tuple [DT_var 0; DT_var 0]) 5;
+  add table (DT_tuple [DT_var 1; DT_var 0]) 6;
+  (* this fails as expected *)
+  (* add (DT_var 1) 42 *)
+  let s = Ttype.to_stype in
+  List.for_all
+    (fun (stype, expected) ->
+       let got = get table stype in
+       if got = expected then true
+       else
          let () =
            Format.printf "expected: %a\ngot: %a\n%!" print expected print got
          in false
-      )
-      [ s int_t , Some (3, IntMap.empty)
-      ; s (list_t string_t), Some (4, IntMap.singleton 0 DT_string)
-      ; s (list_t int_t), Some (1, IntMap.empty)
-      ; s (option_t string_t) , Some (2, IntMap.empty)
-      ; s (list_t (array_t int_t)) ,
-        Some (4, IntMap.singleton 0 (DT_array DT_int))
-      ; s [%t: (int * int)],
-        Some (5, IntMap.singleton 0 DT_int)
-      ; s [%t: (int * bool)],
-        Some (6, IntMap.(singleton 0 (s bool_t) |> add 1 (s int_t)))
-      ; s [%t: int option],
-        Some (42, IntMap.singleton 0 (DT_option DT_int))
-      ]
-end
+    )
+    [ s int_t , Some (3, IntMap.empty)
+    ; s (list_t string_t), Some (4, IntMap.singleton 0 DT_string)
+    ; s (list_t int_t), Some (1, IntMap.empty)
+    ; s (option_t string_t) , Some (2, IntMap.empty)
+    ; s (list_t (array_t int_t)) ,
+      Some (4, IntMap.singleton 0 (DT_array DT_int))
+    ; s [%t: (int * int)],
+      Some (5, IntMap.singleton 0 DT_int)
+    ; s [%t: (int * bool)],
+      Some (6, IntMap.(singleton 0 (s bool_t) |> add 1 (s int_t)))
+    ; s [%t: int option],
+      Some (42, IntMap.singleton 0 (DT_option DT_int))
+    ]
 
 module type S = sig
   type t
   type 'a data
 
-  val empty: modulo_props:bool -> t
+  val create: modulo_props:bool -> t
   (** The matcher without any registered pattern. *)
 
-  val add: t: 'a Ttype.t -> 'a data -> t -> t
+  val add: t -> t: 'a Ttype.t -> 'a data -> unit
   (** Add a case to the matcher. *)
 
   (** {2 Match types with free variables} *)
@@ -360,7 +432,7 @@ module type S = sig
     val data : t data
   end
 
-  val add0: (module C0) -> t -> t
+  val add0: t -> (module C0) -> unit
   (** Add a case to the matcher. Equivalent to {!add}. *)
 
   module type C1 = sig
@@ -368,7 +440,7 @@ module type S = sig
     val data : 'a Ttype.t -> 'a t data
   end
 
-  val add1: (module C1) -> t -> t
+  val add1: t -> (module C1) -> unit
   (** Add a case to the matcher. One free variable.*)
 
   module type C2 = sig
@@ -376,7 +448,7 @@ module type S = sig
     val data : 'a Ttype.t -> 'b Ttype.t -> ('a, 'b) t data
   end
 
-  val add2: (module C2) -> t -> t
+  val add2: t -> (module C2) -> unit
   (** Add a case to the matcher. Two free variables. *)
 
   (** {2 Matching Result} *)
@@ -477,28 +549,28 @@ module Make (Data: sig type 'a t end) : S with type 'a data = 'a Data.t = struct
 
   type t = candidate Tree.t
 
-  let empty ~modulo_props : t = Tree.empty ~modulo_props
+  let create ~modulo_props : t = Tree.create ~modulo_props
 
-  let add (type a) ~(t: a Ttype.t) (data: a data) tree =
+  let add tree (type a) ~(t: a Ttype.t) (data: a data) =
     let c = C0 (module struct
         type t = a
         let t = t
         let data = data end)
-    in Tree.add (Ttype.to_stype t) c tree
+    in Tree.add tree (Ttype.to_stype t) c
 
-  let add0 (module C : C0) tree =
-    Tree.add (Ttype.to_stype C.t) (C0 (module C)) tree
+  let add0 tree (module C : C0) =
+    Tree.add tree (Ttype.to_stype C.t) (C0 (module C))
 
   type var
   let var i : var Ttype.t = Obj.magic (Stype.DT_var i)
   let v0 = var 0
   let v1 = var 1
 
-  let add1 (module C : C1) tree =
-    Tree.add (Ttype.to_stype (C.t v0)) (C1 (module C)) tree
+  let add1 tree (module C : C1) =
+    Tree.add tree (Ttype.to_stype (C.t v0)) (C1 (module C))
 
-  let add2 (module C : C2) tree =
-    Tree.add (Ttype.to_stype (C.t v0 v1)) (C2 (module C)) tree
+  let add2 tree (module C : C2) =
+    Tree.add tree (Ttype.to_stype (C.t v0 v1)) (C2 (module C))
 
   let ttype: type a. int -> Tree.substitution -> a Ttype.t =
     fun i map ->
@@ -511,7 +583,7 @@ module Make (Data: sig type 'a t end) : S with type 'a data = 'a Data.t = struct
   let apply : type a. t -> t:a Ttype.t -> a matched option =
     fun tree ~t ->
       let stype = Ttype.to_stype t in
-      match Tree.get stype tree with
+      match Tree.get tree stype with
       | None -> None
       | Some (C0 (module C : C0), map) ->
         assert (IntMap.cardinal map = 0);

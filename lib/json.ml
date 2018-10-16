@@ -261,14 +261,12 @@ type 'a custom_json =
 
 module Matcher = Matcher.Make (struct type 'a t = 'a custom_json end)
 
-let matcher = ref (Matcher.empty ~modulo_props:true)
+let matcher = Matcher.create ~modulo_props:true
 
-let register_custom ~t conv =
-  matcher := Matcher.add ~t conv !matcher
-
-let register_custom_0 m = matcher := Matcher.add0 m !matcher
-let register_custom_1 m = matcher := Matcher.add1 m !matcher
-let register_custom_2 m = matcher := Matcher.add2 m !matcher
+let register_custom ~t conv = Matcher.add matcher ~t conv
+let register_custom_0 m = Matcher.add0 matcher m
+let register_custom_1 m = Matcher.add1 matcher m
+let register_custom_2 m = Matcher.add2 matcher m
 
 (* OPTIMs:
    - memoize the function (for a given set of flags)
@@ -280,7 +278,7 @@ let variant_xt = Xtype.of_ttype [%t: Variant.t]
 let to_json ?(ctx=empty_ctx) ~t =
   let rec to_json: type a. a Xtype.t -> a -> value = fun t ->
     let open Matcher in
-    match apply !matcher ~t:(t.t) with
+    match apply matcher ~t:(t.t) with
     | Some (M0 (module M : M0 with type matched = a)) ->
       let TypEq.Eq = M.eq in M.data.to_json
     | Some (M1 (module M : M1 with type matched = a)) ->
@@ -368,14 +366,14 @@ end
 let of_json ?(ctx=empty_ctx) ~t =
   let rec of_json: type a. a Xtype.t -> string list -> value -> a = fun t ->
     let open Matcher in
-    match apply !matcher ~t:(t.t) with
+    match apply matcher ~t:(t.t) with
     | Some (M0 (module M : M0 with type matched = a)) ->
-      let TypEq.Eq = M.eq in fun _ x -> M.data.of_json x
+      let TypEq.Eq = M.eq in fun _ -> M.data.of_json
     | Some (M1 (module M : M1 with type matched = a)) ->
-      let TypEq.Eq = M.eq in fun _ x -> M.data.of_json x
+      let TypEq.Eq = M.eq in fun _ -> M.data.of_json
     | Some (M2 (module M : M2 with type matched = a)) ->
-      let TypEq.Eq = M.eq in fun _ x -> M.data.of_json x
-    | None -> fun path x -> of_json_xt (Lazy.force t.xt) path x
+      let TypEq.Eq = M.eq in fun _ -> M.data.of_json
+    | None -> fun path -> of_json_xt (Lazy.force t.xt) path
 
   and of_json_xt: type t. t xtype -> string list -> value -> t = fun t path ->
     match t with
