@@ -80,21 +80,23 @@ let rec to_variant: type a. t: a Xtype.t -> a to_variant = fun ~t x ->
   | Option t -> Option (Ext.Option.map (to_variant ~t) x)
   | Lazy t -> Lazy (lazy (to_variant ~t (Lazy.force x)))
   | Tuple tup ->
-    Tuple (Fields.map_tuple tup dyn x)
+    Tuple (Fields.map_tuple tup mapf x)
   | Record r ->
-    Record (Fields.map_record r dyn_named x)
-  | Sum s -> begin match s.s_cstr_by_value x with
-      | Constant c -> Constructor (fst c.cc_label, None)
-      | Regular ({rc_label; rc_flds = [Field el]; _} as c) ->
-        let arg = to_variant ~t:el.typ
-            (Fields.regular_constructor c el x |> Ext.Option.value_exn)
-        in Constructor (fst rc_label, Some arg)
-      | Regular c ->
-        let l = Fields.map_regular c dyn x in
-        Constructor (fst c.rc_label, Some (Tuple l))
-      | Inlined c ->
-        let l = Fields.map_inlined c dyn_named x in
-        Constructor (fst c.ic_label, Some (Record l))
+    Record (Fields.map_record r mapf' x)
+  | Sum s ->
+    (* TODO: mlfi_json has special handling for Variant.t and Json.t at
+       this point. This might be mirrored using the new Matcher module. *)
+    let f = Fields.map_sum s mapf mapf' in
+    begin
+      match f x with
+      | Fields.Constant name ->
+        Constructor (name, None)
+      | Regular (name, [arg]) ->
+        Constructor (name, Some arg)
+      | Regular (name, args) ->
+        Constructor (name, Some (Tuple args))
+      | Inlined (name, args) ->
+        Constructor (name, Some (Record args))
     end
   | Prop (_,t) -> to_variant ~t x
   | Object _ -> failwith "Objects cannot be variantized"
@@ -130,8 +132,16 @@ let rec to_variant: type a. t: a Xtype.t -> a to_variant = fun ~t x ->
     in
     use_first (Hashtbl.find_all abstract_variantizers name) ;
 
-and dyn = fun (Fields.Dyn (t,x)) -> to_variant ~t x
-and dyn_named = fun ~name (Fields.Dyn (t,x)) -> name, to_variant ~t x
+and mapf: t Fields.mapf =
+  let f : type a. a Xtype.t -> a -> t = fun t -> to_variant ~t
+  in { f }
+
+and mapf': (string * t) Fields.mapf' =
+  let f : type a. name: string -> a Xtype.t -> a -> string * t =
+    fun ~name t ->
+      let to_json = to_variant ~t in
+      fun x -> name, to_json x
+  in { f }
 
 let to_variant ~t v = to_variant ~t:(Xtype.of_ttype t) v
 

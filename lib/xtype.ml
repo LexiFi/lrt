@@ -134,28 +134,31 @@ let lookup : ('a -> string) -> 'a list -> string -> 'a option =
       let i = Ext.String.Tbl.lookup (Lazy.force tbl) name
       in if i < 0 then None else Some (Lazy.force arr).(i)
 
+let cstr_table : type a. a constructor list ->
+  a constructor array * (a -> int) =
+  fun cstrs ->
+    let cst, ncst = ref [], ref [] in
+    List.iteri (fun i -> function
+        | Constant _ -> cst := i :: !cst
+        | Regular _
+        | Inlined _ -> ncst := i :: !ncst
+      ) cstrs;
+    let cstrs = Array.of_list cstrs in
+    let cst = Ext.Array.of_list_rev !cst in
+    let ncst = Ext.Array.of_list_rev !ncst in
+    let fnd x =
+      let x = Obj.repr x in
+      if Obj.is_int x then Array.get cst (Obj.magic x)
+      else Array.get ncst (Obj.tag x)
+    in (cstrs, fnd)
+
 (* prepare finding a constructor by value *)
 let cstr_by_value : type a. a constructor list -> a -> a constructor =
   fun cstrs ->
-    let aux = lazy (
-      let cst, ncst = ref [], ref [] in
-      List.iteri (fun i -> function
-          | Constant _ -> cst := i :: !cst
-          | Regular _
-          | Inlined _ -> ncst := i :: !ncst
-        ) cstrs;
-      let cstrs = Array.of_list cstrs in
-      let cst = Ext.Array.of_list_rev !cst in
-      let ncst = Ext.Array.of_list_rev !ncst in
-      (cstrs, cst, ncst)
-    ) in
+    let aux = lazy (cstr_table cstrs) in
     fun x ->
-      let cstrs, constant, nonconstant = Lazy.force aux in
-      let i =
-        let x = Obj.repr x in
-        if Obj.is_int x then Array.get constant (Obj.magic x)
-        else Array.get nonconstant (Obj.tag x)
-      in cstrs.(i)
+      let cstrs, fnd = Lazy.force aux in
+      cstrs.(fnd x)
 
 let[@landmark] rec xtype_of_ttype : type a. a Ttype.t -> a xtype = fun t ->
   (* CAUTION: This must be consistent with core/std.ml *)
@@ -426,43 +429,69 @@ module Fields = struct
       | Tag tag -> checked tag el.nth
       | Unboxed -> fun o -> Some (Obj.repr o))
 
-  type dynamic = | Dyn : 'a t * 'a -> dynamic
+  type 'b mapf  = { f: 'a. 'a t -> 'a -> 'b } [@@unboxed]
+  type 'b mapf' = { f: 'a. name:string -> 'a t -> 'a -> 'b } [@@unboxed]
 
-  let map_tuple tup f x =
-    let mapf (Field e) = f (Dyn (e.typ, tuple tup e x)) in
-    List.map mapf tup.t_flds
+  let fun_arr_of_fields (type a) n flds (mapf: a mapf) : (Obj.t -> a) array =
+    let flds = ref flds in
+    Array.init n (fun _i ->
+        match !flds with
+        | [] -> assert false
+        | (Field e) :: tl ->
+          flds := tl;
+          let f = mapf.f e.typ in
+          fun (o: Obj.t) -> f (Obj.magic o))
 
-  let map_record r f x =
-    let mapf ((name,_), Field e) = f ~name (Dyn (e.typ, record r e x)) in
-    List.map mapf r.r_flds
+  let fun_arr_of_fields' (type a) n flds (mapf: a mapf') : (Obj.t -> a) array =
+    let flds = ref flds in
+    Array.init n (fun _i ->
+        match !flds with
+        | [] -> assert false
+        | ((name,_), Field e) :: tl ->
+          flds := tl;
+          let f = mapf.f ~name e.typ in
+          fun (o: Obj.t) -> f (Obj.magic o))
 
-  let map_regular c f x =
-    let o = Obj.repr x in
-    match c.rc_repr, c.rc_flds with
-    | Tag tag, flds ->
-      if check tag o then begin
-        let mapf i (Field e) =
-          f (Dyn (e.typ, Obj.magic (Obj.field o i)))
-        in List.mapi mapf flds
-      end else
-        raise (Invalid_argument
-                 "Fields.map_regular: value/constructor mismatch")
-    | Unboxed, [Field e] -> [f (Dyn (e.typ, Obj.magic x))]
-    | Unboxed, _ -> assert false
+  let[@landmark] map_tuple (type a b) (tup: a tuple) (mapf: b mapf) =
+    let farr = fun_arr_of_fields tup.t_len tup.t_flds mapf in
+    fun (x:a) ->
+      let o = Obj.repr x in
+      List.init (Obj.size o) (fun i -> farr.(i) (Obj.field o i))
 
-  let map_inlined c f x =
-    let o = Obj.repr x in
-    match c.ic_repr, c.ic_flds with
-    | Tag tag, flds ->
-      if check tag o then begin
-        let mapf i ((name,_), Field e) =
-          f ~name (Dyn (e.typ, Obj.magic (Obj.field o i)))
-        in List.mapi mapf flds
-      end else
-        raise (Invalid_argument
-                 "Fields.map_inlined: value/constructor mismatch")
-    | Unboxed, [(name,_), Field e] -> [f ~name (Dyn (e.typ, Obj.magic x))]
-    | Unboxed, _ -> assert false
+  let[@landmark] map_record (type a b) (r: a record) (mapf: b mapf') =
+    let farr = fun_arr_of_fields' r.r_len r.r_flds mapf in
+    fun (x:a) ->
+      let o = Obj.repr x in
+      List.init (Obj.size o) (fun i -> farr.(i) (Obj.field o i))
+
+  type ('a, 'b) mapped_sum =
+    | Regular of string * 'a list
+    | Inlined of string * 'b list
+    | Constant of string
+
+  let[@landmark] map_sum :
+    type a b c. a sum -> b mapf -> c mapf' -> a -> (b, c) mapped_sum =
+    fun sum mapf mapf' ->
+      let cstrs, fnd = cstr_table sum.s_cstrs in
+      let farr: (Obj.t -> (b, c) mapped_sum) array =
+        Array.init (Array.length cstrs) (fun i ->
+            match cstrs.(i) with
+            | Constant c -> fun _ -> Constant (fst c.cc_label)
+            | Regular c ->
+              let farr' = fun_arr_of_fields c.rc_len  c.rc_flds mapf in
+              fun o -> Regular (
+                  fst c.rc_label,
+                  List.init (Obj.size o) (fun i -> farr'.(i) (Obj.field o i)))
+            | Inlined c ->
+              let farr' = fun_arr_of_fields' c.ic_len  c.ic_flds mapf' in
+              fun o -> Inlined (
+                  fst c.ic_label,
+                  List.init (Obj.size o) (fun i -> farr'.(i) (Obj.field o i)))
+          )
+      in
+      fun (x:a) ->
+        let o = Obj.repr x
+        in farr.(fnd x) o
 end
 
 let call_method: 'a object_ -> ('a, 'b) element -> 'a -> 'b =

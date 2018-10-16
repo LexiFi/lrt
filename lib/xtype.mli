@@ -118,16 +118,21 @@ module Fields : sig
   val inlined_constructor :
     ('a, 'b) inlined_constructor -> ('b, 'c) element -> 'a -> 'c option
 
-  (** TODO: move this to toplevel *)
-  type dynamic = | Dyn : 'a t * 'a -> dynamic
+  (** {2 Closure friendly maps} **)
 
-  val map_tuple : 'a tuple -> (dynamic -> 'b) -> 'a -> 'b list
-  val map_record :
-    'a record -> (name:string -> dynamic -> 'b) -> 'a -> 'b list
-  val map_regular : ('a, 'b) regular_constructor ->
-    (dynamic -> 'c) -> 'a -> 'c list
-  val map_inlined : ('a, 'b) inlined_constructor ->
-    (name:string -> dynamic -> 'c) -> 'a -> 'c list
+  type 'b mapf  = { f: 'a. 'a t -> 'a -> 'b } [@@unboxed]
+  type 'b mapf' = { f: 'a. name:string -> 'a t -> 'a -> 'b } [@@unboxed]
+
+  val map_tuple : 'a tuple -> 'b mapf -> 'a -> 'b list
+  val map_record : 'a record -> 'b mapf' -> 'a -> 'b list
+
+  type ('a, 'b) mapped_sum =
+    | Regular of string * 'a list
+    | Inlined of string * 'b list
+    | Constant of string
+
+  val map_sum : 'a sum -> 'b mapf -> 'c mapf' -> 'a -> ('b, 'c) mapped_sum
+
 end
 (** Read values from tuples, records and constructors. *)
 

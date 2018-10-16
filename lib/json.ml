@@ -298,31 +298,39 @@ let to_json ?(ctx=empty_ctx) ~t =
     | Array _ -> failwith "to_json: missing matcher candidate"
     | Lazy _ -> failwith "to_json: missing matcher candidate"
     | Prop (_, t) -> to_json t
-    | Option t -> fun x ->
-      (* TODO: push x deeper *)
-      begin match Lazy.force (remove_outer_props t).xt, x with
-        | Option _, None -> Object ["type", String "None"]
-        | Option t, Some (Some x) ->
-          Object ["type", String "Some"; "val", to_json t x]
-        | Option _, Some None ->
-          Object ["type", String "Some"]
-        | _, None -> Null
-        | _, Some x -> to_json t x
+    | Option t ->
+      begin match Lazy.force (remove_outer_props t).xt with
+        | Option t ->
+          (function
+            | None -> Object ["type", String "None"]
+            | Some (Some x) ->
+              Object ["type", String "Some"; "val", to_json t x]
+            | Some None ->
+              Object ["type", String "Some"])
+        | _ ->
+          (function
+            | None -> Null
+            | Some x -> to_json t x)
       end
-    (* TODO: push x deeper *)
-    | Tuple tup -> fun x -> Array (Fields.map_tuple tup dyn x)
-    | Record r -> fun x -> Object (Fields.map_record r dyn_named x)
-    | Sum s -> fun x ->
+    | Tuple tup ->
+      let f = Fields.map_tuple tup mapf in
+      fun x -> Array (f x)
+    | Record r ->
+      let f = Fields.map_record r mapf' in
+      fun x -> Object (f x)
+    | Sum s ->
       (* TODO: mlfi_json has special handling for Variant.t and Json.t at
          this point. This might be mirrored using the new Matcher module. *)
-      let name, obj_flds = match s.s_cstr_by_value x with
-        | Constant c -> fst c.cc_label, []
-        | Regular c ->
-          let l = Fields.map_regular c dyn x
-          in fst c.rc_label, ["val", Array l]
-        | Inlined c ->
-          fst c.ic_label, Fields.map_inlined c dyn_named x
-      in Object (("type", String name) :: obj_flds)
+      let f = Fields.map_sum s mapf mapf' in
+      fun x -> begin
+          match f x with
+          | Fields.Constant name ->
+            Object [("type", String name)]
+          | Regular (name, args) ->
+            Object ["type", String name; "val", Array args]
+          | Inlined (name, args) ->
+            Object (("type", String name) :: args)
+        end
     | Function _ -> failwith "Json: functions not supported"
     (* TODO: avoid indirection via variant *)
     | Char -> fun x -> to_json variant_xt (Variant.to_variant ~t:[%t: char] x)
@@ -333,11 +341,16 @@ let to_json ?(ctx=empty_ctx) ~t =
     | Abstract _ ->
       failwith "TODO: abstract handling + fallback to variant"
 
-  and dyn (Fields.Dyn (t,x)) =
-    to_json t x
+  and mapf: value Fields.mapf =
+    let f : type a. a t -> a -> value = fun t -> to_json t
+    in { f }
 
-  and dyn_named ~name (Fields.Dyn (t,x)) =
-    ctx.to_json_field name, to_json t x
+  and mapf': (string * value) Fields.mapf' =
+    let f : type a. name: string -> a t -> a -> string * value =
+      fun ~name t ->
+        let to_json = to_json t in
+        fun x -> ctx.to_json_field name, to_json x
+    in { f }
 
   in to_json (Xtype.of_ttype t)
 
@@ -364,21 +377,20 @@ end = struct
 end
 
 let of_json ?(ctx=empty_ctx) ~t =
-  let rec of_json: type a. a Xtype.t -> string list -> value -> a = fun t ->
+  let rec of_json: type a. a Xtype.t -> value -> a = fun t ->
     let open Matcher in
     match apply matcher ~t:(t.t) with
     | Some (M0 (module M : M0 with type matched = a)) ->
-      let TypEq.Eq = M.eq in fun _ -> M.data.of_json
+      let TypEq.Eq = M.eq in M.data.of_json
     | Some (M1 (module M : M1 with type matched = a)) ->
-      let TypEq.Eq = M.eq in fun _ -> M.data.of_json
+      let TypEq.Eq = M.eq in M.data.of_json
     | Some (M2 (module M : M2 with type matched = a)) ->
-      let TypEq.Eq = M.eq in fun _ -> M.data.of_json
-    | None -> fun path -> of_json_xt (Lazy.force t.xt) path
+      let TypEq.Eq = M.eq in M.data.of_json
+    | None -> of_json_xt (Lazy.force t.xt)
 
-  and of_json_xt: type t. t xtype -> string list -> value -> t = fun t path ->
-    match t with
+  and of_json_xt: type t. t xtype -> value -> t = function
     | Option t ->
-      let of_json = of_json t ("(Some)" :: path) in
+      let of_json = of_json t in
       begin match Lazy.force (remove_outer_props t).xt with
         | Option _ -> fun v ->
           begin match v with
@@ -411,10 +423,10 @@ let of_json ?(ctx=empty_ctx) ~t =
       end
     (* TODO: push function deeper *)
     | Tuple tup -> (function
-        | Array l -> Builder.tuple tup (field_builder ("(_/_)" :: path) l)
+        | Array l -> Builder.tuple tup (field_builder l)
         | _ -> failwith "tuple expected")
     | Record r -> (function
-        | Object l -> Builder.record r (record_field_builder path l)
+        | Object l -> Builder.record r (record_field_builder l)
         | _ -> failwith "object expected" )
     | Sum sum -> (function
         | Object l ->
@@ -436,38 +448,38 @@ let of_json ?(ctx=empty_ctx) ~t =
             | Constant c, _ -> Builder.constant_constructor c
             | Regular c, Array l ->
               Builder.regular_constructor c
-                (field_builder (("(" ^ name ^ ")") :: path) l)
+                (field_builder l)
             | Inlined c, Object l ->
               Builder.inlined_constructor c
-                (record_field_builder (("(" ^ name ^ ")") :: path) l)
+                (record_field_builder l)
             | _ -> failwith "TODO: what happened here?"
           end
         | _ -> failwith "object expected")
     | Lazy t ->
-      let of_json = of_json t ("lazy" :: path) in
+      let of_json = of_json t in
       fun v -> lazy (of_json v)
-    | Prop (_, t) -> of_json t path
+    | Prop (_, t) -> of_json t
     | Function _ -> failwith "Mlfi_json: functions not supported"
     | Abstract _ ->
       failwith "TODO: abstract handling with variant fallback"
     | _ -> failwith "of_json_xt: missing candidate in matcher"
 
-  and field_builder: type a. string list -> value list -> a Builder.t =
-    fun path lst ->
+  and field_builder: type a. value list -> a Builder.t =
+    fun lst ->
       (* we assume that the calls to mk happen in correct order *)
       let lref = ref lst in
       let mk {typ; _} =
         match !lref with
         | [] -> failwith "tuple length mismatch"
-        | hd :: tl -> lref := tl; of_json typ path hd
+        | hd :: tl -> lref := tl; of_json typ hd
       in {mk}
 
   and record_field_builder:
-    type a. string list -> (string * value) list -> a Builder.t' =
-    fun path lst ->
+    type a. (string * value) list -> a Builder.t' =
+    fun lst ->
       let r = Reader.mk lst in
       let mk (name, _) el =
-        of_json el.typ (name :: path)
+        of_json el.typ
           (Reader.get r (ctx.to_json_field name) Null)
       in {mk}
 
@@ -481,7 +493,7 @@ let of_json ?(ctx=empty_ctx) ~t =
       Print.show ~t:[%t: (string * value) list] l;
       failwith "'type' field is not a string"
 
-  in fun x -> of_json (of_ttype t) [] x
+  in fun x -> of_json (of_ttype t) x
 
 let () =
   let of_json = function
