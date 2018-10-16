@@ -254,18 +254,17 @@ let empty_ctx = ctx ()
 
 let json_unit = Object []
 
-
 type 'a custom_json =
-  { to_json: ?ctx:ctx -> 'a -> value
-  ; of_json: ?ctx:ctx -> value -> 'a
+  { to_json: 'a -> value
+  ; of_json: value -> 'a
   }
 
 module Matcher = Matcher.Make (struct type 'a t = 'a custom_json end)
 
 let matcher = ref (Matcher.empty ~modulo_props:true)
 
-let register_custom ~t ~to_json ~of_json =
-  matcher := Matcher.add ~t {to_json; of_json} !matcher
+let register_custom ~t conv =
+  matcher := Matcher.add ~t conv !matcher
 
 let register_custom_0 m = matcher := Matcher.add0 m !matcher
 let register_custom_1 m = matcher := Matcher.add1 m !matcher
@@ -278,33 +277,31 @@ let register_custom_2 m = matcher := Matcher.add2 m !matcher
 
 let variant_xt = Xtype.of_ttype [%t: Variant.t]
 
-let to_json ?(ctx=empty_ctx) ~t x =
-  let rec to_json: type a. a Xtype.t -> a -> value = fun t x ->
+let to_json ?(ctx=empty_ctx) ~t =
+  let rec to_json: type a. a Xtype.t -> a -> value = fun t ->
     let open Matcher in
     match apply !matcher ~t:(t.t) with
     | Some (M0 (module M : M0 with type matched = a)) ->
-      let TypEq.Eq = M.eq in M.data.to_json x
+      let TypEq.Eq = M.eq in M.data.to_json
     | Some (M1 (module M : M1 with type matched = a)) ->
-      let TypEq.Eq = M.eq in M.data.to_json x
+      let TypEq.Eq = M.eq in M.data.to_json
     | Some (M2 (module M : M2 with type matched = a)) ->
-      let TypEq.Eq = M.eq in M.data.to_json x
-    | None -> to_json_xtype (Lazy.force t.xt) x
+      let TypEq.Eq = M.eq in M.data.to_json
+    | None -> to_json_xtype (Lazy.force t.xt)
 
-  and to_json_xtype: type a. a xtype -> a -> value = fun t x ->
+  and to_json_xtype: type a. a xtype -> a -> value = fun t ->
     match t with
-    | Unit -> json_unit
-    | Prop (_, t) -> to_json t x
-    | Bool -> Bool x
-    | Int -> Number (I x)
-    | Float ->
-      begin match classify_float x with
-        | FP_infinite when x < 0. -> String "-Infinity"
-        | FP_infinite -> String "Infinity"
-        | FP_nan -> String "NaN"
-        | _ -> Number (F x)
-      end
-    | String -> String x
-    | Option t ->
+    | Unit -> failwith "to_json: missing matcher candidate"
+    | Bool -> failwith "to_json: missing matcher candidate"
+    | Int -> failwith "to_json: missing matcher candidate"
+    | Float -> failwith "to_json: missing matcher candidate"
+    | String -> failwith "to_json: missing matcher candidate"
+    | List _ -> failwith "to_json: missing matcher candidate"
+    | Array _ -> failwith "to_json: missing matcher candidate"
+    | Lazy _ -> failwith "to_json: missing matcher candidate"
+    | Prop (_, t) -> to_json t
+    | Option t -> fun x ->
+      (* TODO: push x deeper *)
       begin match Lazy.force (remove_outer_props t).xt, x with
         | Option _, None -> Object ["type", String "None"]
         | Option t, Some (Some x) ->
@@ -314,11 +311,10 @@ let to_json ?(ctx=empty_ctx) ~t x =
         | _, None -> Null
         | _, Some x -> to_json t x
       end
-    | List t -> Array (List.map (to_json t) x)
-    | Array t -> Array (Ext.Array.map_to_list (to_json t) x)
-    | Tuple tup -> Array (Fields.map_tuple tup dyn x)
-    | Record r -> Object (Fields.map_record r dyn_named x)
-    | Sum s ->
+    (* TODO: push x deeper *)
+    | Tuple tup -> fun x -> Array (Fields.map_tuple tup dyn x)
+    | Record r -> fun x -> Object (Fields.map_record r dyn_named x)
+    | Sum s -> fun x ->
       (* TODO: mlfi_json has special handling for Variant.t and Json.t at
          this point. This might be mirrored using the new Matcher module. *)
       let name, obj_flds = match s.s_cstr_by_value x with
@@ -329,13 +325,12 @@ let to_json ?(ctx=empty_ctx) ~t x =
         | Inlined c ->
           fst c.ic_label, Fields.map_inlined c dyn_named x
       in Object (("type", String name) :: obj_flds)
-    | Lazy t -> to_json t (Lazy.force x)
     | Function _ -> failwith "Json: functions not supported"
     (* TODO: avoid indirection via variant *)
-    | Char -> to_json variant_xt (Variant.to_variant ~t:[%t: char] x)
-    | Int32 -> to_json variant_xt (Variant.to_variant ~t:[%t: int32] x)
-    | Int64 -> to_json variant_xt (Variant.to_variant ~t:[%t: int64] x)
-    | Nativeint -> to_json variant_xt (Variant.to_variant ~t:[%t: nativeint] x)
+    | Char -> fun x -> to_json variant_xt (Variant.to_variant ~t:[%t: char] x)
+    | Int32 -> fun x -> to_json variant_xt (Variant.to_variant ~t:[%t: int32] x)
+    | Int64 -> fun x -> to_json variant_xt (Variant.to_variant ~t:[%t: int64] x)
+    | Nativeint -> fun x -> to_json variant_xt (Variant.to_variant ~t:[%t: nativeint] x)
     | Object _ -> failwith "Json: objects not supported"
     | Abstract _ ->
       failwith "TODO: abstract handling + fallback to variant"
@@ -346,7 +341,7 @@ let to_json ?(ctx=empty_ctx) ~t x =
   and dyn_named ~name (Fields.Dyn (t,x)) =
     ctx.to_json_field name, to_json t x
 
-  in to_json (Xtype.of_ttype t) x
+  in to_json (Xtype.of_ttype t)
 
 module Reader: sig
   type 'a t
@@ -370,35 +365,25 @@ end = struct
         with Not_found -> default
 end
 
-let of_json ?(ctx=empty_ctx) ~t x =
-  let rec of_json: type a. a Xtype.t -> string list -> value -> a =
-    fun t path x ->
-      let open Matcher in
-      match apply !matcher ~t:(t.t) with
-      | Some (M0 (module M : M0 with type matched = a)) ->
-        let TypEq.Eq = M.eq in M.data.of_json x
-      | Some (M1 (module M : M1 with type matched = a)) ->
-        let TypEq.Eq = M.eq in M.data.of_json x
-      | Some (M2 (module M : M2 with type matched = a)) ->
-        let TypEq.Eq = M.eq in M.data.of_json x
-      | None -> of_json_xt (Lazy.force t.xt) path x
+let of_json ?(ctx=empty_ctx) ~t =
+  let rec of_json: type a. a Xtype.t -> string list -> value -> a = fun t ->
+    let open Matcher in
+    match apply !matcher ~t:(t.t) with
+    | Some (M0 (module M : M0 with type matched = a)) ->
+      let TypEq.Eq = M.eq in fun _ x -> M.data.of_json x
+    | Some (M1 (module M : M1 with type matched = a)) ->
+      let TypEq.Eq = M.eq in fun _ x -> M.data.of_json x
+    | Some (M2 (module M : M2 with type matched = a)) ->
+      let TypEq.Eq = M.eq in fun _ x -> M.data.of_json x
+    | None -> fun path x -> of_json_xt (Lazy.force t.xt) path x
 
-  and of_json_xt: type t. t xtype -> string list -> value -> t = fun t path v ->
-    match t, v with
-    | Unit, Object _ -> ()
-    | Bool, Bool b -> b
-    | Int, Number (I x) -> x
-    | Int, Number (F x) -> int_of_float x
-    | Float, Number (F x) -> x
-    | Float, Number (I x) -> float_of_int x
-    | Float, String "Infinity" -> infinity
-    | Float, String "-Infinity" -> neg_infinity
-    | Float, String "NaN" -> nan
-    | String, String x -> x
-    | Option t, x ->
+  and of_json_xt: type t. t xtype -> string list -> value -> t = fun t path ->
+    match t with
+    | Option t ->
+      let of_json = of_json t ("(Some)" :: path) in
       begin match Lazy.force (remove_outer_props t).xt with
-        | Option _ ->
-          begin match x with
+        | Option _ -> fun v ->
+          begin match v with
             | Object l ->
               let constr, arg =
                 match l with
@@ -411,7 +396,7 @@ let of_json ?(ctx=empty_ctx) ~t x =
               in
               begin match constr with
                 | "None" -> None
-                | "Some" -> Some (of_json t ("(Some)":: path) arg)
+                | "Some" -> Some (of_json arg)
                 | _ ->
                   Print.show ~t:value_t v;
                   failwith "Nested option, 'type' field should be Some or None"
@@ -421,48 +406,53 @@ let of_json ?(ctx=empty_ctx) ~t x =
               failwith "Type/value mismatch"
           end
         | _ ->
-          begin match x with
+          begin function
             | Null -> None
-            | _ -> Some (of_json t ("(Some)" :: path) x)
+            | v -> Some (of_json v)
           end
       end
-    | List t, Array l -> List.map (of_json t ("(_)" :: path)) l
-    | Array t, Array l -> Ext.Array.of_list_map (of_json t ("[_]" :: path)) l
-    | Tuple tup, Array l ->
-      Builder.tuple tup (field_builder ("(_/_)" :: path) l)
-    | Record r, Object l ->
-      Builder.record r (record_field_builder path l)
-    | Sum sum, Object l ->
-      (* TODO: mlfi_json has special handling for Variant.t and Json.t at
-         this point. This might be mirrored using the new Matcher module. *)
-      let name, arg =
-        match l with
-        | [ "type", String ty; "val", v ] -> ty, v
-        | ("type", String ty) :: rest -> ty, Object rest
-        | _ ->
-          get_constr l,
-          try List.assoc "val" l
-          with Not_found -> Object (List.remove_assoc "type" l)
-      in
-      let c = match sum.s_lookup name with
-        | Some c -> c
-        | None -> failwith (Printf.sprintf "Unexpected constructor %S" name)
-      in begin match c, arg with
-        | Constant c, _ -> Builder.constant_constructor c
-        | Regular c, Array l ->
-          Builder.regular_constructor c
-            (field_builder (("(" ^ name ^ ")") :: path) l)
-        | Inlined c, Object l ->
-          Builder.inlined_constructor c
-            (record_field_builder (("(" ^ name ^ ")") :: path) l)
-        | _ -> failwith "TODO: what happened here?"
-      end
-    | Lazy t, _ -> lazy (of_json t ("lazy" :: path) v)
-    | Prop (_, t), _ -> of_json t path v
-    | Function _, _ -> failwith "Mlfi_json: functions not supported"
-    | Abstract _, _ ->
+    (* TODO: push function deeper *)
+    | Tuple tup -> (function
+        | Array l -> Builder.tuple tup (field_builder ("(_/_)" :: path) l)
+        | _ -> failwith "tuple expected")
+    | Record r -> (function
+        | Object l -> Builder.record r (record_field_builder path l)
+        | _ -> failwith "object expected" )
+    | Sum sum -> (function
+        | Object l ->
+          (* TODO: mlfi_json has special handling for Variant.t and Json.t at
+             this point. This might be mirrored using the new Matcher module. *)
+          let name, arg =
+            match l with
+            | [ "type", String ty; "val", v ] -> ty, v
+            | ("type", String ty) :: rest -> ty, Object rest
+            | _ ->
+              get_constr l,
+              try List.assoc "val" l
+              with Not_found -> Object (List.remove_assoc "type" l)
+          in
+          let c = match sum.s_lookup name with
+            | Some c -> c
+            | None -> failwith (Printf.sprintf "Unexpected constructor %S" name)
+          in begin match c, arg with
+            | Constant c, _ -> Builder.constant_constructor c
+            | Regular c, Array l ->
+              Builder.regular_constructor c
+                (field_builder (("(" ^ name ^ ")") :: path) l)
+            | Inlined c, Object l ->
+              Builder.inlined_constructor c
+                (record_field_builder (("(" ^ name ^ ")") :: path) l)
+            | _ -> failwith "TODO: what happened here?"
+          end
+        | _ -> failwith "object expected")
+    | Lazy t ->
+      let of_json = of_json t ("lazy" :: path) in
+      fun v -> lazy (of_json v)
+    | Prop (_, t) -> of_json t path
+    | Function _ -> failwith "Mlfi_json: functions not supported"
+    | Abstract _ ->
       failwith "TODO: abstract handling with variant fallback"
-    | _ -> failwith "mismatch"
+    | _ -> failwith "of_json_xt: missing candidate in matcher"
 
   and field_builder: type a. string list -> value list -> a Builder.t =
     fun path lst ->
@@ -493,7 +483,86 @@ let of_json ?(ctx=empty_ctx) ~t x =
       Print.show ~t:[%t: (string * value) list] l;
       failwith "'type' field is not a string"
 
-  in of_json (of_ttype t) [] x
+  in fun x -> of_json (of_ttype t) [] x
+
+let () =
+  let of_json = function
+    | Number (I x) -> x
+    | Number (F x) -> int_of_float x
+    | _ -> failwith "integer expected"
+  and to_json i = Number (I i) in
+  register_custom ~t:int_t {of_json; to_json}
+
+let () =
+  let of_json = function
+    | Number (F x) -> x
+    | Number (I x) -> float_of_int x
+    | String "Infinity" -> infinity
+    | String "-Infinity" -> neg_infinity
+    | String "NaN" -> nan
+    | _ -> failwith "float expected"
+  and to_json x =
+    match classify_float x with
+    | FP_infinite when x < 0. -> String "-Infinity"
+    | FP_infinite -> String "Infinity"
+    | FP_nan -> String "NaN"
+    | _ -> Number (F x)
+  in
+  register_custom ~t:float_t {of_json; to_json}
+
+let () =
+  let to_json () = json_unit
+  and of_json = function
+    | Object _ -> ()
+    | _ -> failwith "unit object expected"
+  in
+  register_custom ~t:unit_t {of_json; to_json}
+
+let () =
+  let to_json b = Bool b
+  and of_json = function
+    | Bool b -> b
+    | _ -> failwith "boolean expected"
+  in
+  register_custom ~t:bool_t {of_json; to_json}
+
+let () =
+  let to_json s = String s
+  and of_json = function
+    | String x -> x
+    | _ -> failwith "string expected"
+  in
+  register_custom ~t:string_t {of_json; to_json}
+
+let () =
+  register_custom_1 (module struct
+    type 'a t = 'a list [@@deriving t]
+    let data (t: 'a Ttype.t) =
+      let to_json_el = to_json ?ctx:None ~t in
+      let of_json_el = of_json ?ctx:None ~t in
+      let to_json l =
+        Array (List.map to_json_el l)
+      and of_json = function
+        | Array l -> List.map of_json_el l
+        | _ -> failwith "array/list expected"
+      in
+      {of_json; to_json}
+  end)
+
+let () =
+  register_custom_1 (module struct
+    type 'a t = 'a array [@@deriving t]
+    let data (t: 'a Ttype.t) =
+      let to_json_el = to_json ?ctx:None ~t in
+      let of_json_el = of_json ?ctx:None ~t in
+      let to_json l =
+        Array (Ext.Array.map_to_list to_json_el l)
+      and of_json = function
+        | Array l -> Ext.Array.of_list_map of_json_el l
+        | _ -> failwith "array/list expected"
+      in
+      {of_json; to_json}
+  end)
 
 open Buffer
 

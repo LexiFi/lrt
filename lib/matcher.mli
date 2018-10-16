@@ -7,6 +7,7 @@ module type S = sig
   val empty: modulo_props:bool -> t
   (** The matcher without any registered pattern. *)
 
+  (** TODO: imperative interface *)
   val add: t: 'a Ttype.t -> 'a data -> t -> t
   (** Add a case to the matcher. *)
 

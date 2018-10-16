@@ -17,7 +17,6 @@ and 'node gtype =
   | DT_prop of properties * 'node gtype
   | DT_var of int
 
-
 and node = private {
   mutable rec_descr: node_descr; (** Structure. *)
   rec_uid: int; (** Corresponds to physical equality of nodes. *)

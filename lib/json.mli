@@ -132,13 +132,16 @@ val of_json: ?ctx:ctx -> t:'a Ttype.t -> value -> 'a
 *)
 
 
+type 'a custom_json =
+  { to_json: 'a -> value
+  ; of_json: value -> 'a
+  }
+
 (** {2 Custom mapping for specific types} *)
 
 (* TODO: support passing local custom conversions to to_json/of_json. *)
 
-val register_custom: t:'a Ttype.t ->
-  to_json:(?ctx:ctx -> 'a -> value) ->
-  of_json:(?ctx:ctx -> value -> 'a) -> unit
+val register_custom: t:'a Ttype.t -> 'a custom_json -> unit
 
 (** [register_conversion] registers a global custom mapping between
     OCaml values and JSON trees for a specific closed *abstract* type.
@@ -151,11 +154,6 @@ val register_custom: t:'a Ttype.t ->
     constructor ([null] is reserved for representing the
     [None] case).
 *)
-
-type 'a custom_json =
-  { to_json: ?ctx:ctx -> 'a -> value
-  ; of_json: ?ctx:ctx -> value -> 'a
-  }
 
 module Matcher : Matcher.S with type 'a data := 'a custom_json
 

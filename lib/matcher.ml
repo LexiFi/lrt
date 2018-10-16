@@ -44,6 +44,11 @@ end = struct
   (* TODO: avoid construction of intermediate values and compare stypes
      directly. *)
 
+  (* TODO: Do we really need non-modulo-props matching? *)
+
+  (* TODO: Make Symbol return an int, replace SymbolMap with Hashtable, then
+     no compare necessary *)
+
   type t =
     | Base of base (* TODO: Base could be int too *)
     | Tuple of int
@@ -55,6 +60,15 @@ end = struct
                   ; mutable names: string list
                   ; mutable table: Ext.String.Tbl.t
                   }
+
+  (* let last = ref (-1) *)
+  (* let fresh () = incr last; !last *)
+
+  (* let int = fresh ()
+  let float = fresh ()
+  let string = fresh ()
+  let array = fresh ()
+      list  *)
 
   let empty = { n = 0; names = []; table = Ext.String.Tbl.prepare [] }
   let add r name =
