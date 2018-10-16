@@ -1,4 +1,4 @@
-module Symbol : sig
+module type SYMBOL = sig
   (* A basic type language consist of symbols (with associated fixed arity) and
      variables.
 
@@ -24,124 +24,132 @@ module Symbol : sig
      TODO: Extend stype with an integer symbol identifier to avoid all overhead.
      Serialization of stype would strip this identifier, deserialization would
      lookup the identifier in a registry [Stype.equality] / create a new one.
+
+     TODO: Update documentation. Especially, the prop handling: key only
+
+     TODO: may property names and rec_name/abstract name collide?
   *)
 
-  type t
-  val compare : t -> t -> int
-
-  type registry
-  val empty: registry
-
   type maybe_free =
-    | Symbol of t * Stype.t list (** symbol, arguments *)
+    | Symbol of int * Stype.t list (** symbol, arguments *)
     | Var of int (** DT_var *)
 
-  val of_stype: registry -> modulo_props: bool -> Stype.t -> maybe_free option
-  val of_stype_register: registry -> modulo_props: bool -> Stype.t -> maybe_free
-end = struct
-  type base = | Int | Float | String | Array | List | Option | Arrow
+  val of_stype: modulo_props: bool -> Stype.t -> maybe_free option
+  val of_stype_register: modulo_props: bool -> Stype.t -> maybe_free
+end
 
-  (* TODO: avoid construction of intermediate values and compare stypes
-     directly. *)
-
+module Symbol (Unit: sig end) : SYMBOL = struct
   (* TODO: Do we really need non-modulo-props matching? *)
 
-  (* TODO: Make Symbol return an int, replace SymbolMap with Hashtable, then
-     no compare necessary *)
+  let strings = ref []
+  let table = ref (Ext.String.Tbl.prepare [])
+  (* Strings are mapped to positive non-neg integers using a string table *)
 
-  type t =
-    | Base of base (* TODO: Base could be int too *)
-    | Tuple of int
-    | Props of Stype.properties
-    | Named of int
-    | Object of string list (* method names. TODO: may be insufficient *)
+  let last = ref (0)
+  let next () = decr last; !last
+  (* Non-strings are mapped to negative integers using a counter *)
 
-  type registry = { mutable n: int
-                  ; mutable names: string list
-                  ; mutable table: Ext.String.Tbl.t
-                  }
+  let int = next ()
+  let float = next ()
+  let string = next ()
+  let array = next ()
+  let list = next ()
+  let option = next ()
+  let arrow = next ()
 
-  (* let last = ref (-1) *)
-  (* let fresh () = incr last; !last *)
+  (* TODO: make this grow on demand? *)
+  let tuples = Array.init 10 (fun _ -> next ())
 
-  (* let int = fresh ()
-  let float = fresh ()
-  let string = fresh ()
-  let array = fresh ()
-      list  *)
+  let add name =
+    strings := name :: !strings;
+    (* reverse, otherwise old strings would get new ids *)
+    table := Ext.String.Tbl.prepare (List.rev !strings)
 
-  let empty = { n = 0; names = []; table = Ext.String.Tbl.prepare [] }
-  let add r name =
-    let names = name :: r.names in
-    r.n <- r.n + 1;
-    r.names <- names;
-    r.table <- Ext.String.Tbl.prepare (List.rev names);
-    r.n - 1
-
-  let register r s =
-    let i = Ext.String.Tbl.lookup r.table s in
-    if i >= 0 then i
-    else add r s
-
-  let lookup r s =
-    let i = Ext.String.Tbl.lookup r.table s in
+  let lookup s =
+    let i = Ext.String.Tbl.lookup !table s in
     if i >= 0 then Some i
     else None
 
+  let register s =
+    let i = Ext.String.Tbl.lookup !table s in
+    if i >= 0 then i
+    else ( add s;
+           match lookup s with
+           | None -> failwith "broken logic in Matcher.Symbol"
+           | Some i -> i )
+
   type maybe_free =
-    | Symbol of t * Stype.t list
+    | Symbol of int * Stype.t list
     | Var of int (* DT_var *)
 
-  let rec of_stype: registry -> modulo_props: bool -> Stype.t -> maybe_free
-      option = fun r ~modulo_props -> function
-    | DT_int -> Some (Symbol (Base Int, []))
-    | DT_float -> Some (Symbol (Base Float, []))
-    | DT_string -> Some (Symbol (Base String, []))
-    | DT_list a -> Some (Symbol (Base List, [a]))
-    | DT_array a -> Some (Symbol (Base Array, [a]))
-    | DT_option a -> Some (Symbol (Base Option, [a]))
-    | DT_arrow (_, a, b) -> Some (Symbol (Base Arrow, [a; b]))
-    | DT_prop (_, s) when modulo_props -> of_stype r ~modulo_props s
-    | DT_prop (p, s) -> Some (Symbol (Props p, [s]))
-    | DT_tuple l -> Some (Symbol (Tuple (List.length l), l))
+  (* Associativity by enforcing single prop DT_prop *)
+  let rec normalize_props t = function
+    | [] -> t
+    | hd :: tl -> normalize_props (Stype.DT_prop ([hd], t)) tl
+
+  let rec of_stype: modulo_props: bool -> Stype.t -> maybe_free
+      option = fun ~modulo_props -> function
+    | DT_int -> Some (Symbol (int, []))
+    | DT_float -> Some (Symbol (float, []))
+    | DT_string -> Some (Symbol (string, []))
+    | DT_list a -> Some (Symbol (list, [a]))
+    | DT_array a -> Some (Symbol (array, [a]))
+    | DT_option a -> Some (Symbol (option, [a]))
+    | DT_arrow (_, a, b) -> Some (Symbol (arrow, [a; b]))
+    | DT_prop (_, s) when modulo_props -> of_stype ~modulo_props s
+    | DT_prop ([], s) -> of_stype ~modulo_props s
+    | DT_prop ([(key,_)], s) ->
+      begin match lookup key with
+        | None -> None
+        | Some i -> Some (Symbol (i, [s]))
+      end
+    | DT_prop (l, s) ->
+      of_stype ~modulo_props (normalize_props s l)
+    | DT_tuple l ->
+      let arity = List.length l in
+      if arity < Array.length tuples
+      then Some (Symbol (tuples.(arity), l))
+      else None
     | DT_abstract (rec_name, rec_args)
     | DT_node {rec_name; rec_args; _} ->
-      begin match lookup r rec_name with
+      begin match lookup rec_name with
         | None -> None
-        | Some i -> Some (Symbol (Named i, rec_args))
+        | Some i -> Some (Symbol (i, rec_args))
       end
-    | DT_object l ->
-      let method_names, types = List.split l
-      in Some (Symbol (Object method_names, types))
+    | DT_object _ ->
+      failwith "object not supported"
     | DT_var i -> Some (Var i)
 
-  let rec of_stype_register: registry -> modulo_props: bool -> Stype.t ->
-    maybe_free = fun r ~modulo_props -> function
-    | DT_int -> Symbol (Base Int, [])
-    | DT_float -> Symbol (Base Float, [])
-    | DT_string -> Symbol (Base String, [])
-    | DT_list a -> Symbol (Base List, [a])
-    | DT_array a -> Symbol (Base Array, [a])
-    | DT_option a -> Symbol (Base Option, [a])
-    | DT_arrow (_, a, b) -> Symbol (Base Arrow, [a; b])
-    | DT_prop (_, s) when modulo_props -> of_stype_register r ~modulo_props s
-    | DT_prop (p, s) -> Symbol (Props p, [s])
-    | DT_tuple l -> Symbol (Tuple (List.length l), l)
+  let rec of_stype_register: modulo_props: bool -> Stype.t -> maybe_free =
+    fun ~modulo_props -> function
+    | DT_int -> Symbol (int, [])
+    | DT_float -> Symbol (float, [])
+    | DT_string -> Symbol (string, [])
+    | DT_list a -> Symbol (list, [a])
+    | DT_array a -> Symbol (array, [a])
+    | DT_option a -> Symbol (option, [a])
+    | DT_arrow (_, a, b) -> Symbol (arrow, [a; b])
+    | DT_prop (_, s) when modulo_props -> of_stype_register ~modulo_props s
+    | DT_prop ([], s) -> of_stype_register ~modulo_props s
+    | DT_prop ([(key,_)], s) -> Symbol (register key, [s])
+    | DT_prop (l, s) ->
+      of_stype_register ~modulo_props (normalize_props s l)
+    | DT_tuple l ->
+      let arity = List.length l in
+      if arity < Array.length tuples
+      then Symbol (tuples.(arity), l)
+      else failwith "tuple too long"
     | DT_abstract (rec_name, rec_args)
     | DT_node {rec_name; rec_args; _} ->
-      Symbol (Named (register r rec_name), rec_args)
-    | DT_object l ->
-      let method_names, types = List.split l
-      in Symbol (Object method_names, types)
+      Symbol (register rec_name, rec_args)
+    | DT_object _ ->
+      failwith "object not supported"
     | DT_var i -> Var i
-
-  let compare = compare
-  (* TODO: A less naive compare may speed up things significantly. *)
 end
 
 module IntMap = Map.Make (struct type t = int let compare = compare end)
 
-module Tree : sig
+module Tree (Symbol : SYMBOL) : sig
   type 'a t
   type key = Stype.t
   type substitution = Stype.t IntMap.t
@@ -168,7 +176,7 @@ end = struct
   type key = Stype.t
   type substitution = Stype.t IntMap.t
 
-  module SymbolMap = Map.Make(Symbol)
+  module SymbolMap = IntMap
 
   type 'a tree =
     | Leave of { value: 'a; free_vars: (int * int) list }
@@ -176,21 +184,19 @@ end = struct
     | Inner of { map: 'a tree SymbolMap.t; free: 'a tree IntMap.t }
 
   type 'a t = { modulo_props: bool
-              ; tree: 'a tree
-              ; registry: Symbol.registry }
+              ; tree: 'a tree }
 
   let empty_tree = Inner { map = SymbolMap.empty; free = IntMap.empty }
 
   let empty ~modulo_props = { modulo_props ;
-                              tree = empty_tree ;
-                              registry = Symbol.empty}
+                              tree = empty_tree }
 
   let get stype t =
     let modulo_props = t.modulo_props in
     let equal = if modulo_props then
         Stype.equality_modulo_props else Stype.equality
     and get_step s =
-      match Symbol.of_stype t.registry ~modulo_props s with
+      match Symbol.of_stype ~modulo_props s with
       | Some (Symbol.Symbol (s, l)) -> Some (s, l)
       | None -> None
       | _ -> failwith "free variable in query"
@@ -242,7 +248,7 @@ end = struct
   let add stype value t =
     let get_step =
       let modulo_props = t.modulo_props in
-      Symbol.of_stype_register t.registry ~modulo_props
+      Symbol.of_stype_register ~modulo_props
     in
     let rec traverse stack free_vars tree =
       match stack, tree with
@@ -411,6 +417,12 @@ module type S = sig
 end
 
 module Make (Data: sig type 'a t end) : S with type 'a data = 'a Data.t = struct
+
+  (* TODO: document, that symbol table is stored in Module, not in Matcher.t *)
+
+  module Symbol = Symbol (struct end)
+  module Tree = Tree (Symbol)
+
   (* TODO: How can I avoid this duplication of signatures? *)
   type 'a data = 'a Data.t
 
