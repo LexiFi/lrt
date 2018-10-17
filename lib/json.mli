@@ -54,7 +54,7 @@ val ctx:
 
 (** {2 Typeful generic mapping between JSON trees and OCaml values.} *)
 
-val to_json: ?ctx:ctx -> t:'a Ttype.t -> 'a -> value
+val to_json: ?ctx:ctx -> 'a Ttype.t -> 'a -> value
 (**
    [to_json x] maps an OCaml value to a JSON tree representing the same
    information.  The mapping is driven by the type of [x] and the
@@ -124,7 +124,7 @@ val to_json: ?ctx:ctx -> t:'a Ttype.t -> 'a -> value
 
 *)
 
-val of_json: ?ctx:ctx -> t:'a Ttype.t -> value -> 'a
+val of_json: ?ctx:ctx -> 'a Ttype.t -> value -> 'a
 (** Reverse mapping.  If [to_json ~t x] succeeds, the property
     [of_json ~t (to_json ~t x) = x] is expected to hold
     (except corner cases such as unchecked special float values,

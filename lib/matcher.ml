@@ -148,6 +148,7 @@ module Symbol (Unit: sig end) : SYMBOL = struct
 
 end
 
+(*
 let%expect_test _ =
   let module A = Symbol (struct end) in
   let open A in
@@ -201,6 +202,7 @@ let%expect_test _ =
     Symbol 3
     Symbol 3
     not registered |}]
+*)
 
 module IntTable = struct
   type 'a t = (int, 'a) Hashtbl.t

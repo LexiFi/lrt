@@ -275,7 +275,7 @@ let register_custom_2 m = Matcher.add2 matcher m
 
 let variant_xt = Xtype.of_ttype [%t: Variant.t]
 
-let[@landmark] to_json ?(ctx=empty_ctx) ~t =
+let[@landmark] to_json ?(ctx=empty_ctx) t =
   let rec to_json: type a. a Xtype.t -> a -> value = fun t ->
     let open Matcher in
     match apply matcher ~t:(t.t) with
@@ -287,30 +287,24 @@ let[@landmark] to_json ?(ctx=empty_ctx) ~t =
       let TypEq.Eq = M.eq in M.data.to_json
     | None -> to_json_xtype (Lazy.force t.xt)
 
-  and to_json_xtype: type a. a xtype -> a -> value = fun t ->
-    match t with
-    | Unit -> failwith "to_json: missing matcher candidate"
-    | Bool -> failwith "to_json: missing matcher candidate"
-    | Int -> failwith "to_json: missing matcher candidate"
-    | Float -> failwith "to_json: missing matcher candidate"
-    | String -> failwith "to_json: missing matcher candidate"
-    | List _ -> failwith "to_json: missing matcher candidate"
-    | Array _ -> failwith "to_json: missing matcher candidate"
-    | Lazy _ -> failwith "to_json: missing matcher candidate"
+  and to_json_xtype: type a. a xtype -> a -> value = function
     | Prop (_, t) -> to_json t
     | Option t ->
+      (** TODO: Register matcher for nested options? *)
       begin match Lazy.force (remove_outer_props t).xt with
         | Option t ->
+          let to_json = to_json t in
           (function
             | None -> Object ["type", String "None"]
             | Some (Some x) ->
-              Object ["type", String "Some"; "val", to_json t x]
+              Object ["type", String "Some"; "val", to_json x]
             | Some None ->
               Object ["type", String "Some"])
         | _ ->
+          let to_json = to_json t in
           (function
             | None -> Null
-            | Some x -> to_json t x)
+            | Some x -> to_json x)
       end
     | Tuple tup ->
       let f = Fields.map_tuple tup mapf in
@@ -340,6 +334,7 @@ let[@landmark] to_json ?(ctx=empty_ctx) ~t =
     | Object _ -> failwith "Json: objects not supported"
     | Abstract _ ->
       failwith "TODO: abstract handling + fallback to variant"
+    | _ -> failwith "to_json: missing matcher candidate"
 
   and mapf: value Fields.mapf =
     let f : type a. a t -> a -> value = fun t -> to_json t
@@ -354,29 +349,7 @@ let[@landmark] to_json ?(ctx=empty_ctx) ~t =
 
   in to_json (Xtype.of_ttype t)
 
-module Reader: sig
-  type 'a t
-  val mk: (string * 'a) list -> 'a t
-  val get: 'a t -> string -> 'a -> 'a
-end = struct
-  type 'a t = (string * 'a) list ref
-
-  let mk l = ref l
-
-  (* Optimized lookup for record fields, for the case where the ordering
-     match between the JSON value and the OCaml record definition. *)
-
-  let get (r : 'a t) s default =
-    match !r with
-    | (t, v) :: rest when t = s -> r := rest; v
-    | [] -> default
-    | _ :: rest ->
-        (* could fallback to building a lookup table here... *)
-        try List.assoc s rest
-        with Not_found -> default
-end
-
-let[@landmark] of_json ?(ctx=empty_ctx) ~t =
+let[@landmark] of_json ?(ctx=empty_ctx) t =
   let rec of_json: type a. a Xtype.t -> value -> a = fun t ->
     let open Matcher in
     match apply matcher ~t:(t.t) with
@@ -392,8 +365,8 @@ let[@landmark] of_json ?(ctx=empty_ctx) ~t =
     | Option t ->
       let of_json = of_json t in
       begin match Lazy.force (remove_outer_props t).xt with
-        | Option _ -> fun v ->
-          begin match v with
+        | Option _t ->
+          begin function
             | Object l ->
               let constr, arg =
                 match l with
@@ -408,11 +381,9 @@ let[@landmark] of_json ?(ctx=empty_ctx) ~t =
                 | "None" -> None
                 | "Some" -> Some (of_json arg)
                 | _ ->
-                  Print.show ~t:value_t v;
                   failwith "Nested option, 'type' field should be Some or None"
               end
             | _ ->
-              Print.show ~t:value_t v;
               failwith "Type/value mismatch"
           end
         | _ ->
@@ -421,14 +392,19 @@ let[@landmark] of_json ?(ctx=empty_ctx) ~t =
             | v -> Some (of_json v)
           end
       end
-    (* TODO: push function deeper *)
-    | Tuple tup -> (function
-        | Array l -> Builder.tuple tup (field_builder l)
+    | Tuple tup ->
+      let asm = Assembler.tuple tup asm in
+      (function
+        | Array l -> asm l
         | _ -> failwith "tuple expected")
-    | Record r -> (function
-        | Object l -> Builder.record r (record_field_builder l)
+    | Record r ->
+      let asm = Assembler.record r asm in
+      (function
+        | Object l -> asm (fix_names l)
         | _ -> failwith "object expected" )
-    | Sum sum -> (function
+    | Sum sum ->
+      let asm = Assembler.sum sum asm in
+      (function
         | Object l ->
           (* TODO: mlfi_json has special handling for Variant.t and Json.t at
              this point. This might be mirrored using the new Matcher module. *)
@@ -445,13 +421,9 @@ let[@landmark] of_json ?(ctx=empty_ctx) ~t =
             | Some c -> c
             | None -> failwith (Printf.sprintf "Unexpected constructor %S" name)
           in begin match c, arg with
-            | Constant c, _ -> Builder.constant_constructor c
-            | Regular c, Array l ->
-              Builder.regular_constructor c
-                (field_builder l)
-            | Inlined c, Object l ->
-              Builder.inlined_constructor c
-                (record_field_builder l)
+            | Constant c, _ -> asm (Constant c)
+            | Regular c, Array l -> asm (Regular (c, l))
+            | Inlined c, Object l -> asm (Inlined (c, fix_names l))
             | _ -> failwith "TODO: what happened here?"
           end
         | _ -> failwith "object expected")
@@ -464,24 +436,10 @@ let[@landmark] of_json ?(ctx=empty_ctx) ~t =
       failwith "TODO: abstract handling with variant fallback"
     | _ -> failwith "of_json_xt: missing candidate in matcher"
 
-  and field_builder: type a. value list -> a Builder.t =
-    fun lst ->
-      (* we assume that the calls to mk happen in correct order *)
-      let lref = ref lst in
-      let mk {typ; _} =
-        match !lref with
-        | [] -> failwith "tuple length mismatch"
-        | hd :: tl -> lref := tl; of_json typ hd
-      in {mk}
+  and asm: value Assembler.asm =
+    let f: type a. a t -> value -> a = fun t -> of_json t in { f }
 
-  and record_field_builder:
-    type a. (string * value) list -> a Builder.t' =
-    fun lst ->
-      let r = Reader.mk lst in
-      let mk (name, _) el =
-        of_json el.typ
-          (Reader.get r (ctx.to_json_field name) Null)
-      in {mk}
+  and fix_names l = List.map (fun (name, x) -> (ctx.to_json_field name, x)) l
 
   and get_constr l =
     match List.assoc "type" l with
@@ -493,7 +451,7 @@ let[@landmark] of_json ?(ctx=empty_ctx) ~t =
       Print.show ~t:[%t: (string * value) list] l;
       failwith "'type' field is not a string"
 
-  in fun x -> of_json (of_ttype t) x
+  in of_json (of_ttype t)
 
 let () =
   let of_json = function
@@ -548,8 +506,8 @@ let () =
   register_custom_1 (module struct
     type 'a t = 'a list [@@deriving t]
     let data (t: 'a Ttype.t) =
-      let to_json_el = to_json ?ctx:None ~t in
-      let of_json_el = of_json ?ctx:None ~t in
+      let to_json_el = to_json t in
+      let of_json_el = of_json t in
       let to_json l =
         Array (List.map to_json_el l)
       and of_json = function
@@ -563,8 +521,8 @@ let () =
   register_custom_1 (module struct
     type 'a t = 'a array [@@deriving t]
     let data (t: 'a Ttype.t) =
-      let to_json_el = to_json ?ctx:None ~t in
-      let of_json_el = of_json ?ctx:None ~t in
+      let to_json_el = to_json t in
+      let of_json_el = of_json t in
       let to_json l =
         Array (Ext.Array.map_to_list to_json_el l)
       and of_json = function

@@ -120,7 +120,10 @@ module Fields : sig
 
   (** {2 Closure friendly maps} **)
 
+  (* TODO: Instead of the Xtype.t, this could also pass an element. *)
   type 'b mapf  = { f: 'a. 'a t -> 'a -> 'b } [@@unboxed]
+
+  (* TODO: Instead of the name, this might as well pass the complete label. *)
   type 'b mapf' = { f: 'a. name:string -> 'a t -> 'a -> 'b } [@@unboxed]
 
   val map_tuple : 'a tuple -> 'b mapf -> 'a -> 'b list
@@ -182,6 +185,28 @@ module Make : sig
   (** Throws [Missing_field] if not all fields where set via [set]. *)
 end
 (** Similar to [Builder] but with active interface. *)
+
+module Assembler : sig
+
+  (* TODO: Instead of the Xtype.t, this could also pass an element. *)
+  type 'a asm = { f: 'b. 'b t -> 'a -> 'b } [@@unboxed]
+
+  val tuple : 'a tuple -> 'b asm -> 'b list -> 'a
+  (** The assembler consumes the provided list in order of the tuple elements.*)
+
+  val record : 'a record -> 'b asm -> (string * 'b) list -> 'a
+
+  type ('a, 'b) cstr =
+    | Constant:
+        'a constant_constructor -> ('a, 'b) cstr
+    | Regular:
+        ('a, 'c) regular_constructor * 'b list -> ('a, 'b) cstr
+    | Inlined:
+        ('a, 'c) inlined_constructor * (string * 'b) list -> ('a, 'b) cstr
+
+  val sum : 'a sum -> 'b asm -> ('a, 'b) cstr -> 'a
+end
+(** Similar to {!Builder}, but enabling closures *)
 
 (** {2 Paths} *)
 

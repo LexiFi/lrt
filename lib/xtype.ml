@@ -353,6 +353,150 @@ module Builder = struct
       | Inlined c -> inlined_constructor c { mk = fun _ -> b.mk }
 end
 
+module Assembler = struct
+
+  module Reader: sig
+    (* From mlfi_json. *)
+    type 'a t
+    val mk: (string * 'a) list -> 'a t
+    val get: 'a t -> string -> 'a
+  end = struct
+    type 'a t = (string * 'a) list ref
+
+    let mk l = ref l
+
+    (* Optimized lookup for record fields, for the case where the ordering
+       match between the JSON value and the OCaml record definition. *)
+
+    let get (r : 'a t) s =
+      match !r with
+      | (t, v) :: rest when t = s -> r := rest; v
+      | [] -> raise Not_found
+      | _ :: rest ->
+        (* could fallback to building a lookup table here... *)
+        List.assoc s rest
+  end
+
+  (* TODO: Instead of the Xtype.t, this could also pass an element. *)
+  type 'a asm = { f: 'b. 'b t -> 'a -> 'b } [@@unboxed]
+
+  let fun_arr_of_flds arity flds asm =
+    let flds = ref flds in
+    Array.init arity (fun _i ->
+        match !flds with
+        | [] -> assert false
+        | Field el :: tl ->
+          flds := tl;
+          let f = asm.f el.typ in
+          Obj.magic f)
+
+  let fun_arr_of_flds' arity flds asm =
+    let flds = ref flds in
+    Array.init arity (fun _i ->
+        match !flds with
+        | [] -> assert false
+        | (_, Field el) :: tl ->
+          flds := tl;
+          let f = asm.f el.typ in
+          Obj.magic f)
+
+  let init : int -> int -> 'a field list -> 'b asm -> 'b list -> Obj.t =
+    fun tag arity flds asm ->
+    let farr = lazy ( fun_arr_of_flds arity flds asm ) in
+    fun lst ->
+      let farr = Lazy.force farr in
+      let o = Obj.new_block tag arity in
+      let lst = ref lst in
+      for i = 0 to arity - 1 do
+        let hd = match !lst with
+          (* TODO: introduce exception or use result as return type *)
+          | [] -> failwith "Xtype.Assembler.tuple: list too short"
+          | hd :: tl -> lst := tl; hd
+        in
+        Obj.set_field o i (farr.(i) hd)
+      done;
+      o
+
+  let init' :
+    int -> int -> 'a record_field list -> 'b asm -> (string * 'b) list -> Obj.t =
+    fun tag arity flds asm ->
+      let farr = lazy ( fun_arr_of_flds' arity flds asm ) in
+      fun lst ->
+        let farr = Lazy.force farr in
+        let o = Obj.new_block tag arity in
+        let rd = Reader.mk lst in
+        List.iteri (fun i ((name, _),_) ->
+            let b =
+              try
+                Reader.get rd name
+              (* TODO: introduce exception or use result as return type *)
+              with Not_found -> failwith "Xtype.Assembler.record: field missing"
+            in
+            Obj.set_field o i (farr.(i) b)
+          ) flds;
+        o
+
+  let tuple : 'a tuple -> 'b asm -> 'b list -> 'a =
+    fun tup asm ->
+      let init : 'b list -> Obj.t = init 0 tup.t_len tup.t_flds asm in
+      Obj.magic init
+
+  let record : 'a record -> 'b asm -> (string * 'b) list -> 'a =
+    fun r asm ->
+      if r.r_repr = Unboxed then failwith "TODO: unboxed records";
+      let init : (string * 'b) list -> Obj.t = init' 0 r.r_len r.r_flds asm in
+      Obj.magic init
+
+  type ('a, 'b) cstr =
+    | Constant:
+        'a constant_constructor -> ('a, 'b) cstr
+    | Regular:
+        ('a, 'c) regular_constructor * 'b list -> ('a, 'b) cstr
+    | Inlined:
+        ('a, 'c) inlined_constructor * (string * 'b) list -> ('a, 'b) cstr
+
+  let sum : 'a sum -> 'b asm -> ('a, 'b) cstr -> 'a = fun sum asm ->
+    let aux = lazy (
+      (* TODO: store number of constructors in stype *)
+      let rev_inlined, rev_regular =
+        List.fold_left (fun (inlined, regular) c ->
+            match (c : _ constructor) with
+            | Constant _ -> (inlined, regular)
+            | Regular c ->
+              let init = match c.rc_repr with
+                | Unboxed -> failwith "TODO: support unboxed"
+                | Tag tag -> init tag c.rc_len c.rc_flds asm
+              in
+              (None :: inlined, Some init :: regular)
+            | Inlined c ->
+              let init = match c.ic_repr with
+                | Unboxed -> failwith "TODO: support unboxed"
+                | Tag tag -> init' tag c.ic_len c.ic_flds asm
+              in
+              (Some init :: inlined, None :: regular)
+          ) ([],[]) sum.s_cstrs
+      in
+      Ext.Array.of_list_rev rev_inlined, Ext.Array.of_list_rev rev_regular
+    ) in
+    fun c ->
+      let inlined, regular = Lazy.force aux in
+      match c with
+      | Constant c -> Obj.magic c.cc_nr
+      | Regular (c, l) -> begin match c.rc_repr with
+          | Unboxed -> failwith "TODO: unboxed constructors"
+          | Tag i -> match regular.(i) with
+            | None -> assert false
+            | Some f -> Obj.magic (f l : Obj.t)
+        end
+      | Inlined (c, l) -> begin match c.ic_repr with
+          | Unboxed -> failwith "TODO: unboxed constructors"
+          | Tag i -> match inlined.(i) with
+            | None -> assert false
+            | Some f -> Obj.magic (f l : Obj.t)
+        end
+
+end
+
 module Make = struct
 
   type 'a t = Obj.t option array
@@ -462,6 +606,7 @@ module Fields = struct
   let[@landmark] map_record (type a b) (r: a record) (mapf: b mapf') =
     let farr = lazy (fun_arr_of_fields' r.r_len r.r_flds mapf) in
     fun (x:a) ->
+      if r.r_repr = Unboxed then failwith "TODO: unboxed records";
       let farr = Lazy.force farr in
       let o = Obj.repr x in
       List.init (Obj.size o) (fun i -> farr.(i) (Obj.field o i))
@@ -481,11 +626,13 @@ module Fields = struct
               match cstrs.(i) with
               | Constant c -> fun _ -> Constant (fst c.cc_label)
               | Regular c ->
+                if c.rc_repr = Unboxed then failwith "TODO: unboxed cstr";
                 let farr' = fun_arr_of_fields c.rc_len  c.rc_flds mapf in
                 fun o -> Regular (
                     fst c.rc_label,
                     List.init (Obj.size o) (fun i -> farr'.(i) (Obj.field o i)))
               | Inlined c ->
+                if c.ic_repr = Unboxed then failwith "TODO: unboxed cstr";
                 let farr' = fun_arr_of_fields' c.ic_len  c.ic_flds mapf' in
                 fun o -> Inlined (
                     fst c.ic_label,
