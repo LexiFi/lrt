@@ -273,8 +273,6 @@ let register_custom_2 m = Matcher.add2 matcher m
      in DT_node
 *)
 
-let variant_xt = Xtype.of_ttype [%t: Variant.t]
-
 let[@landmark] to_json ?(ctx=empty_ctx) t =
   let rec to_json: type a. a Xtype.t -> a -> value = fun t ->
     let open Matcher in
@@ -289,23 +287,6 @@ let[@landmark] to_json ?(ctx=empty_ctx) t =
 
   and to_json_xtype: type a. a xtype -> a -> value = function
     | Prop (_, t) -> to_json t
-    | Option t ->
-      (** TODO: Register matcher for nested options? *)
-      begin match Lazy.force (remove_outer_props t).xt with
-        | Option t ->
-          let to_json = to_json t in
-          (function
-            | None -> Object ["type", String "None"]
-            | Some (Some x) ->
-              Object ["type", String "Some"; "val", to_json x]
-            | Some None ->
-              Object ["type", String "Some"])
-        | _ ->
-          let to_json = to_json t in
-          (function
-            | None -> Null
-            | Some x -> to_json x)
-      end
     | Tuple tup ->
       let f = Fields.map_tuple tup mapf in
       fun x -> Array (f x)
@@ -313,8 +294,6 @@ let[@landmark] to_json ?(ctx=empty_ctx) t =
       let f = Fields.map_record r mapf' in
       fun x -> Object (f x)
     | Sum s ->
-      (* TODO: mlfi_json has special handling for Variant.t and Json.t at
-         this point. This might be mirrored using the new Matcher module. *)
       let f = Fields.map_sum s mapf mapf' in
       fun x -> begin
           match f x with
@@ -325,20 +304,24 @@ let[@landmark] to_json ?(ctx=empty_ctx) t =
           | Inlined (name, args) ->
             Object (("type", String name) :: args)
         end
-    | Function _ -> failwith "Json: functions not supported"
-    (* TODO: avoid indirection via variant *)
-    | Char -> fun x -> to_json variant_xt (Variant.to_variant ~t:[%t: char] x)
-    | Int32 -> fun x -> to_json variant_xt (Variant.to_variant ~t:[%t: int32] x)
-    | Int64 -> fun x -> to_json variant_xt (Variant.to_variant ~t:[%t: int64] x)
-    | Nativeint -> fun x -> to_json variant_xt (Variant.to_variant ~t:[%t: nativeint] x)
-    | Object _ -> failwith "Json: objects not supported"
+    (* TODO: avoid indirection via variant, handle of_json *)
+    | Char -> to_json_variant [%t: char]
+    | Int32 -> to_json_variant [%t: int32]
+    | Int64 -> to_json_variant [%t: int64]
+    | Nativeint -> to_json_variant [%t: nativeint]
     | Abstract _ ->
-      failwith "TODO: abstract handling + fallback to variant"
-    | _ -> failwith "to_json: missing matcher candidate"
+      failwith "TODO: fallback to variant as in mlfi_json"
+    | _ -> failwith "Json: unknown type"
 
   and mapf: value Fields.mapf =
     let f : type a. a t -> a -> value = fun t -> to_json t
     in { f }
+
+  and to_json_variant: type a. a Ttype.t -> a -> value =
+    fun t ->
+      let to_json = to_json (of_ttype Variant.t) in
+      let to_variant = Variant.to_variant ~t in
+      fun x -> to_json (to_variant x)
 
   and mapf': (string * value) Fields.mapf' =
     let f : type a. name: string -> a t -> a -> string * value =
@@ -348,6 +331,16 @@ let[@landmark] to_json ?(ctx=empty_ctx) t =
     in { f }
 
   in to_json (Xtype.of_ttype t)
+
+let get_constr l =
+  match List.assoc "type" l with
+  | String constr -> constr
+  | exception Not_found ->
+    Print.show ~t:[%t: (string * value) list] l;
+    failwith "No 'type' field in object of sum type"
+  | _ ->
+    Print.show ~t:[%t: (string * value) list] l;
+    failwith "'type' field is not a string"
 
 let[@landmark] of_json ?(ctx=empty_ctx) t =
   let rec of_json: type a. a Xtype.t -> value -> a = fun t ->
@@ -362,36 +355,6 @@ let[@landmark] of_json ?(ctx=empty_ctx) t =
     | None -> of_json_xt (Lazy.force t.xt)
 
   and of_json_xt: type t. t xtype -> value -> t = function
-    | Option t ->
-      let of_json = of_json t in
-      begin match Lazy.force (remove_outer_props t).xt with
-        | Option _t ->
-          begin function
-            | Object l ->
-              let constr, arg =
-                match l with
-                | [ "type", String ty; "val", v ] -> ty, v
-                | [ "type", String ty ] -> ty, Null
-                | _ ->
-                  get_constr l,
-                  try List.assoc "val" l
-                  with Not_found -> Null
-              in
-              begin match constr with
-                | "None" -> None
-                | "Some" -> Some (of_json arg)
-                | _ ->
-                  failwith "Nested option, 'type' field should be Some or None"
-              end
-            | _ ->
-              failwith "Type/value mismatch"
-          end
-        | _ ->
-          begin function
-            | Null -> None
-            | v -> Some (of_json v)
-          end
-      end
     | Tuple tup ->
       let asm = Assembler.tuple tup asm in
       (function
@@ -406,8 +369,6 @@ let[@landmark] of_json ?(ctx=empty_ctx) t =
       let asm = Assembler.sum sum asm in
       (function
         | Object l ->
-          (* TODO: mlfi_json has special handling for Variant.t and Json.t at
-             this point. This might be mirrored using the new Matcher module. *)
           let name, arg =
             match l with
             | [ "type", String ty; "val", v ] -> ty, v
@@ -424,32 +385,18 @@ let[@landmark] of_json ?(ctx=empty_ctx) t =
             | Constant c, _ -> asm (Constant c)
             | Regular c, Array l -> asm (Regular (c, l))
             | Inlined c, Object l -> asm (Inlined (c, fix_names l))
-            | _ -> failwith "TODO: what happened here?"
+            | Regular _, _ -> failwith "Array expected"
+            | Inlined _, _ -> failwith "Object expected"
           end
         | _ -> failwith "object expected")
-    | Lazy t ->
-      let of_json = of_json t in
-      fun v -> lazy (of_json v)
     | Prop (_, t) -> of_json t
-    | Function _ -> failwith "Mlfi_json: functions not supported"
-    | Abstract _ ->
-      failwith "TODO: abstract handling with variant fallback"
-    | _ -> failwith "of_json_xt: missing candidate in matcher"
+    | Abstract _ -> failwith "TODO: fallback to variant as mlfi_json"
+    | _ -> failwith "Json: unknown type"
 
   and asm: value Assembler.asm =
     let f: type a. a t -> value -> a = fun t -> of_json t in { f }
 
   and fix_names l = List.map (fun (name, x) -> (ctx.to_json_field name, x)) l
-
-  and get_constr l =
-    match List.assoc "type" l with
-    | String constr -> constr
-    | exception Not_found ->
-      Print.show ~t:[%t: (string * value) list] l;
-      failwith "No 'type' field in object of sum type"
-    | _ ->
-      Print.show ~t:[%t: (string * value) list] l;
-      failwith "'type' field is not a string"
 
   in of_json (of_ttype t)
 
@@ -531,6 +478,70 @@ let () =
       in
       {of_json; to_json}
   end)
+
+let () =
+  register_custom_1 (module struct
+    type 'a t = 'a Lazy.t [@patch lazy_t] [@@deriving t]
+    let data (t: 'a Ttype.t) =
+      let to_json = to_json t
+      and of_json = of_json t in
+      let to_json x = to_json (Lazy.force x)
+      and of_json x = lazy (of_json x)
+      in {of_json; to_json}
+  end)
+
+let () =
+  register_custom_1 (module struct
+    type 'a t = 'a option [@@deriving t]
+    let data (t: 'a Ttype.t) =
+      let to_json = to_json t
+      and of_json = of_json t in
+      let to_json = function
+        | Some x -> to_json x
+        | None -> Null
+      and of_json = function
+        | Null -> None
+        | x -> Some (of_json x)
+    in {of_json; to_json}
+  end)
+
+let () =
+  register_custom_1 (module struct
+    type 'a t = 'a option option [@@deriving t]
+    let data (t: 'a Ttype.t) =
+      let to_json = to_json t
+      and of_json = of_json t in
+      let to_json = function
+        | Some Some x -> Object ["type", String "Some"; "val", to_json x]
+        | Some None -> Object ["type", String "Some"]
+        | None -> Object ["type", String "None"]
+      and of_json json =
+        let aux = match json with
+          | Object ["type", String ty; "val", v] -> ty, v
+          | Object ["type", String ty] -> ty, Null
+          | Object l ->
+            get_constr l,
+            (try List.assoc "val" l with Not_found -> Null)
+          | _ -> failwith "Object expected"
+        in match aux with
+        | "None", _ -> None
+        | "Some", Null -> Some None
+        | "Some", x -> Some (Some (of_json x))
+        | _ -> failwith "Nested option, 'type' field should be Some or None"
+      in {of_json; to_json}
+  end)
+
+let () =
+  let of_json = function
+    | String s -> Variant.variant_of_string s
+    | _ -> failwith "Variant string expected"
+  and to_json x = String (Variant.string_one_line_of_variant x) in
+  register_custom ~t:[%t: Variant.t] {of_json; to_json}
+
+let () =
+  let of_json x = x
+  and to_json x = x in
+  register_custom ~t:[%t: value] {of_json; to_json}
 
 open Buffer
 
