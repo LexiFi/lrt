@@ -1,6 +1,6 @@
 (** Unification of dynamic types. *)
 
-(** {2 Types with free variables} *)
+(** {3 Types with free variables} *)
 
 module type T0 = sig
   type t [@@deriving t]
@@ -16,7 +16,7 @@ module type T2 = sig
   type ('a, 'b) t [@@deriving t]
 end
 
-(** {2 Unification} *)
+(** {3 Unification} *)
 
 module type PARAM = sig
   val modulo_props : bool

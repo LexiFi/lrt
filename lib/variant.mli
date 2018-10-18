@@ -43,7 +43,7 @@ val of_variant : t:'a Ttype.t -> t -> 'a
     de-variantizer.
 *)
 
-(** {2 (De)Serialization} *)
+(** {3 (De)Serialization} *)
 
 val print_variant : Format.formatter -> t -> unit
 (** Print a variant with the syntax of MLFi constants. *)
@@ -99,7 +99,7 @@ val variant_of_file : string -> t
 val value_of_variant_in_file : t:'a Ttype.t -> string -> 'a
 (** Read a value as a variant from a text file. *)
 
-(** {2 Variant mapper} *)
+(** {3 Variant mapper} *)
 
 (** Lexifi has documentation on how to use mappers and the other properties.
     This should go here *)
@@ -122,12 +122,13 @@ val of_variant_custom
     prefixed with the optional [name] argument and re-raised as [Failure].
 
     The following example shows how to handle the transition from [type t = int]
-    to [type t = int * string]: {[
-type t = int * string [@@deriving t]
-let t = of_variant_custom ~name:"int to (int * string)" ~t (function
-  | Int i -> Some (i, string_of_int i)
-  | _ -> None
-)]}
+    to [type t = int * string]:
+    {[
+      type t = int * string [@@deriving t]
+      let t = of_variant_custom ~name:"int to (int * string)" ~t (function
+          | Int i -> Some (i, string_of_int i)
+          | _ -> None
+        )]}
 *)
 
 val of_variant_mapper 
@@ -161,7 +162,7 @@ let of_variant_default ?name ~t init =
     ]}
 *)
 
-(** {2 Handle abstract types} *)
+(** {3 Handle abstract types} *)
 
 type 'a to_variant = 'a -> t
 type 'a of_variant = t -> 'a

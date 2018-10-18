@@ -52,6 +52,7 @@ val meta : ('a, 'b) t -> meta list
 val print : Format.formatter -> ('a, 'b) t -> unit
 (** Print a path in the syntax expected by the syntax extension. *)
 
+(** Operations based on the untyped meta information. *)
 module Unsafe : sig
   (** The following functions compare paths based on the untyped meta
       information. This meta information is derived from an untyped
@@ -67,7 +68,6 @@ module Unsafe : sig
   (** [is_prefix path1 path2] checks if [path2] starts with [path1].
       When this is the case, the function returns the remaining path. *)
 end
-(** Operations based on the untyped meta information. *)
 
 (**/**)
 

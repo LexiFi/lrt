@@ -7,7 +7,7 @@
 (*  form or for any purpose without the express permission of LexiFi SAS.  *)
 (***************************************************************************)
 
-(** {2 Representation of JSON trees} *)
+(** {3 Representation of JSON trees} *)
 
 type number = I of int | F of float
 
@@ -26,7 +26,7 @@ type value =
       be encoded in a special (undocumented) way.
 *)
 
-(** {2 Mapping between JSON trees and their textual representation.} *)
+(** {3 Mapping between JSON trees and their textual representation.} *)
 
 val encode : ?utf8:bool -> value -> string
 (** Encode JSON tree into a compact JSON text (single line,  etc). *)
@@ -50,7 +50,7 @@ type ctx
 
 val ctx : ?to_json_field:(string -> string) -> unit -> ctx
 
-(** {2 Typeful generic mapping between JSON trees and OCaml values.} *)
+(** {3 Typeful generic mapping between JSON trees and OCaml values.} *)
 
 val to_json : ?ctx:ctx -> 'a Ttype.t -> 'a -> value
 (**
@@ -147,7 +147,7 @@ val of_json : ?ctx:ctx -> 'a Ttype.t -> value -> 'a
 
 type 'a custom_json = {to_json: 'a -> value; of_json: value -> 'a}
 
-(** {2 Custom mapping for specific types} *)
+(** {3 Custom mapping for specific types} *)
 
 (* TODO: support passing local custom conversions to to_json/of_json. *)
 

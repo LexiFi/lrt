@@ -11,7 +11,7 @@ type dynamic = Dyn : 'a t * 'a -> dynamic
 val equality : 'a t -> 'b t -> ('a, 'b) TypEq.t option
 val equality_modulo_props : 'a t -> 'b t -> ('a, 'b) TypEq.t option
 
-(** {2 Access information in types} *)
+(** {3 Access information in types} *)
 
 val split_arrow : ('a -> 'b) t -> 'a t * 'b t
 val build_arrow : 'a t -> 'b t -> ('a -> 'b) t
@@ -19,7 +19,7 @@ val fst : ('a * 'b) t -> 'a t
 val snd : ('a * 'b) t -> 'b t
 val abstract_name : 'a t -> string option
 
-(** {2 Porperties } *)
+(** {3 Porperties } *)
 
 val remove_outer_props : 'a t -> 'a t
 (** Remove properties from a ttype. If properties are nested, all are removed.*)
@@ -41,7 +41,7 @@ assert (fst (consume_outer_props s_t) = fst (consume_outer_props t))
 
 val add_props : Stype.properties -> 'a t -> 'a t
 
-(** {2 Conversion to/from stype} *)
+(** {3 Conversion to/from stype} *)
 
 type is_t = Ttype : 'a t -> is_t
 

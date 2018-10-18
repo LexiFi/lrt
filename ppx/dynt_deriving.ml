@@ -1,4 +1,4 @@
-(** The [\[@@deriving t\]] syntax extension. *)
+(** The [\[@@deriving t\]] syntax extension. See {!Dynt}. *)
 
 (**/**)
 

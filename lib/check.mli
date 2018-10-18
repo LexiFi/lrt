@@ -7,7 +7,7 @@
 
 (** A quickcheck-like library for OCaml. *)
 
-(** {2 Generators} *)
+(** {3 Generators} *)
 
 (** Generators of ['a] values. *)
 type 'a gen
@@ -79,7 +79,7 @@ val elements_freq_lazy : (int * 'a Lazy.t) list -> 'a gen
 val until : ('a -> bool) -> 'a gen -> 'a gen
 (** Generate values until the given condition is satisfied. *)
 
-(** {2 Generators of basic types} *)
+(** {3 Generators of basic types} *)
 
 val unit : unit gen
 (** Generate [unit]. *)
@@ -142,7 +142,7 @@ val array_of_size : int -> 'a gen -> 'a array gen
 (** Generate an array of at most a given size, where each element is
     generated using the given generator. *)
 
-(** {2 Mlfi-specific generators} *)
+(** {3 Mlfi-specific generators} *)
 
 val lident : string gen
 (** Generate a lowercase identifier, usable as a record field name (not an MLFi keyword) *)
@@ -173,14 +173,14 @@ val dynamic : ?size:int -> UGen.t list -> Ttype.dynamic gen
 (** Generate a random [Dyn ('a ttype, 'a)]. Arguments correspond to
  *  the ones of [of_type_gen]. *)
 
-(** {2 Combinators to make writing properties easier} *)
+(** {3 Combinators to make writing properties easier} *)
 
 val ( => ) : bool -> bool -> bool
 val ( ==> ) : bool -> (unit -> bool) -> bool
 
 (* Like [(=>)] but with a lazy second argument. *)
 
-(** {2 Shrinking} *)
+(** {3 Shrinking} *)
 
 type 'a shrink = 'a -> 'a list
 
@@ -236,7 +236,7 @@ module Shrink : sig
   (* val of_type: t:'a ttype -> 'a shrink *)
 end
 
-(** {2 Running the generators} *)
+(** {3 Running the generators} *)
 
 type 'a test_result =
   | Succeed of {name: string option; test_run: int}

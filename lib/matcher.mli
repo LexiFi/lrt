@@ -10,7 +10,7 @@ module type S = sig
   val add : t -> t:'a Ttype.t -> 'a data -> unit
   (** Add a case to the matcher. *)
 
-  (** {2 Match types with free variables} *)
+  (** {3 Match types with free variables} *)
 
   module type C0 = sig
     include Unify.T0
@@ -39,7 +39,7 @@ module type S = sig
   val add2 : t -> (module C2) -> unit
   (** Add a case to the matcher. Two free variables. *)
 
-  (** {2 Matching Result} *)
+  (** {3 Matching Result} *)
 
   module type M0 = sig
     include Unify.T0
@@ -76,7 +76,7 @@ module type S = sig
     | M1 of (module M1 with type matched = 'a)
     | M2 of (module M2 with type matched = 'a)
 
-  (** {2 Executing the Matcher} *)
+  (** {3 Executing the Matcher} *)
 
   val apply : t -> t:'a Ttype.t -> 'a matched option
   val apply_exn : t -> t:'a Ttype.t -> 'a matched

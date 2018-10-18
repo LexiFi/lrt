@@ -1,4 +1,4 @@
-(** Inspection of type definitions. *)
+(** Visitable representation of types. *)
 
 type record_repr = Regular | Float | Unboxed
 type constr_repr = Tag of int | Unboxed
@@ -73,7 +73,7 @@ and 's method_ = private Method : string * ('s, 't) element -> 's method_
 and 's object_ = private
   {o_methods: 's method_ list; o_lookup: string -> 's method_ option}
 
-(** {2 Initialization and transformation} *)
+(** {3 Initialization and transformation} *)
 
 val of_ttype : 'a Ttype.t -> 'a t
 (** Produce a representation of a dynamic type, that is safer to inspect than
@@ -96,7 +96,7 @@ val consume_outer_props : 'a t -> Stype.properties * 'a t
     associative, i.e. [ Prop ([a], Prop ([b, c], _)) ] yields the same list
     as [ Prop ([a, b], Prop ([c], _)) ]. *)
 
-(** {2 Destruction and construction of values} *)
+(** {3 Destruction and construction of values} *)
 
 (** Read values from tuples, records and constructors. *)
 module Read : sig
@@ -216,7 +216,7 @@ module Assembler : sig
   (** The assembler uses the same mechanism as {!tuple} and {!sum}. *)
 end
 
-(** {2 Paths}
+(** {3 Paths}
 
     Interop between dynamic types and {!Path}.
 *)

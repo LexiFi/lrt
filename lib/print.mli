@@ -10,7 +10,7 @@ val print : t:'a Ttype.t -> Format.formatter -> 'a -> unit
 val show : t:'a Ttype.t -> 'a -> unit
 (** Print a value to stdout. *)
 
-(** {2 Handling abstract types} *)
+(** {3 Handling abstract types} *)
 
 type 'a printer = Format.formatter -> 'a -> unit
 
@@ -38,7 +38,7 @@ val add_abstract_0 : (module PRINTABLE_0) -> unit
 val add_abstract_1 : (module PRINTABLE_1) -> unit
 val add_abstract_2 : (module PRINTABLE_2) -> unit
 
-(** {2 Unsafe printing for abstract types}
+(** {3 Unsafe printing for abstract types}
 
     The abstract types are matched by name only.
 *)
