@@ -1,4 +1,4 @@
-(** Universal untyped representation of values.
+(** Ocaml syntax compatible representation of values.
 
     Values can be converted to and from variants using {!to_variant} and
     {!of_variant}. *)

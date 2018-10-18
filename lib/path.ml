@@ -22,12 +22,12 @@ and ('a, 'b) lens = {get: 'a -> 'b option; set: 'a -> 'b -> 'a option}
 and meta =
   (* private *)
   | Field of {field_name: string}
-  | Constructor of {name: string; arg: constructor_argument}
+  | Constructor of {name: string; arg: argument}
   | Tuple of {nth: int; arity: int}
   | List of {nth: int}
   | Array of {nth: int}
 
-and constructor_argument =
+and argument =
   | Regular of {nth: int; arity: int}
   | Inline of {field_name: string}
 
@@ -48,7 +48,7 @@ let rec print_step ppf = function
   | List {nth} -> Format.fprintf ppf "[%i]" nth
   | Array {nth} -> Format.fprintf ppf "[|%i|]" nth
 
-let meta_list t =
+let meta t =
   let rec fold : type a b. meta list -> (a, b) t -> meta list =
    fun acc -> function
     | [] -> List.rev acc
@@ -57,7 +57,7 @@ let meta_list t =
   fold [] t
 
 let print ppf t =
-  print_list ppf ~opn:"[%path? [" ~cls:"]]" ~sep:"; " print_step (meta_list t)
+  print_list ppf ~opn:"[%path? [" ~cls:"]]" ~sep:"; " print_step (meta t)
 
 let ( >>= ) x f = match x with None -> None | Some x -> f x
 
@@ -82,7 +82,7 @@ let rec ( @ ) : type a b c. (a, b) t -> (b, c) t -> (a, c) t =
 module Unsafe = struct
   let is_prefix : type a b c. (a, b) t -> (a, c) t -> (b, c) t option =
    fun prefix t ->
-    let pmeta, tmeta = (meta_list prefix, meta_list t) in
+    let pmeta, tmeta = (meta prefix, meta t) in
     let rec check (l : meta list) (r : meta list) (p : (_, _) t) =
       match (l, r, p) with
       | [], _, p -> Some p

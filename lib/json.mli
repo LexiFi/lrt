@@ -1,3 +1,5 @@
+(** Json compatible representation of values. *)
+
 (***************************************************************************)
 (*  Copyright (C) 2000-2018 LexiFi SAS. All rights reserved.               *)
 (*                                                                         *)

@@ -3,12 +3,12 @@
     This module introduces paths within types and values.
 
     Paths are constructed using the syntax extension [\[%path? P\]].
-    The payload P is a list of steps, each following this syntax:
+    The payload [P] is a list of steps, each following this syntax:
 
       - [ ([],_,_) ] to access the first element of a triple.
-      - [ f ] to access the record field [f].
-      - [ C (_,[]) ] to access the second argument to variant constructor [C].
-      - [ C f ] to access inline field [f] of variant constructor [C].
+      - [ fld ] to access the record field [fld].
+      - [ Cst (_,[]) ] to access the second argument to constructor [Cst].
+      - [ Cst fld ] to access inline record field [fld] of constructor [Cst].
       - [ [7] ] to access the seventh element of a list.
       - [ [|5|] ] to access the fifth element of an array.
 
@@ -16,9 +16,9 @@
 
     Examples:
 
-      - [\[%path? \[f; (\[\],_)\]\]] corresponds to [fun x -> fst x.f]
-      - [\[%path? \[C f; \[|1|\]\]\]] corresponds to
-        [function C x -> Array.get x.f 1]
+      - [\[%path? \[fld; (\[\],_)\]\]] corresponds to [fun x -> fst x.fld]
+      - [\[%path? \[Cst fld; \[|1|\]\]\]] corresponds to
+        [fun (Cst x) -> Array.get x.fld 1]
 *)
 
 type (_, _) t =
@@ -31,12 +31,12 @@ and ('a, 'b) lens = {get: 'a -> 'b option; set: 'a -> 'b -> 'a option}
 
 and meta = private
   | Field of {field_name: string}
-  | Constructor of {name: string; arg: constructor_argument}
+  | Constructor of {name: string; arg: argument}
   | Tuple of {nth: int; arity: int}
   | List of {nth: int}
   | Array of {nth: int}
 
-and constructor_argument =
+and argument =
   | Regular of {nth: int; arity: int}
   | Inline of {field_name: string}
 
@@ -53,9 +53,7 @@ val print : Format.formatter -> ('a, 'b) t -> unit
 (** Print a path in the syntax expected by the syntax extension. *)
 
 module Unsafe : sig
-  (** Operations based on the untyped meta information.
-
-      The following functions compare paths based on the untyped meta
+  (** The following functions compare paths based on the untyped meta
       information. This meta information is derived from an untyped
       representation of your program using a PPX. You might be able to construct
       distinct paths with the same meta information.  This module will interpret
@@ -69,6 +67,7 @@ module Unsafe : sig
   (** [is_prefix path1 path2] checks if [path2] starts with [path1].
       When this is the case, the function returns the remaining path. *)
 end
+(** Operations based on the untyped meta information. *)
 
 (**/**)
 
