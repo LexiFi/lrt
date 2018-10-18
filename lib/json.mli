@@ -57,51 +57,67 @@ val to_json : ?ctx:ctx -> 'a Ttype.t -> 'a -> value
    default behavior (which can be overridden) is defined below.
 
    Basic types:
-   - 1                 ---> 1
-   - 1.                ---> 1.
-   - ()                ---> {}
-   - true/false        ---> true/false
-   - "abc"             ---> "abc"
-   - 2001-01-01        ---> "2001-01-01"
+   {[
+   - 1          ---> 1
+   - 1.         ---> 1.
+   - ()         ---> {}
+   - true/false ---> true/false
+   - "abc"      ---> "abc"
+   - 2001-01-01 ---> "2001-01-01"
+   ]}
 
    List/array/tuple types:
-   - [x; y]            ---> [x', y']
-   - [|x; y|]          ---> [x', y']
-   - (x, y)            ---> [x', y']
+   {[
+   - [x; y]   ---> [x', y']
+   - [|x; y|] ---> [x', y']
+   - (x, y)   ---> [x', y']
+   ]}
 
    Record types:
+   {[
    - {l1 = x; l2 = y}    ---> {"l1": x', "l2": y'}
    - {l1 = x; l2 = None} ---> {"l1": x'}
+   ]}
 
    Sum types:
-   - A                   ---> {"type": "A"}
-   - B x                 ---> {"type": "B", "val": [x']}
-   - C (x, y)            ---> {"type": "C", "val": [x', y']}
-   - D {l1 = x; l2 = y}  ---> {"type": "D", "l1": x', "l2": y'}
+   {[
+   - A                  ---> {"type": "A"}
+   - B x                ---> {"type": "B", "val": [x'] }
+   - C (x, y)           ---> {"type": "C", "val": [x', y'] }
+   - D {l1 = x; l2 = y} ---> {"type": "D", "l1": x', "l2": y'}
+   ]}
 
    Option types:
-   - Some x            ---> x'
-   - None              ---> null (when not in record)
+   {[
+   - Some x ---> x'
+   - None   ---> null (when not in record)
+   ]}
 
    Nested option types!
-   - Some (Some x)    ---> {"type": "Some", "val": x'}
-   - Some None        ---> {"type": "Some"}
-   - None             ---> {"type": "None"}
+   {[
+   - Some (Some x) ---> {"type": "Some", "val": x'}
+   - Some None     ---> {"type": "Some"}
+   - None          ---> {"type": "None"}
+   ]}
 
    Lazy types:
-   - lazy x            ---> x'
+   {[
+   - lazy x ---> x'
      (x is forced upon jsonification; de-jsonification is lazy)
+   ]}
 
    String Maps ('a Mlfi_sets_maps.StringMap.t)
-     are mapped to objects
-
-     e.g.
-     {"a" -> 1; "b" -> 2}                 ---> {"a": 1, "b": 2}
-     {"foo" -> "hello"; "bar" -> "world"} ---> {"foo": "hello", "bar": "world"}
+     are mapped to objects, e.g.
+   {[
+   - {"a" -> 1; "b" -> 2}                 ---> {"a": 1, "b": 2}
+   - {"foo" -> "hello"; "bar" -> "world"} ---> {"foo": "hello", "bar": "world"}
+   ]}
 
    Special cases:
-   - (x : Mlfi_isdatypes.variant) ---->  "<textual representation of x, in OCaml syntax>"
-   - (x : Mlfi_json.value)        ---->  x
+   {[
+   - (x : Variant.t)  ---->  <textual representation of x, in OCaml syntax>
+   - (x : Json.value) ---->  x
+   ]}
 
 
    Notes:
