@@ -22,28 +22,25 @@
 *)
 
 type (_, _) t =
-  | (::) : ('a, 'b) step * ('b, 'c) t -> ('a, 'c) t
+  | ( :: ) : ('a, 'b) step * ('b, 'c) t -> ('a, 'c) t
   | [] : ('a, 'a) t
 
 and ('a, 'b) step = ('a, 'b) lens * meta
 
-and ('a, 'b) lens =
-  { get : 'a -> 'b option
-  ; set : 'a -> 'b -> 'a option
-  }
+and ('a, 'b) lens = {get: 'a -> 'b option; set: 'a -> 'b -> 'a option}
 
 and meta = private
-  | Field of { field_name : string }
-  | Constructor of { name : string; arg : constructor_argument }
-  | Tuple of { nth : int; arity : int }
-  | List of { nth : int }
-  | Array of { nth : int }
+  | Field of {field_name: string}
+  | Constructor of {name: string; arg: constructor_argument}
+  | Tuple of {nth: int; arity: int}
+  | List of {nth: int}
+  | Array of {nth: int}
 
 and constructor_argument =
-  | Regular of { nth : int; arity : int }
-  | Inline of { field_name : string }
+  | Regular of {nth: int; arity: int}
+  | Inline of {field_name: string}
 
-val ( @ ): ('a, 'b) t -> ('b, 'c) t -> ('a, 'c) t
+val ( @ ) : ('a, 'b) t -> ('b, 'c) t -> ('a, 'c) t
 (** [a @ b] composes the paths a and b. *)
 
 val meta_list : ('a, 'b) t -> meta list
@@ -64,11 +61,11 @@ module Unsafe : sig
       construct distinct paths with the same meta information.
       This module will interpret such paths as equal. *)
 
-  val is_equal: ('a, 'b) t -> ('a, 'b) t -> bool
+  val is_equal : ('a, 'b) t -> ('a, 'b) t -> bool
   (** [is_equal path1 path2] checks if [path1] and [path2] consist of the same
       steps. *)
 
-  val is_prefix: ('a, 'b) t -> ('a, 'c) t -> ('b, 'c) t option
+  val is_prefix : ('a, 'b) t -> ('a, 'c) t -> ('b, 'c) t option
   (** [is_prefix path1 path2] checks if [path2] starts with [path1].
       When this is the case, the function returns the remaining path. *)
 end
@@ -80,11 +77,11 @@ module Internal : sig
       because the rest of the module assumes consistency between the lens and
       meta information. *)
 
-  val field: field_name:string -> meta
-  val tuple: nth:int -> arity:int -> meta
-  val constructor_regular: name:string -> nth:int -> arity:int -> meta
-  val constructor_inline: name:string -> field_name:string -> meta
-  val list: nth:int -> meta
-  val array: nth:int -> meta
-end [@@ocaml.deprecated "Do not use this module directly"]
-
+  val field : field_name:string -> meta
+  val tuple : nth:int -> arity:int -> meta
+  val constructor_regular : name:string -> nth:int -> arity:int -> meta
+  val constructor_inline : name:string -> field_name:string -> meta
+  val list : nth:int -> meta
+  val array : nth:int -> meta
+end
+[@@ocaml.deprecated "Do not use this module directly"]

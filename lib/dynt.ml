@@ -14,10 +14,10 @@ module Std = Std
 type stype = Stype.t
 type 'a ttype = 'a Ttype.t
 type 'a xtype = 'a Xtype.t
-type dynamic = Ttype.dynamic =
-  | Dyn : 'a ttype * 'a -> dynamic
+type dynamic = Ttype.dynamic = Dyn : 'a ttype * 'a -> dynamic
 
 include Std
 
 (**/**)
+
 module Dynt_ppx_runtime = Dynt_ppx_runtime

@@ -1,14 +1,13 @@
-type (_, _) t = Eq: ('a, 'a) t
+type (_, _) t = Eq : ('a, 'a) t
 
 let refl = Eq
+let trans (type a b c) (Eq : (a, b) t) (Eq : (b, c) t) : (a, c) t = Eq
+let sym (type a b) (Eq : (a, b) t) : (b, a) t = Eq
+let app (type a b) (Eq : (a, b) t) (x : a) : b = x
 
-let trans (type a) (type b) (type c) (Eq : (a, b) t) (Eq : (b, c) t) =
-  (Eq : (a, c) t)
-
-let sym (type a) (type b) (Eq : (a, b) t) = (Eq : (b, a) t)
-
-let app (type a) (type b) (Eq : (a, b) t) (x : a) = (x : b)
-
-module Lift(T : sig type 'a c end) = struct
-  let eq (type a) (type b) (Eq : (a, b) t) = (Eq : (a T.c, b T.c) t)
+module Lift (T : sig
+  type 'a c
+end) =
+struct
+  let eq (type a b) (Eq : (a, b) t) : (a T.c, b T.c) t = Eq
 end

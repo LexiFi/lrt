@@ -1,15 +1,12 @@
 open Dynt
 
-type t = Variant_roundtrip_type.t list
-[@@deriving t]
+type t = Variant_roundtrip_type.t list [@@deriving t]
 
 let filename =
-  if Array.length Sys.argv > 1 then
-    Sys.argv.(1)
-  else begin
-    Printf.eprintf "Please provide filename of data as first argument";
-    exit 1
-  end
+  if Array.length Sys.argv > 1 then Sys.argv.(1)
+  else (
+    Printf.eprintf "Please provide filename of data as first argument" ;
+    exit 1 )
 
 let value = Variant.value_of_variant_in_file ~t filename
 
@@ -35,12 +32,11 @@ let[@landmark "3_leaves"] () =
   done
 *)
 
-let[@landmark "prepare"] of_json, to_json =
- Json.of_json t, Json.to_json t
+let[@landmark "prepare"] of_json, to_json = (Json.of_json t, Json.to_json t)
 
 let[@landmark "iteration"] run () =
   let[@landmark "to_json"] json = to_json value in
   let[@landmark "of_json"] value' = of_json json in
-  ignore(value')
+  ignore value'
 
 let _ = List.init 10 (fun _ -> run ())
