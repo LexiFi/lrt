@@ -248,16 +248,16 @@ let[@landmark] to_json ?(ctx = empty_ctx) t =
   and to_json_xtype : type a. a xtype -> a -> value = function
     | Prop (_, t) -> to_json t
     | Tuple tup ->
-        let f = Fields.map_tuple tup mapf in
+        let f = Read.map_tuple tup mapf in
         fun x -> Array (f x)
     | Record r ->
-        let f = Fields.map_record r mapf' in
+        let f = Read.map_record r mapf' in
         fun x -> Object (f x)
     | Sum s -> (
-        let f = Fields.map_sum s mapf mapf' in
+        let f = Read.map_sum s mapf mapf' in
         fun x ->
           match f x with
-          | Fields.Constant name -> Object [("type", String name)]
+          | Read.Constant name -> Object [("type", String name)]
           | Regular (name, args) ->
               Object [("type", String name); ("val", Array args)]
           | Inlined (name, args) -> Object (("type", String name) :: args) )
@@ -268,7 +268,7 @@ let[@landmark] to_json ?(ctx = empty_ctx) t =
     | Nativeint -> to_json_variant [%t: nativeint]
     | Abstract _ -> failwith "TODO: fallback to variant as in mlfi_json"
     | _ -> failwith "Json: unknown type"
-  and mapf : value Fields.mapf =
+  and mapf : value Read.mapf =
     let f : type a. a t -> a -> value = fun t -> to_json t in
     {f}
   and to_json_variant : type a. a Ttype.t -> a -> value =
@@ -276,7 +276,7 @@ let[@landmark] to_json ?(ctx = empty_ctx) t =
     let to_json = to_json (of_ttype Variant.t) in
     let to_variant = Variant.to_variant ~t in
     fun x -> to_json (to_variant x)
-  and mapf' : (string * value) Fields.mapf' =
+  and mapf' : (string * value) Read.mapf' =
     let f : type a. name:string -> a t -> a -> string * value =
      fun ~name t ->
       let to_json = to_json t in

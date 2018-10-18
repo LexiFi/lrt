@@ -542,7 +542,7 @@ module Make = struct
    fun c f -> Builder.inlined_constructor c (named_builder f c.ic_len)
 end
 
-module Fields = struct
+module Read = struct
   let check tag o = Obj.is_block o && Obj.tag o = tag
   let cast : (Obj.t -> Obj.t) -> 'a -> 'b = Obj.magic
 
@@ -575,6 +575,12 @@ module Fields = struct
       ( match c.ic_repr with
       | Tag tag -> checked tag el.nth
       | Unboxed -> fun o -> Some (Obj.repr o) )
+
+  let call_method : 'a object_ -> ('a, 'b) element -> 'a -> 'b =
+   fun o e ->
+    let (Method (name, _)) = List.nth o.o_methods e.nth in
+    let label = CamlinternalOO.public_method_label name in
+    fun x -> Obj.magic (CamlinternalOO.send (Obj.magic x) label)
 
   type 'b mapf = {f: 'a. 'a t -> 'a -> 'b} [@@unboxed]
   type 'b mapf' = {f: 'a. name:string -> 'a t -> 'a -> 'b} [@@unboxed]
@@ -654,12 +660,6 @@ module Fields = struct
       let o = Obj.repr x in
       farr.(fnd x) o
 end
-
-let call_method : 'a object_ -> ('a, 'b) element -> 'a -> 'b =
- fun o e ->
-  let (Method (name, _)) = List.nth o.o_methods e.nth in
-  let label = CamlinternalOO.public_method_label name in
-  fun x -> Obj.magic (CamlinternalOO.send (Obj.magic x) label)
 
 (* paths *)
 

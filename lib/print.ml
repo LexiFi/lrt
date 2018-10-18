@@ -163,7 +163,7 @@ let print_dynamic fmt (t, x) =
         pp_close_box fmt ()
     | Tuple tup ->
         let print_el (Field e) =
-          print_dynamic e.typ.t false (Fields.tuple tup e x)
+          print_dynamic e.typ.t false (Read.tuple tup e x)
         in
         pp_open_box fmt 1 ;
         print_list ~pre:"(" ~sep:"," ~pst:")" print_el tup.t_flds ;
@@ -174,7 +174,7 @@ let print_dynamic fmt (t, x) =
           pp_print_string fmt name ;
           pp_print_string fmt " =" ;
           pp_print_space fmt () ;
-          print_dynamic e.typ.t false (Fields.record r e x) ;
+          print_dynamic e.typ.t false (Read.record r e x) ;
           pp_close_box fmt ()
         in
         pp_open_hvbox fmt 1 ;
@@ -189,13 +189,13 @@ let print_dynamic fmt (t, x) =
             pp_print_string fmt (fst c.rc_label) ;
             pp_print_space fmt () ;
             print_dynamic e.typ.t true
-              (Fields.regular_constructor c e x |> Ext.Option.value_exn) ;
+              (Read.regular_constructor c e x |> Ext.Option.value_exn) ;
             pp_close_box fmt ()
         | Regular c ->
             let print_el (Field e) =
               pp_open_box fmt 1 ;
               print_dynamic e.typ.t false
-                (Fields.regular_constructor c e x |> Ext.Option.value_exn) ;
+                (Read.regular_constructor c e x |> Ext.Option.value_exn) ;
               pp_close_box fmt ()
             in
             pp_open_box fmt 1 ;
@@ -210,7 +210,7 @@ let print_dynamic fmt (t, x) =
               pp_print_string fmt " =" ;
               pp_print_space fmt () ;
               print_dynamic e.typ.t false
-                (Fields.inlined_constructor c e x |> Ext.Option.value_exn) ;
+                (Read.inlined_constructor c e x |> Ext.Option.value_exn) ;
               pp_close_box fmt ()
             in
             pp_open_hvbox fmt 1 ;

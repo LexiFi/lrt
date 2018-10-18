@@ -85,14 +85,14 @@ let rec to_variant : type a. t:a Xtype.t -> a to_variant =
   | Array t -> Array (Array.map (to_variant ~t) x)
   | Option t -> Option (Ext.Option.map (to_variant ~t) x)
   | Lazy t -> Lazy (lazy (to_variant ~t (Lazy.force x)))
-  | Tuple tup -> Tuple (Fields.map_tuple tup mapf x)
-  | Record r -> Record (Fields.map_record r mapf' x)
+  | Tuple tup -> Tuple (Read.map_tuple tup mapf x)
+  | Record r -> Record (Read.map_record r mapf' x)
   | Sum s -> (
       (* TODO: mlfi_json has special handling for Variant.t and Json.t at
        this point. This might be mirrored using the new Matcher module. *)
-      let f = Fields.map_sum s mapf mapf' in
+      let f = Read.map_sum s mapf mapf' in
       match f x with
-      | Fields.Constant name -> Constructor (name, None)
+      | Read.Constant name -> Constructor (name, None)
       | Regular (name, [arg]) -> Constructor (name, Some arg)
       | Regular (name, args) -> Constructor (name, Some (Tuple args))
       | Inlined (name, args) -> Constructor (name, Some (Record args)) )
@@ -132,11 +132,11 @@ let rec to_variant : type a. t:a Xtype.t -> a to_variant =
       in
       use_first (Hashtbl.find_all abstract_variantizers name)
 
-and mapf : t Fields.mapf =
+and mapf : t Read.mapf =
   let f : type a. a Xtype.t -> a -> t = fun t -> to_variant ~t in
   {f}
 
-and mapf' : (string * t) Fields.mapf' =
+and mapf' : (string * t) Read.mapf' =
   let f : type a. name:string -> a Xtype.t -> a -> string * t =
    fun ~name t ->
     let to_json = to_variant ~t in
