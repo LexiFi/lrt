@@ -850,7 +850,7 @@ let () =
 
 (*
 let () =
-  let s = "\"" ^ Utf8.of_latin1 "öhh! vad säger du nu då?" ^ "\"" in
+  let s = "\"" ^ Utf8.of_latin1 "Ã¶hh! vad sÃ¤ger du nu dÃ¥?" ^ "\"" in
   match decode s with
   | String s -> print_endline s
   | _ -> print_endline "error"
