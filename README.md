@@ -1,13 +1,36 @@
-# dynamic_types
+Dynt - dynamic types for OCaml
+==============================
 
-## [@@deriving t]
+TODO:
+* pitch
+* install notes
+* github pages with documentation
+* opam package
+* interface documentation
+* license, file headers
 
-`test/ppx.ml` contains inline tests for the PPX deriver. The tests can
-be evaluated using `dune runtest`.
+## Notes to the future maintainer
 
-The generated code can be viewed using one of the following commands.
+There are four main directories:
 
-```
-dune exec ppx/standalone.exe test/ppx.ml
-{ echo '(* vim: set ft=ocaml : *)'; dune exec ppx/standalone.exe test/ppx.ml } | vim -R -
-```
+* `lib` contains all the dynamic types and useful modules built atop.
+* `ppx` contains the syntax extension.
+* `bench` contains the json/variant roundtrip benchmark code.
+* `tests` contains the separate tests. Some more tests are placed
+  directly in the corresponding modules.
+
+Everything was build and tested on `4.07.1` only.
+
+Some things remain open:
+
+* Except of `Json` no module uses the latest features of `Xtype` and
+  `Matcher`.
+* `Unify` was written before `Matcher` and needs an update.
+* `git grep TODO`
+
+Useful commands:
+
+* View the generated code using
+  `dune exec ppx/standalone.exe test/ppx.ml`.
+* Run tests using `dune runtest`.
+* Format the code using `dune build @fmt --auto-promote`.
