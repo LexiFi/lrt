@@ -1,5 +1,5 @@
 _build
 *.install
 .merlin
-_opam*
+_*
 external
