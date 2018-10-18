@@ -1,13 +1,22 @@
 (library
- (name dynt_ppx)
- (public_name dynt.ppx)
- (synopsis "[@@deriving t] & [%path? .] syntax extensions")
- (libraries ppxlib)
- (preprocess (pps ppxlib.metaquot))
- (modules dynt_deriving dynt_path)
- (kind ppx_deriver))
+  (name dynt_deriving)
+  (public_name dynt.deriving)
+  (synopsis "dynt [@@deriving t] syntax extension")
+  (libraries ppxlib)
+  (preprocess (pps ppxlib.metaquot))
+  (modules dynt_deriving)
+  (kind ppx_deriver))
+
+(library
+  (name dynt_path)
+  (public_name dynt.path)
+  (synopsis "dynt [%path? .] syntax extension")
+  (libraries ppxlib)
+  (preprocess (pps ppxlib.metaquot))
+  (modules dynt_path)
+  (kind ppx_rewriter))
 
 (executable
- (name standalone)
- (libraries dynt_ppx ppxlib)
- (modules standalone))
+  (name standalone)
+  (libraries dynt_path dynt_deriving ppxlib)
+  (modules standalone))

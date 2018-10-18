@@ -512,9 +512,9 @@ module Abstract = struct
     print [%t: B.t];
     print [%t: C.t];
     [%expect {|
-      ppx_test#test/ppx.ml.Abstract.A.t
-      ppx_test#test/ppx.ml.Abstract.A.t
-      ppx_test#test/ppx.ml.Abstract.C.t |}]
+      dynt_test#test/ppx.ml.Abstract.A.t
+      dynt_test#test/ppx.ml.Abstract.A.t
+      dynt_test#test/ppx.ml.Abstract.C.t |}]
 
 
   (* use non abstract ttype internally *)
@@ -812,9 +812,9 @@ module NoName = struct
     (* print N.s_t; *)
     (* print N.t; *)
     [%expect {|
-      ppx_test#test/ppx.ml.NoName.t
+      dynt_test#test/ppx.ml.NoName.t
       int
-      ppx_test#test/ppx.ml.NoName.F.t |}]
+      dynt_test#test/ppx.ml.NoName.F.t |}]
 
 end
 

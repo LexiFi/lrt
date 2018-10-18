@@ -1,12 +1,12 @@
 (library
- (name ppx_test)
- (libraries dynt inspect)
- (inline_tests)
- (modules path ppx variantizer matcher)
- (preprocess (pps ppx_expect dynt.ppx)))
+  (name dynt_test)
+  (libraries dynt inspect)
+  (inline_tests)
+  (modules path ppx variantizer matcher)
+  (preprocess (pps ppx_expect dynt.path dynt.deriving)))
 
 (tests
   (names fuzzing)
   (libraries dynt)
   (modules fuzzing)
-  (preprocess (pps ppx_expect dynt.ppx)))
+  (preprocess (pps ppx_expect dynt.path dynt.deriving)))

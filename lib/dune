@@ -1,12 +1,13 @@
 (library
   (public_name dynt)
-  (synopsis "Dynamic Types")
+  (synopsis "Dynt: DYNamic Types")
   (inline_tests)
   (libraries landmarks)
-  (preprocess (pps ppx_expect dynt.ppx landmarks.ppx)))
+  (preprocess (pps ppx_expect dynt.deriving landmarks.ppx)))
 
 (rule
   (targets variant_lexer.ml)
   (deps    variant_lexer.mll)
-  (action  (chdir %{workspace_root}
-            (run %{bin:ocamllex} -ml -q -o %{targets} %{deps}))))
+  (action
+    (chdir %{workspace_root}
+           (run %{bin:ocamllex} -ml -q -o %{targets} %{deps}))))
