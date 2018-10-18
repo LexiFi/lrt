@@ -88,11 +88,11 @@ module Fields : sig
   val tuple : 'a tuple -> ('a, 'b) element -> 'a -> 'b
   val record : 'a record -> ('a, 'b) element -> 'a -> 'b
 
-  val regular_constructor :
-    ('a, 'b) regular_constructor -> ('b, 'c) element -> 'a -> 'c option
+  val regular_constructor 
+    : ('a, 'b) regular_constructor -> ('b, 'c) element -> 'a -> 'c option
 
-  val inlined_constructor :
-    ('a, 'b) inlined_constructor -> ('b, 'c) element -> 'a -> 'c option
+  val inlined_constructor 
+    : ('a, 'b) inlined_constructor -> ('b, 'c) element -> 'a -> 'c option
 
   (** {2 Closure friendly maps} **)
 
@@ -153,12 +153,12 @@ module Make : sig
   val record : 'a record -> ('a t -> unit) -> 'a
   (** Throws [Missing_field] if not all fields where set via [set]. *)
 
-  val regular_constructor :
-    ('a, 'b) regular_constructor -> ('b t -> unit) -> 'a
+  val regular_constructor 
+    : ('a, 'b) regular_constructor -> ('b t -> unit) -> 'a
   (** Throws [Missing_field] if not all fields where set via [set]. *)
 
-  val inlined_constructor :
-    ('a, 'b) inlined_constructor -> ('b t -> unit) -> 'a
+  val inlined_constructor 
+    : ('a, 'b) inlined_constructor -> ('b t -> unit) -> 'a
   (** Throws [Missing_field] if not all fields where set via [set]. *)
 end
 
@@ -189,11 +189,11 @@ module Step : sig
   val tuple : 'a tuple -> ('a, 'b) element -> ('a, 'b) Path.step
   val record : 'a record -> ('a, 'b) element -> ('a, 'b) Path.step
 
-  val regular_constructor :
-    ('a, 'b) regular_constructor -> ('b, 'c) element -> ('a, 'c) Path.step
+  val regular_constructor 
+    : ('a, 'b) regular_constructor -> ('b, 'c) element -> ('a, 'c) Path.step
 
-  val inlined_constructor :
-    ('a, 'b) inlined_constructor -> ('b, 'c) element -> ('a, 'c) Path.step
+  val inlined_constructor 
+    : ('a, 'b) inlined_constructor -> ('b, 'c) element -> ('a, 'c) Path.step
 end
 
 val all_paths : 'a Ttype.t -> 'b Ttype.t -> ('a, 'b) Path.t list

@@ -196,23 +196,23 @@ module Shrink : sig
   val tuple : 'a shrink -> 'b shrink -> ('a * 'b) shrink
   val tuple3 : 'a shrink -> 'b shrink -> 'c shrink -> ('a * 'b * 'c) shrink
 
-  val tuple4 :
-       'a shrink
+  val tuple4 
+    :  'a shrink
     -> 'b shrink
     -> 'c shrink
     -> 'd shrink
     -> ('a * 'b * 'c * 'd) shrink
 
-  val tuple5 :
-       'a shrink
+  val tuple5 
+    :  'a shrink
     -> 'b shrink
     -> 'c shrink
     -> 'd shrink
     -> 'e shrink
     -> ('a * 'b * 'c * 'd * 'e) shrink
 
-  val tuple6 :
-       'a shrink
+  val tuple6 
+    :  'a shrink
     -> 'b shrink
     -> 'c shrink
     -> 'd shrink
@@ -220,8 +220,8 @@ module Shrink : sig
     -> 'f shrink
     -> ('a * 'b * 'c * 'd * 'e * 'f) shrink
 
-  val tuple7 :
-       'a shrink
+  val tuple7 
+    :  'a shrink
     -> 'b shrink
     -> 'c shrink
     -> 'd shrink
@@ -254,8 +254,8 @@ type 'a test_result =
       ; shrink_count: int option
       ; backtrace: string }
 
-val test :
-     int
+val test 
+  :  int
   -> seed:int
   -> ?name:string
   -> generator:'a gen

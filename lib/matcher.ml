@@ -583,9 +583,8 @@ end) : S with type 'a data = 'a Data.t = struct
   let ttype : type a. int -> Tree.substitution -> a Ttype.t =
    fun i map ->
     match IntMap.find_opt i map with
-    | None ->
-        Obj.magic Std.unit_t
-        (* Unification succeeded, but type variable
+    | None -> Obj.magic Std.unit_t
+    (* Unification succeeded, but type variable
                                         was not used. *)
     | Some s -> Obj.magic s
 

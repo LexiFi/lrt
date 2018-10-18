@@ -27,8 +27,8 @@ module Parsec : sig
   val comma : unit parser
   val colon : unit parser
 
-  val run :
-    ?filename:string -> 'a parser -> string -> [`KO of string | `OK of 'a]
+  val run 
+    : ?filename:string -> 'a parser -> string -> [`KO of string | `OK of 'a]
 
   module State : sig
     type t

@@ -88,25 +88,27 @@ val is_cst_args : 'a variant_args -> bool
 module Internal : sig
   (** Internally used helper functions *)
 
-  val create_variant_type :
-       string
+  val create_variant_type 
+    :  string
     -> t list
     -> (t -> (string * properties * t variant_args) list * variant_repr)
     -> t
 
-  val create_record_type :
-       string
+  val create_record_type 
+    :  string
     -> t list
     -> (t -> (string * properties * t) list * record_repr)
     -> t
 
   val create_node : string -> t list -> node
 
-  val set_node_variant :
-    node -> (string * properties * t variant_args) list * variant_repr -> unit
+  val set_node_variant 
+    :  node
+    -> (string * properties * t variant_args) list * variant_repr
+    -> unit
 
-  val set_node_record :
-    node -> (string * properties * t) list * record_repr -> unit
+  val set_node_record 
+    : node -> (string * properties * t) list * record_repr -> unit
 
   val hash0 : t -> int
   (** This hash function ignores paths and properties. It remembers only the

@@ -406,8 +406,8 @@ module Assembler = struct
       done ;
       o
 
-  let init' :
-         int
+  let init' 
+      :  int
       -> int
       -> 'a record_field list
       -> 'b asm
@@ -702,8 +702,9 @@ module Step = struct
     in
     (cast {get; set}, StepMeta.field ~field_name)
 
-  let regular_constructor :
-      ('a, 'b) regular_constructor -> ('b, 'c) element -> ('a, 'c) Path.step =
+  let regular_constructor 
+      : ('a, 'b) regular_constructor -> ('b, 'c) element -> ('a, 'c) Path.step
+      =
    fun c f ->
     let arity = c.rc_len in
     let nth = f.nth in
@@ -722,8 +723,9 @@ module Step = struct
     let name = fst c.rc_label in
     (cast {get; set}, StepMeta.constructor_regular ~name ~nth ~arity)
 
-  let inlined_constructor :
-      ('a, 'b) inlined_constructor -> ('b, 'c) element -> ('a, 'c) Path.step =
+  let inlined_constructor 
+      : ('a, 'b) inlined_constructor -> ('b, 'c) element -> ('a, 'c) Path.step
+      =
    fun c f ->
     let i = f.nth in
     let (field_name, _), _ = List.nth c.ic_flds i in

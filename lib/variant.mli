@@ -57,8 +57,8 @@ val string_one_line_of_variant : t -> string
     of MLFi constants, on one line. Same behavior with respect
     to exceptions than [compact_string_of_variant]. *)
 
-val compact_string_of_variant :
-  ?dont_compress_records:unit -> ?with_more_spaces:unit -> t -> string
+val compact_string_of_variant 
+  : ?dont_compress_records:unit -> ?with_more_spaces:unit -> t -> string
 (** Similar to {!string_one_line_of_variant}, but use a more compact
     form, with fewer whitespaces, and a special syntax for lists and arrays of
     records (unless the [dont_compress_records] flag is used). The result is
@@ -67,8 +67,8 @@ val compact_string_of_variant :
     that exception.
 *)
 
-val output_compact_string_of_variant :
-     ?dont_compress_records:unit
+val output_compact_string_of_variant 
+  :  ?dont_compress_records:unit
   -> ?with_more_spaces:unit
   -> out_channel
   -> t
@@ -78,8 +78,8 @@ val output_compact_string_of_variant :
 val variant_to_file : ?eol_lf:unit -> string -> t -> unit
 (** Write a variant to a text file. *)
 
-val value_to_variant_in_file :
-  t:'a Ttype.t -> ?eol_lf:unit -> string -> 'a -> unit
+val value_to_variant_in_file 
+  : t:'a Ttype.t -> ?eol_lf:unit -> string -> 'a -> unit
 (** Write a value as a variant to a text file. *)
 
 (** Raised when an exception is raised by the variant parser.
@@ -104,8 +104,8 @@ val value_of_variant_in_file : t:'a Ttype.t -> string -> 'a
 (** Lexifi has documentation on how to use mappers and the other properties.
     This should go here *)
 
-val of_variant_custom :
-  ?name:string -> t:'a Ttype.t -> (t -> 'a option) -> 'a Ttype.t
+val of_variant_custom 
+  : ?name:string -> t:'a Ttype.t -> (t -> 'a option) -> 'a Ttype.t
 (** [of_variant_custom ~t custom] returns a modified [t] such that
     [of_variant ~t v] uses [custom v] as fallback when the normal
     devariantization fails with [Bad_type_for_variant].
@@ -130,8 +130,8 @@ let t = of_variant_custom ~name:"int to (int * string)" ~t (function
 )]}
 *)
 
-val of_variant_mapper :
-  ?name:string -> t:'a Ttype.t -> (t -> t option) -> 'a Ttype.t
+val of_variant_mapper 
+  : ?name:string -> t:'a Ttype.t -> (t -> t option) -> 'a Ttype.t
 (** [of_variant_mapper ~t mapper] returns a modified [t] such that
     [of_variant ~t] uses [mapper] as fallback mechanism when the normal
     conversion fails.
@@ -147,8 +147,8 @@ let of_variant_mapper ?name ~t mapper =
     ]}
 *)
 
-val of_variant_default :
-  ?name:string -> t:'a Ttype.t -> (unit -> 'a) -> 'a Ttype.t
+val of_variant_default 
+  : ?name:string -> t:'a Ttype.t -> (unit -> 'a) -> 'a Ttype.t
 (** [of_variant_default ~t init] returns a modified [t] such that
     [of_variant ~t] uses [init ()] as default value when the normal conversion
     fails.
@@ -189,8 +189,8 @@ module type VARIANTIZABLE_2 = sig
 
   val to_variant : 'a to_variant -> 'b to_variant -> ('a, 'b) t to_variant
 
-  val of_variant :
-    failwith -> 'a of_variant -> 'b of_variant -> ('a, 'b) t of_variant
+  val of_variant 
+    : failwith -> 'a of_variant -> 'b of_variant -> ('a, 'b) t of_variant
 end
 
 (** The following raise [Failure] on non-abstract types. *)

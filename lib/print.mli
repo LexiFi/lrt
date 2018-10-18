@@ -1,10 +1,12 @@
 (** Dynamic printing. *)
 
 (* TODO: val print: Format.fomatter -> Ttype.dynamic -> unit *)
+
 val print : t:'a Ttype.t -> Format.formatter -> 'a -> unit
 (** Print a value to the given formatter. *)
 
 (* TODO: val show: Ttype.dynamic -> unit *)
+
 val show : t:'a Ttype.t -> 'a -> unit
 (** Print a value to stdout. *)
 
@@ -55,8 +57,8 @@ module type UNSAFE_ABSTRACT_PRINTABLE_2 = sig
   val printer : 'a printer -> 'b printer -> ('a, 'b) t printer
 end
 
-val add_unsafe_abstract_0 :
-  name:string -> (Format.formatter -> 'a printer) -> unit
+val add_unsafe_abstract_0 
+  : name:string -> (Format.formatter -> 'a printer) -> unit
 
 val add_unsafe_abstract_1 : (module UNSAFE_ABSTRACT_PRINTABLE_1) -> unit
 val add_unsafe_abstract_2 : (module UNSAFE_ABSTRACT_PRINTABLE_2) -> unit

@@ -42,8 +42,8 @@ module type VARIANTIZABLE_2 = sig
 
   val to_variant : 'a to_variant -> 'b to_variant -> ('a, 'b) t to_variant
 
-  val of_variant :
-    failwith -> 'a of_variant -> 'b of_variant -> ('a, 'b) t of_variant
+  val of_variant 
+    : failwith -> 'a of_variant -> 'b of_variant -> ('a, 'b) t of_variant
 end
 
 type variantizable =

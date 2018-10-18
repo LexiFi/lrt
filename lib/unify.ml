@@ -129,9 +129,8 @@ let unify ~modulo_props nfree t1 t2 =
 (* Use stype unification & magic to satisfy interface *)
 
 let ttype : type a. Stype.t option -> a Ttype.t = function
-  | None ->
-      Obj.magic Std.unit_t
-      (* Unification succeeded, but type variable was
+  | None -> Obj.magic Std.unit_t
+  (* Unification succeeded, but type variable was
                                     not used. *)
   | Some s -> Obj.magic s
 
