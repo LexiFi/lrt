@@ -41,25 +41,25 @@ and constructor_argument =
   | Inline of {field_name: string}
 
 val ( @ ) : ('a, 'b) t -> ('b, 'c) t -> ('a, 'c) t
-(** [a @ b] composes the paths a and b. *)
-
-val meta_list : ('a, 'b) t -> meta list
-(** Read the abstract representation from a path. *)
-
-val print : Format.formatter -> ('a, 'b) t -> unit
-(** Print a path in the syntax expected by the syntax extension. *)
+(** [a @ b] composes the paths [a] and [b]. *)
 
 val lens : ('a, 'b) t -> ('a, 'b) lens
 (** Condense a path to a single lens. *)
+
+val meta : ('a, 'b) t -> meta list
+(** Reads the unsafe representation of steps from a path. *)
+
+val print : Format.formatter -> ('a, 'b) t -> unit
+(** Print a path in the syntax expected by the syntax extension. *)
 
 module Unsafe : sig
   (** Operations based on the untyped meta information.
 
       The following functions compare paths based on the untyped meta
       information. This meta information is derived from an untyped
-      representation of your program using a PPX. You are able to
-      construct distinct paths with the same meta information.
-      This module will interpret such paths as equal. *)
+      representation of your program using a PPX. You might be able to construct
+      distinct paths with the same meta information.  This module will interpret
+      such paths as equal and potentially produce unexpected results. *)
 
   val is_equal : ('a, 'b) t -> ('a, 'b) t -> bool
   (** [is_equal path1 path2] checks if [path1] and [path2] consist of the same
@@ -74,7 +74,7 @@ end
 
 module Internal : sig
   (** Constructors for the private type [meta]. This should not be used directly
-      because the rest of the module assumes consistency between the lens and
+      because other parts of the module assume consistency between the lens and
       meta information. *)
 
   val field : field_name:string -> meta
@@ -84,4 +84,4 @@ module Internal : sig
   val list : nth:int -> meta
   val array : nth:int -> meta
 end
-[@@ocaml.deprecated "Do not use this module directly"]
+[@@ocaml.deprecated "do not use this module directly"]
