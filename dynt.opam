@@ -10,7 +10,7 @@ authors: ["Patrik Keller <patrik@keller-re.de>, LexiFi"]
 homepage: "https://github.com/LexiFi/dynt/"
 bug-reports: "https://github.com/LexiFi/dynt/issues"
 dev-repo: "git+https://github.com/LexiFi/dynt.git"
-doc: "https://lexifi.github.io/dynt/"
+doc: "https://lexifi.github.io/dynt/dynt/Dynt/index.html"
 license: "MIT"
 depends: [
   "inspect" { with-test }

@@ -1,13 +1,59 @@
-Dynt - dynamic types for OCaml
+Dynt - Dynamic Types for OCaml
 ==============================
 
 TODO:
 * pitch
-* install notes
-* github pages with documentation
-* opam package
+* opam release
 * interface documentation
 * license, file headers
+
+## Getting started
+
+The best way to install this package is via opam.
+
+```sh
+opam insall dynt
+```
+
+Then, in order to generate runtime representations of your dynamic
+types, you have to enable the dynt ppx. Your dune file might look like
+the following.
+
+```scheme
+(executable
+  (name foo)
+  (libararies bar dynt)
+  (preprocess (pps dynt.ppx)))
+```
+
+Now you can use dynamic types in your `foo.ml`:
+
+```ocaml
+open Dynt
+
+type nat =
+  | Z
+  | S of t
+  [@@deriving t]
+
+let () =
+  Print.print ~t:nat_t (S (S (S Z)))
+```
+
+Having the basic things set up, you are ready to explore the
+[documentation][docs] of the `Dynt` module.
+
+## About
+
+This approach to runtime types was initially developed by [LexiFi][lexifi]
+for its internal use. In 2018 it was partially reworked and prepared for
+public release as [part of an internship][story].
+
+The package is is licensed by LexiFi under the terms of the MIT license.
+
+[docs]: https://lexifi.github.io/dynt/dynt/Dynt/index.html
+[lexifi]: https://lexifi.github.io/
+[story]: https://lexifi.github.io/404
 
 ## Notes to the future maintainer
 
