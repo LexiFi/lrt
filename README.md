@@ -11,7 +11,7 @@ TODO:
 The best way to install this package is via opam.
 
 ```sh
-opam insall dynt
+opam install dynt
 ```
 
 Then, in order to generate runtime representations of your dynamic
