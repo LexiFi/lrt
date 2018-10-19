@@ -18,6 +18,7 @@ type value =
   | String of string
   | Array of value list
   | Object of (string * value) list
+[@@deriving t]
 
 (** Notes:
     - The [String] payload is either Latin1-encoded or utf8-encoded,
@@ -52,7 +53,8 @@ val ctx : ?to_json_field:(string -> string) -> unit -> ctx
 
 (** {3 Typeful generic mapping between JSON trees and OCaml values.} *)
 
-val to_json : ?ctx:ctx -> 'a Ttype.t -> 'a -> value
+(** TODO: update docs *)
+
 (**
    [to_json x] maps an OCaml value to a JSON tree representing the same
    information.  The mapping is driven by the type of [x] and the
@@ -138,20 +140,19 @@ val to_json : ?ctx:ctx -> 'a Ttype.t -> 'a -> value
 
 *)
 
-val of_json : ?ctx:ctx -> 'a Ttype.t -> value -> 'a
 (** Reverse mapping.  If [to_json ~t x] succeeds, the property
     [of_json ~t (to_json ~t x) = x] is expected to hold
     (except corner cases such as unchecked special float values,
     and assuming that custom converters behaves properly).
 *)
 
-type 'a custom_json = {to_json: 'a -> value; of_json: value -> 'a}
+type 'a conv = {to_json: 'a -> value; of_json: value -> 'a}
+
+val conv : ?ctx:ctx -> 'a Ttype.t -> 'a conv
 
 (** {3 Custom mapping for specific types} *)
 
 (* TODO: support passing local custom conversions to to_json/of_json. *)
-
-val register_custom : t:'a Ttype.t -> 'a custom_json -> unit
 
 (** [register_conversion] registers a global custom mapping between
     OCaml values and JSON trees for a specific closed *abstract* type.
@@ -165,11 +166,7 @@ val register_custom : t:'a Ttype.t -> 'a custom_json -> unit
     [None] case).
 *)
 
-module Matcher : Matcher.S with type 'a data := 'a custom_json
-
-val register_custom_0 : (module Matcher.C0) -> unit
-val register_custom_1 : (module Matcher.C1) -> unit
-val register_custom_2 : (module Matcher.C2) -> unit
+module Matcher : Matcher.S with type 'a data := 'a conv
 
 (* TODO: move somewhere else *)
 val of_get_params : ?utf8:bool -> (string * string) list -> value

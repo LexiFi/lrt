@@ -209,83 +209,6 @@ type value =
   | Object of (string * value) list
 [@@deriving t]
 
-type ctx = {to_json_field: string -> string}
-
-let ctx ?(to_json_field = fun x -> x) () = {to_json_field}
-let empty_ctx = ctx ()
-let json_unit = Object []
-
-type 'a custom_json = {to_json: 'a -> value; of_json: value -> 'a}
-
-module Matcher = Matcher.Make (struct type 'a t = 'a custom_json end)
-
-let matcher = Matcher.create ~modulo_props:true
-let register_custom ~t conv = Matcher.add matcher ~t conv
-let register_custom_0 m = Matcher.add0 matcher m
-let register_custom_1 m = Matcher.add1 matcher m
-let register_custom_2 m = Matcher.add2 matcher m
-
-(* OPTIMs:
-   - memoize the function (for a given set of flags)
-     in DT_node
-*)
-
-let[@landmark] to_json ?(ctx = empty_ctx) t =
-  let rec to_json : type a. a Xtype.t -> a -> value =
-   fun t ->
-    let open Matcher in
-    match apply matcher ~t:t.t with
-    | Some (M0 (module M : M0 with type matched = a)) ->
-        let TypEq.Eq = M.eq in
-        M.data.to_json
-    | Some (M1 (module M : M1 with type matched = a)) ->
-        let TypEq.Eq = M.eq in
-        M.data.to_json
-    | Some (M2 (module M : M2 with type matched = a)) ->
-        let TypEq.Eq = M.eq in
-        M.data.to_json
-    | None -> to_json_xtype (Lazy.force t.xt)
-  and to_json_xtype : type a. a xtype -> a -> value = function
-    | Prop (_, t) -> to_json t
-    | Tuple tup ->
-        let f = Read.map_tuple tup mapf in
-        fun x -> Array (f x)
-    | Record r ->
-        let f = Read.map_record r mapf' in
-        fun x -> Object (f x)
-    | Sum s -> (
-        let f = Read.map_sum s mapf mapf' in
-        fun x ->
-          match f x with
-          | Read.Constant name -> Object [("type", String name)]
-          | Regular (name, args) ->
-              Object [("type", String name); ("val", Array args)]
-          | Inlined (name, args) -> Object (("type", String name) :: args) )
-    (* TODO: avoid indirection via variant, handle of_json *)
-    | Char -> to_json_variant [%t: char]
-    | Int32 -> to_json_variant [%t: int32]
-    | Int64 -> to_json_variant [%t: int64]
-    | Nativeint -> to_json_variant [%t: nativeint]
-    | Abstract _ -> failwith "TODO: fallback to variant as in mlfi_json"
-    | _ -> failwith "Json: unknown type"
-  and mapf : value Read.mapf =
-    let f : type a. a t -> a -> value = fun t -> to_json t in
-    {f}
-  and to_json_variant : type a. a Ttype.t -> a -> value =
-   fun t ->
-    let to_json = to_json (of_ttype Variant.t) in
-    let to_variant = Variant.to_variant ~t in
-    fun x -> to_json (to_variant x)
-  and mapf' : (string * value) Read.mapf' =
-    let f : type a. name:string -> a t -> a -> string * value =
-     fun ~name t ->
-      let to_json = to_json t in
-      fun x -> (ctx.to_json_field name, to_json x)
-    in
-    {f}
-  in
-  to_json (Xtype.of_ttype t)
-
 let get_constr l =
   match List.assoc "type" l with
   | String constr -> constr
@@ -296,65 +219,131 @@ let get_constr l =
       Print.show ~t:[%t: (string * value) list] l ;
       failwith "'type' field is not a string"
 
-let[@landmark] of_json ?(ctx = empty_ctx) t =
-  let rec of_json : type a. a Xtype.t -> value -> a =
+type ctx = {to_json_field: string -> string}
+
+let ctx ?(to_json_field = fun x -> x) () = {to_json_field}
+let empty_ctx = ctx ()
+let json_unit = Object []
+
+type 'a conv = {to_json: 'a -> value; of_json: value -> 'a}
+
+module Matcher = Matcher.Make (struct type 'a t = 'a conv end)
+
+let matcher = Matcher.create ~modulo_props:false
+
+let conv ?(ctx = empty_ctx) t =
+  let rec conv_t : type a. a Xtype.t -> a conv =
    fun t ->
     let open Matcher in
     match apply matcher ~t:t.t with
     | Some (M0 (module M : M0 with type matched = a)) ->
         let TypEq.Eq = M.eq in
-        M.data.of_json
+        M.data
     | Some (M1 (module M : M1 with type matched = a)) ->
         let TypEq.Eq = M.eq in
-        M.data.of_json
+        M.data
     | Some (M2 (module M : M2 with type matched = a)) ->
         let TypEq.Eq = M.eq in
-        M.data.of_json
-    | None -> of_json_xt (Lazy.force t.xt)
-  and of_json_xt : type t. t xtype -> value -> t = function
-    | Tuple tup -> (
-        let asm = Assembler.tuple tup asm in
-        function Array l -> asm l | _ -> failwith "tuple expected" )
-    | Record r -> (
-        let asm = Assembler.record r asm in
-        function
-        | Object l -> asm (fix_names l) | _ -> failwith "object expected" )
-    | Sum sum -> (
-        let asm = Assembler.sum sum asm in
-        function
-        | Object l -> (
-            let name, arg =
-              match l with
-              | [("type", String ty); ("val", v)] -> (ty, v)
-              | ("type", String ty) :: rest -> (ty, Object rest)
-              | _ -> (
-                  ( get_constr l
-                  , try List.assoc "val" l with Not_found ->
-                      Object (List.remove_assoc "type" l) ) )
-            in
-            let c =
-              match sum.s_lookup name with
-              | Some c -> c
-              | None ->
-                  failwith (Printf.sprintf "Unexpected constructor %S" name)
-            in
-            match (c, arg) with
-            | Constant c, _ -> asm (Constant c)
-            | Regular c, Array l -> asm (Regular (c, l))
-            | Inlined c, Object l -> asm (Inlined (c, fix_names l))
-            | Regular _, _ -> failwith "Array expected"
-            | Inlined _, _ -> failwith "Object expected" )
-        | _ -> failwith "object expected" )
-    | Prop (_, t) -> of_json t
-    | Abstract _ -> failwith "TODO: fallback to variant as mlfi_json"
-    | _ -> failwith "Json: unknown type"
-  and asm : value Assembler.asm =
-    let f : type a. a t -> value -> a = fun t -> of_json t in
+        M.data
+    | None -> (
+      match Lazy.force t.xt with
+      | Prop (_, t) -> conv_t t
+      | Tuple t -> conv_tuple t
+      | Record r -> conv_record r
+      | Sum s -> conv_sum s
+      | Int32 -> conv_via_variant [%t: int32]
+      | Int64 -> conv_via_variant [%t: int64]
+      | Nativeint -> conv_via_variant [%t: nativeint]
+      | Abstract _ -> conv_via_variant t.t
+      | _ -> failwith "Json: unknown type" )
+  and conv_tuple : type a. a tuple -> a conv =
+   fun tup ->
+    let to_json =
+      let map = Read.map_tuple tup mapf in
+      fun x -> Array (map x)
+    and of_json =
+      let asm = Assembler.tuple tup asm in
+      function Array l -> asm l | _ -> failwith "tuple expected"
+    in
+    {to_json; of_json}
+  and conv_record : type a. a record -> a conv =
+   fun r ->
+    let to_json =
+      let map = Read.map_record r mapf' in
+      fun x -> Object (map x)
+    and of_json =
+      let asm = Assembler.record r asm in
+      function
+      | Object l -> asm (fix_names l) | _ -> failwith "object expected"
+    in
+    {to_json; of_json}
+  and conv_sum : type a. a sum -> a conv =
+   fun sum ->
+    let to_json =
+      let map = Read.map_sum sum mapf mapf' in
+      fun x ->
+        match map x with
+        | Read.Constant name -> Object [("type", String name)]
+        | Regular (name, args) ->
+            Object [("type", String name); ("val", Array args)]
+        | Inlined (name, args) -> Object (("type", String name) :: args)
+    and of_json =
+      let asm = Assembler.sum sum asm in
+      function
+      | Object l -> (
+          let name, arg =
+            match l with
+            | [("type", String ty); ("val", v)] -> (ty, v)
+            | ("type", String ty) :: rest -> (ty, Object rest)
+            | _ -> (
+                ( get_constr l
+                , try List.assoc "val" l with Not_found ->
+                    Object (List.remove_assoc "type" l) ) )
+          in
+          let c =
+            match sum.s_lookup name with
+            | Some c -> c
+            | None ->
+                failwith (Printf.sprintf "Unexpected constructor %S" name)
+          in
+          match (c, arg) with
+          | Constant c, _ -> asm (Constant c)
+          | Regular c, Array l -> asm (Regular (c, l))
+          | Inlined c, Object l -> asm (Inlined (c, fix_names l))
+          | Regular _, _ -> failwith "Array expected"
+          | Inlined _, _ -> failwith "Object expected" )
+      | _ -> failwith "object expected"
+    in
+    {to_json; of_json}
+  and mapf : value Read.mapf =
+    let f : type a. a t -> a -> value = fun t -> (conv_t t).to_json in
     {f}
-  and fix_names l =
-    List.map (fun (name, x) -> (ctx.to_json_field name, x)) l
+  and mapf' : (string * value) Read.mapf' =
+    let f : type a. name:string -> a t -> a -> string * value =
+     fun ~name t ->
+      let to_json = (conv_t t).to_json in
+      fun x -> (ctx.to_json_field name, to_json x)
+    in
+    {f}
+  and asm : value Assembler.asm =
+    let f : type a. a t -> value -> a = fun t -> (conv_t t).of_json in
+    {f}
+  and fix_names l = List.map (fun (name, x) -> (ctx.to_json_field name, x)) l
+  and conv_via_variant : type a. a Ttype.t -> a conv =
+   fun t ->
+    let v_conv = conv_t (of_ttype Variant.t) in
+    let to_variant = Variant.to_variant ~t in
+    let of_variant = Variant.of_variant ~t in
+    let to_json x = v_conv.to_json (to_variant x)
+    and of_json x = of_variant (v_conv.of_json x) in
+    {to_json; of_json}
   in
-  of_json (of_ttype t)
+  conv_t (Xtype.of_ttype t)
+
+(* OPTIMs:
+   - memoize the function (for a given set of flags)
+     in DT_node
+*)
 
 let () =
   let of_json = function
@@ -362,7 +351,7 @@ let () =
     | Number (F x) -> int_of_float x
     | _ -> failwith "integer expected"
   and to_json i = Number (I i) in
-  register_custom ~t:int_t {of_json; to_json}
+  Matcher.add matcher ~t:int_t {of_json; to_json}
 
 let () =
   let of_json = function
@@ -379,7 +368,7 @@ let () =
     | FP_nan -> String "NaN"
     | _ -> Number (F x)
   in
-  register_custom ~t:float_t {of_json; to_json}
+  Matcher.add matcher ~t:float_t {of_json; to_json}
 
 let () =
   let to_json () = json_unit
@@ -387,84 +376,82 @@ let () =
     | Object _ -> ()
     | _ -> failwith "unit object expected"
   in
-  register_custom ~t:unit_t {of_json; to_json}
+  Matcher.add matcher ~t:unit_t {of_json; to_json}
 
 let () =
   let to_json b = Bool b
   and of_json = function Bool b -> b | _ -> failwith "boolean expected" in
-  register_custom ~t:bool_t {of_json; to_json}
+  Matcher.add matcher ~t:bool_t {of_json; to_json}
 
 let () =
   let to_json s = String s
   and of_json = function String x -> x | _ -> failwith "string expected" in
-  register_custom ~t:string_t {of_json; to_json}
+  Matcher.add matcher ~t:string_t {of_json; to_json}
 
 let () =
-  register_custom_1
+  Matcher.add1 matcher
     ( module struct
       type 'a t = 'a list [@@deriving t]
 
       let data (t : 'a Ttype.t) =
-        let to_json_el = to_json t in
-        let of_json_el = of_json t in
-        let to_json l = Array (List.map to_json_el l)
+        let conv = conv t in
+        let to_json l = Array (List.map conv.to_json l)
         and of_json = function
-          | Array l -> List.map of_json_el l
+          | Array l -> List.map conv.of_json l
           | _ -> failwith "array/list expected"
         in
         {of_json; to_json}
     end )
 
 let () =
-  register_custom_1
+  Matcher.add1 matcher
     ( module struct
       type 'a t = 'a array [@@deriving t]
 
       let data (t : 'a Ttype.t) =
-        let to_json_el = to_json t in
-        let of_json_el = of_json t in
-        let to_json l = Array (Ext.Array.map_to_list to_json_el l)
+        let conv = conv t in
+        let to_json l = Array (Ext.Array.map_to_list conv.to_json l)
         and of_json = function
-          | Array l -> Ext.Array.of_list_map of_json_el l
+          | Array l -> Ext.Array.of_list_map conv.of_json l
           | _ -> failwith "array/list expected"
         in
         {of_json; to_json}
     end )
 
 let () =
-  register_custom_1
+  Matcher.add1 matcher
     ( module struct
       type 'a t = ('a Lazy.t[@patch lazy_t]) [@@deriving t]
 
       let data (t : 'a Ttype.t) =
-        let to_json = to_json t and of_json = of_json t in
-        let to_json x = to_json (Lazy.force x)
-        and of_json x = lazy (of_json x) in
+        let conv = conv t in
+        let to_json x = conv.to_json (Lazy.force x)
+        and of_json x = lazy (conv.of_json x) in
         {of_json; to_json}
     end )
 
 let () =
-  register_custom_1
+  Matcher.add1 matcher
     ( module struct
       type 'a t = 'a option [@@deriving t]
 
       let data (t : 'a Ttype.t) =
-        let to_json = to_json t and of_json = of_json t in
-        let to_json = function Some x -> to_json x | None -> Null
-        and of_json = function Null -> None | x -> Some (of_json x) in
+        let conv = conv t in
+        let to_json = function Some x -> conv.to_json x | None -> Null
+        and of_json = function Null -> None | x -> Some (conv.of_json x) in
         {of_json; to_json}
     end )
 
 let () =
-  register_custom_1
+  Matcher.add1 matcher
     ( module struct
       type 'a t = 'a option option [@@deriving t]
 
       let data (t : 'a Ttype.t) =
-        let to_json = to_json t and of_json = of_json t in
+        let conv = conv t in
         let to_json = function
           | Some (Some x) ->
-              Object [("type", String "Some"); ("val", to_json x)]
+              Object [("type", String "Some"); ("val", conv.to_json x)]
           | Some None -> Object [("type", String "Some")]
           | None -> Object [("type", String "None")]
         and of_json json =
@@ -479,7 +466,7 @@ let () =
           match aux with
           | "None", _ -> None
           | "Some", Null -> Some None
-          | "Some", x -> Some (Some (of_json x))
+          | "Some", x -> Some (Some (conv.of_json x))
           | _ -> failwith "Nested option, 'type' field should be Some or None"
         in
         {of_json; to_json}
@@ -490,11 +477,11 @@ let () =
     | String s -> Variant.variant_of_string s
     | _ -> failwith "Variant string expected"
   and to_json x = String (Variant.string_one_line_of_variant x) in
-  register_custom ~t:[%t: Variant.t] {of_json; to_json}
+  Matcher.add matcher ~t:[%t: Variant.t] {of_json; to_json}
 
 let () =
   let of_json x = x and to_json x = x in
-  register_custom ~t:[%t: value] {of_json; to_json}
+  Matcher.add matcher ~t:[%t: value] {of_json; to_json}
 
 open Buffer
 

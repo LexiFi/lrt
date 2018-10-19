@@ -59,19 +59,20 @@ let () =
 
 let f : Ttype.dynamic -> bool = function
   | Ttype.Dyn (t, x) ->
-      let j = Json.to_json t x in
+      let Json.({to_json; of_json}) = Json.conv t in
+      let j = to_json x in
       let () =
         Format.printf "Value: %a\n%!" (Print.print ~t) x ;
         Format.printf "Json: %s\n%!" (Json.to_pretty_string j)
       in
-      let x' = Json.of_json t j in
+      let x' = of_json j in
       let s = Json.encode j in
       let j' =
         try Json.decode s with r ->
           Printf.eprintf "Json.decode:\n%s\n%!" s ;
           raise r
       in
-      let x'' = Json.of_json t j' in
+      let x'' = of_json j' in
       let r = compare x x' = 0 && compare x' x'' = 0 && compare j j' = 0 in
       if not r then
         Format.printf "Screwed:\nv': %s\nx'': %a\n%!"

@@ -19,11 +19,11 @@ Then, in order to generate runtime representations of your dynamic
 types, you have to enable the dynt ppx. Your dune file might look like
 the following.
 
-```scheme
+```dune
 (executable
   (name foo)
-  (libararies bar dynt)
-  (preprocess (pps dynt.ppx)))
+  (libraries bar dynt)
+  (preprocess (pps dynt.deriving)))
 ```
 
 Now you can use dynamic types in your `foo.ml`:
@@ -33,7 +33,7 @@ open Dynt
 
 type nat =
   | Z
-  | S of t
+  | S of nat
   [@@deriving t]
 
 let () =
@@ -80,6 +80,6 @@ Useful commands:
   `dune exec ppx/standalone.exe test/ppx.ml`.
 * Run tests using `dune runtest`.
 * Format the code using `dune build @fmt --auto-promote` or
-  `make format`.
+  `make fmt`.
 * Generate documentation for github pages using `make docs`, then commit
   and push to master.
