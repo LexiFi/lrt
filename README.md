@@ -64,8 +64,6 @@ There are four main directories:
 * `tests` contains the separate tests. Some more tests are placed
   directly in the corresponding modules.
 
-Everything was build and tested on `4.07.1` only.
-
 Some things remain open:
 
 * Except of `Json` no module uses the latest features of `Xtype` and
