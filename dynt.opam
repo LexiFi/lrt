@@ -1,10 +1,16 @@
 opam-version: "2.0"
+name: "dynt"
 version: "dev"
-maintainer: ""
-authors: [""]
-homepage: ""
-bug-reports: ""
-dev-repo: ""
+synopsis: "Dynamic Types for OCaml"
+description: """
+To be written.
+"""
+maintainer: "LexiFi"
+authors: ["Patrik Keller <patrik@keller-re.de>, LexiFi"]
+homepage: "https://github.com/LexiFi/dynt/"
+bug-reports: "https://github.com/LexiFi/dynt/issues"
+dev-repo: "git+https://github.com/LexiFi/dynt.git"
+doc: "https://lexifi.github.io/dynt/"
 license: "MIT"
 depends: [
   "inspect" { with-test }
@@ -13,5 +19,8 @@ depends: [
   "ppxlib" { build }
 ]
 build: [
+  ["dune" "runtest" "-p" name] { with-test }
+  ["dune" "build" "@doc" "-p" name] { with-doc }
   ["dune" "build" "-p" name "-j" jobs]
 ]
+run-test: ["dune" "runtest" "-p" name]
