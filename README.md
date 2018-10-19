@@ -5,7 +5,6 @@ TODO:
 * pitch
 * opam release
 * interface documentation
-* license, file headers
 
 ## Getting started
 

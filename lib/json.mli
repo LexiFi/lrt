@@ -1,11 +1,11 @@
-(** Json compatible representation of values. *)
+(******************************************************************************)
+(*  Copyright (C) 2018 by LexiFi.                                             *)
+(*                                                                            *)
+(*  This source file is released under the terms of the MIT license as part   *)
+(*  of the dynt package. Details can be found in the attached LICENSE file.   *)
+(******************************************************************************)
 
-(***************************************************************************)
-(*  Copyright (C) 2000-2018 LexiFi SAS. All rights reserved.               *)
-(*                                                                         *)
-(*  No part of this document may be reproduced or transmitted in any       *)
-(*  form or for any purpose without the express permission of LexiFi SAS.  *)
-(***************************************************************************)
+(** Json compatible representation of values. *)
 
 (** {3 Representation of JSON trees} *)
 

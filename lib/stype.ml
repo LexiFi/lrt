@@ -1,6 +1,9 @@
-(* TODO: pk: It feels like the unboxed/boxed flag should be stored at the level
- * of variants and records. Now it is put into the (single) field / constructor.
- * This lead to indirections, when accessing the flag. *)
+(******************************************************************************)
+(*  Copyright (C) 2018 by LexiFi.                                             *)
+(*                                                                            *)
+(*  This source file is released under the terms of the MIT license as part   *)
+(*  of the dynt package. Details can be found in the attached LICENSE file.   *)
+(******************************************************************************)
 
 type properties = (string * string) list
 

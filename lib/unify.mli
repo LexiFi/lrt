@@ -1,3 +1,10 @@
+(******************************************************************************)
+(*  Copyright (C) 2018 by LexiFi.                                             *)
+(*                                                                            *)
+(*  This source file is released under the terms of the MIT license as part   *)
+(*  of the dynt package. Details can be found in the attached LICENSE file.   *)
+(******************************************************************************)
+
 (** Unification of dynamic types. *)
 
 (** {3 Types with free variables} *)

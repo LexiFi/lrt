@@ -1,3 +1,10 @@
+(******************************************************************************)
+(*  Copyright (C) 2018 by LexiFi.                                             *)
+(*                                                                            *)
+(*  This source file is released under the terms of the MIT license as part   *)
+(*  of the dynt package. Details can be found in the attached LICENSE file.   *)
+(******************************************************************************)
+
 module type SYMBOL = sig
   (* A basic type language consist of symbols (with associated fixed arity) and
      variables.
@@ -137,7 +144,7 @@ module Symbol (Unit : sig end) : SYMBOL = struct
     | DT_var i -> Var i
 end
 
-(*
+(* TODO: investigate why this is commented
 let%expect_test _ =
   let module A = Symbol (struct end) in
   let open A in
