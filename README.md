@@ -33,4 +33,7 @@ Useful commands:
 * View the generated code using
   `dune exec ppx/standalone.exe test/ppx.ml`.
 * Run tests using `dune runtest`.
-* Format the code using `dune build @fmt --auto-promote`.
+* Format the code using `dune build @fmt --auto-promote` or
+  `make format`.
+* Generate documentation for github pages using `make docs`, then commit
+  and push to master.
