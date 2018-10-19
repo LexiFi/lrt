@@ -1,5 +1,4 @@
-_build
+_*
 *.install
 .merlin
-_*
-external
+dune-workspace
