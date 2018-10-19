@@ -708,9 +708,8 @@ module Unboxed = struct
     let generator = Check.of_type_gen ~size:101 ~t:root [] in
     let check a b t =
       let x_a, x_b = (a t, b t) in
-      if eq x_a x_b then true
-      else false
-        (* let p f = Inspect.Sexpr.dump_with_formatter f in
+      if eq x_a x_b then true else false
+      (* let p f = Inspect.Sexpr.dump_with_formatter f in
         Format.eprintf "obj: %a\nocaml: %a\npath: %a\n\n%!" p t p x_a p x_b ;
         false *)
     in

@@ -293,15 +293,14 @@ end = struct
           function
           | Some x -> Some x
           | None ->
-              let rec loop seq =
-                match seq () with
-                | Seq.Nil -> None
-                | Seq.Cons ((free_id, tree), rest) -> (
+              let rec loop = function
+                | [] -> None
+                | (free_id, tree) :: tl' -> (
                   match List.assoc_opt free_id subst with
                   | None -> traverse tl ((free_id, hd) :: subst) tree
                   | Some stype ->
                       if equal stype hd then traverse tl subst tree
-                      else loop rest )
+                      else loop tl' )
               in
               (* TODO: change type of node.free to something ordered *)
               let sorted =
@@ -309,11 +308,11 @@ end = struct
                   (fun k v acc -> IntMap.add k v acc)
                   node.free IntMap.empty
               in
-              loop (IntMap.to_seq sorted) )
+              loop (IntMap.bindings sorted) )
       | [], _ | _ :: _, Leave _ -> assert false
       (* This should be impossible. [Symbol.of_stype] should
                         uniquely identify the number of children on each step.
-                     *)
+      *)
     in
     traverse [stype] [] t.tree
 
