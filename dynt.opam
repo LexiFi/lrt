@@ -14,7 +14,8 @@ doc: "https://lexifi.github.io/dynt/dynt/Dynt/index.html"
 license: "MIT"
 depends: [
   "ppx_expect" { build | with-test }
-  "dune"   { build }
+  "dune" { build }
+  "landmarks" { build }
   "ppxlib" { build }
 ]
 build: [
