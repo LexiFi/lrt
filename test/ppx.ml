@@ -709,10 +709,10 @@ module Unboxed = struct
     let check a b t =
       let x_a, x_b = (a t, b t) in
       if eq x_a x_b then true
-      else
-        let p f = Inspect.Sexpr.dump_with_formatter f in
+      else false
+        (* let p f = Inspect.Sexpr.dump_with_formatter f in
         Format.eprintf "obj: %a\nocaml: %a\npath: %a\n\n%!" p t p x_a p x_b ;
-        false
+        false *)
     in
     let property t = check gf (geti 0) t in
     let seed = Random.bits () in

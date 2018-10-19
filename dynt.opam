@@ -13,7 +13,6 @@ dev-repo: "git+https://github.com/LexiFi/dynt.git"
 doc: "https://lexifi.github.io/dynt/dynt/Dynt/index.html"
 license: "MIT"
 depends: [
-  "inspect" { with-test }
   "ppx_expect" { build | with-test }
   "dune"   { build }
   "ppxlib" { build }
