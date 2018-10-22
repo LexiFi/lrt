@@ -5,7 +5,7 @@
 (*  of the dynt package. Details can be found in the attached LICENSE file.   *)
 (******************************************************************************)
 
-(** Unification of dynamic types. *)
+(** Unification of runtime types. *)
 
 (** {3 Types with free variables} *)
 

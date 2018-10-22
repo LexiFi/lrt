@@ -68,7 +68,8 @@ Some things remain open:
 
 * Except of `Json` no module uses the latest features of `Xtype` and
   `Matcher`.
-* `Unify` was written before `Matcher` and needs an update.
+* `Unify` was written before `Matcher` and uses a different definition
+  of equality.
 * `git grep TODO`
 
 Useful commands:

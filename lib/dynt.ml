@@ -216,14 +216,24 @@ module Xtype = Xtype
 
 (** {4 Unification}
 
-    TODO: Describe Unify
+    The {!Unify} module holds functors that allow to unify an unclosed runtime
+    type with a closed one. This was particularly interesting for implementing
+    the abstract type handling of {!Print} and {!Variant}. It may be that
+    {!Matcher} is strictly more powerful and {!Unify} can be dropped.
 *)
 
 module Unify = Unify
 
 (** {4 Pattern matching}
 
-    TODO: Describe Matcher
+    {!Matcher} provides a mechanism for storing data indexed by type
+    using as discrimination tree. The runtime type provided as key during
+    insertion may contain free variables. Data can be retrieved from the store
+    by providing a closed type. During retrieval, the key type is unified with
+    the type used for insertion.
+
+    This provides a mechanism similar to OCaml pattern matching but for runtime
+    types.
 *)
 
 module Matcher = Matcher
