@@ -136,8 +136,7 @@ let stypes_of_free ~loc free =
 
 let lid_runtime = Longident.parse "Dynt_ppx_runtime.Types"
 let lid_ttype = Longident.parse "Dynt_ppx_runtime.Types.Ttype.t"
-
-let wrap_runtime ~loc = pexp_open ~loc Override {txt = lid_runtime; loc}
+let wrap_runtime ~loc = pexp_open ~loc Override {txt= lid_runtime; loc}
 
 let wrap_props ~loc props t =
   match props with
@@ -188,8 +187,7 @@ let names_of_type_decl td =
   let typ = td.ptype_name.txt in
   {typ; ttyp= mangle_label typ; node= typ ^ "_node"}
 
-let ttype_ct_of_ct ~loc ct =
-  ptyp_constr ~loc {txt= lid_ttype; loc} [ct]
+let ttype_ct_of_ct ~loc ct = ptyp_constr ~loc {txt= lid_ttype; loc} [ct]
 
 let type_of_type_decl ~loc td : core_type =
   let (module M) = Ast_builder.make loc in

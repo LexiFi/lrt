@@ -20,7 +20,7 @@
 
     {[
     # #require "dynt.deriving";;
-    # open Dynt;;
+    # open Dynt.Std;;
     # type foo = { bar: string } [@@deriving t] ;;
     type foo = { bar: string }
     val foo_t : foo ttype
@@ -35,8 +35,11 @@
 
 module Std = struct
   include Std
+
   (**/**)
+
   module Dynt_ppx_runtime = Dynt_ppx_runtime
+
   (**/**)
 end
 
