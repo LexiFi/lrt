@@ -5,7 +5,7 @@
   (libraries ppxlib)
   (preprocess (pps ppxlib.metaquot))
   (modules dynt_deriving)
-  (kind ppx_deriver))
+  (kind ppx_rewriter))
 
 (library
   (name dynt_path)

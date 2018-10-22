@@ -225,7 +225,7 @@ end
 
 (** {3 Paths}
 
-    Interop between dynamic types and {!Path}.
+    Interop between runtime types and {!Path}.
 *)
 
 (** Build steps from elements. *)

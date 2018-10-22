@@ -409,9 +409,11 @@ module Properties = struct
   type ('a, 'b) combined =
     | Core of
         (((('a[@prop {w= "a"}]) * ('b[@prop {w= "b"}]))[@prop {w= "a*b"}]) list[@prop
-                                                                               "w"
-                                                                               "(a*b)list"])
-        [@prop "w" "Core"]
+                                                                               { 
+                                                                               w=
+                                                                               "(a*b)list"
+                                                                               }])
+        [@prop {w= "Core"}]
     | Inline of {field: ('b[@prop {w= "b"}]) [@prop {w= "field"}]}
         [@prop {w= "Inline"}]
   [@@deriving t] [@@prop {key= "value"}]
@@ -421,7 +423,7 @@ module Properties = struct
     print [%t: int constructors] ;
     print [%t: int coretype] ;
     print [%t: many'] ;
-    print [%t: ((int, string) combined[@prop "w" "combined"])] ;
+    print [%t: ((int, string) combined[@prop {w= "combined"}])] ;
     [%expect
       {|
       (int fields =

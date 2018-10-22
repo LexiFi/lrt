@@ -14,7 +14,18 @@
 
 (** {3 Constructing dynamic types}
 
-    TODO: Describe usage of [[@@deriving t]].
+    Runtime representations of OCaml types are built using the [dynt.deriving]
+    PPX syntax extension. In the simplest case, you only have to attach a
+    [ [@@deriving t] ] attribute to the type declaration.
+
+    {[
+    # open Dynt;;
+    # type foo = { bar: string } [@@deriving t] ;;
+    type foo = { bar: string }
+    val foo_t : foo ttype
+    # type t = foo * int [@@deriving t] ;;
+    val t : t ttype
+    ]}
 
     Runtime representations of the basic OCaml types can be found in the {!Std}
     module. These definitions are generally required, when you use the
@@ -22,6 +33,126 @@
 *)
 
 module Std = Std
+
+(** {4 Free variable handling}
+
+    Types with free variables are represented as closures with one
+    {!ttype} argument per free variable. Most APIs, like {!Print} for dynamic
+    printing, consume closed types.
+
+    {[
+    # type 'a tree =
+    +   | Leave of 'a
+    +   | Node of 'a tree list
+    + [@@deriving t];;
+    val tree_t : 'a ttype -> 'a tree ttype
+    # let () = Print.show ~t:(tree_t int_t) (Node [Leave 0; Leave 1]);;
+    Node [Leave 0; Leave 1]
+    ]}
+
+    Stating the types in function application style might be a bit unintuitive.
+    Thus there is an extension point that translates types to applications.
+    Instead of the previous example, you can also write the following.
+
+    {[
+    # let () = Print.show ~t:[%t: int tree] (Node [Leave 0; Leave 1]);;
+    Node [Leave 0; Leave 1]
+    ]}
+*)
+
+(** {4 Abstract types}
+
+    We attempt to support abstract types. Whenever you want to hide the actual
+    type definition from the derived ttype, you have to annotate the type
+    declarations with [ [@@abstract] ].
+
+    {[
+    # module M : sig
+    +   type t [@@deriving t]
+    + end = struct
+    +   type t = int array [@@deriving t]
+    + end;;
+    module M : sig type t val t : t ttype end
+    # Format.printf "%a\n" Ttype.print M.t;;
+    int array
+    # module N : sig
+    +   type t [@@deriving t]
+    + end = struct
+    +   type t = int array [@@abstract] [@@deriving t]
+    + end;;
+    module N : sig type t val t : t ttype end
+    # Format.printf "%a\n" Ttype.print M.t;;
+    //toplevel//.N.t
+    ]}
+
+    It is worth to note that abstract types are represented by a string. You can
+    trick the naming mechanism into producing indistinguishable abstract runtime
+    types for distinct OCaml types. You can bypass the name generation by
+    providing a string argument to the abstract annotation.
+
+    {[
+    # type abstract = int [@@abstract "uid"] [@@deriving t];;
+    val abstract_t : abstract ttype
+    # Format.printf "%a\n" Ttype.print abstract_t;;
+    uid
+    ]}
+
+    In case you want to expose an abstract ttype, but use a non-abstract version
+    within the module, we recommend to define two types - one non-abstract for
+    internal use and one abstract for satisfying the interface - as outlined
+    below.
+
+    {[
+    # module M : sig
+    +   type hidden [@@deriving t]
+    + end = struct
+    +   type visible = string list
+    +   and hidden = visible [@@abstract] [@@deriving t];;
+    +   (* [visible] represents a string list here. *)
+    + end;;
+    ]}
+*)
+
+(** {4 Patching}
+
+    It happens frequently, that ttypes are not available under the expected
+    name. For such cases, we provide the [@patch] annotation.
+
+    {[
+    # lazy_t;;
+    - : 'a ttype -> 'a lazy_t ttype = <fun>
+    # type 'a lazy_pair = ('a * 'a) Lazy.t [@patch lazy_t] [@@deriving t];;
+    type 'a lazy_pair = ('a * 'a) lazy_t
+    val lazy_pair_t : 'a ttype -> 'a lazy_pair ttype = <fun>
+    ]}
+
+    When using an external type that has no corresponding ttype we recommend to
+    introduce an abstract alias and use it as replacement.
+
+    {[
+    type external = External.t [@@abstract] [@@deriving t]
+    type local = (External.t [@patch external_t]) list [@@deriving t]
+    ]}
+*)
+
+(** {4 Properties}
+
+    Our runtime types support attachments of properties. The behaviour of some
+    APIs can be tweaked by providing certain properties. Properties can be added
+    to core types, record fields and constructors. Keep in mind the binding
+    precedence of annotations.
+
+    {[
+    type sum =
+      | A of int [@prop {key1= "binds to constructor A"}]
+      | B of (int [@prop {key2= "binds to type int"}])
+    and record =
+      { c : int [@prop {key3= "binds to field c"}]
+      ; d : (int [@prop {key4= "binds"; key5="to int"}])
+      }
+    [@@deriving t]
+    ]}
+*)
 
 (** {3 Using dynamic types}
 
