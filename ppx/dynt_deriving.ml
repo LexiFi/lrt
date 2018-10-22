@@ -134,9 +134,10 @@ let stypes_of_free ~loc free =
   let open M in
   List.mapi (fun i _v -> [%expr DT_var [%e eint i]]) free |> elist
 
-let wrap_runtime ~loc =
-  let txt = Longident.parse "Dynt_ppx_runtime.Types" in
-  pexp_open ~loc Override {txt; loc}
+let lid_runtime = Longident.parse "Dynt_ppx_runtime.Types"
+let lid_ttype = Longident.parse "Dynt_ppx_runtime.Types.Ttype.t"
+
+let wrap_runtime ~loc = pexp_open ~loc Override {txt = lid_runtime; loc}
 
 let wrap_props ~loc props t =
   match props with
@@ -148,7 +149,7 @@ let wrap_props ~loc props t =
 (* check whether ttype is of a certain type and make it an stype *)
 let stype_of_ttype ({ptyp_loc= loc; _} as ct) expr =
   (* strip patch attribute *)
-  let ct, _ = patch_of_ct ct and txt = Longident.parse "Ttype.t" in
+  let ct, _ = patch_of_ct ct and txt = lid_ttype in
   [%expr stype_of_ttype ([%e expr] : [%t ptyp_constr ~loc {loc; txt} [ct]])]
 
 (*
@@ -188,8 +189,7 @@ let names_of_type_decl td =
   {typ; ttyp= mangle_label typ; node= typ ^ "_node"}
 
 let ttype_ct_of_ct ~loc ct =
-  let txt = Longident.parse "Ttype.t" in
-  ptyp_constr ~loc {txt; loc} [ct]
+  ptyp_constr ~loc {txt= lid_ttype; loc} [ct]
 
 let type_of_type_decl ~loc td : core_type =
   let (module M) = Ast_builder.make loc in
@@ -202,7 +202,7 @@ let ttype_of_type_decl ~loc td : core_type =
   let (module M) = Ast_builder.make loc in
   let open M in
   let ct = type_of_type_decl ~loc td in
-  ptyp_constr {txt= Longident.parse "Ttype.t"; loc} [ct]
+  ptyp_constr {txt= lid_ttype; loc} [ct]
 
 let close_ttype ~loc ~free ttype =
   List.fold_left

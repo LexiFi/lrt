@@ -2,7 +2,7 @@
   (name dynt_test)
   (libraries dynt)
   (inline_tests)
-  (modules path ppx variantizer matcher)
+  (modules path ppx variantizer matcher open_std_only)
   (preprocess (pps ppx_expect dynt.path dynt.deriving)))
 
 (tests

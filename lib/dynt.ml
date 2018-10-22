@@ -33,7 +33,12 @@
     [[@@deriving t]] syntax extension.
 *)
 
-module Std = Std
+module Std = struct
+  include Std
+  (**/**)
+  module Dynt_ppx_runtime = Dynt_ppx_runtime
+  (**/**)
+end
 
 (** {4 Free variable handling}
 
@@ -279,9 +284,3 @@ type 'a ttype = 'a Ttype.t
 type dynamic = Ttype.dynamic = Dyn : 'a ttype * 'a -> dynamic
 
 include Std
-
-(**/**)
-
-module Ppx_runtime = Ppx_runtime
-
-(**/**)

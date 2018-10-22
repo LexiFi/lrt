@@ -12,6 +12,7 @@
 module Types = struct
   (** Runtime for building types *)
 
+  module Ttype = Ttype
   open Stype.Internal
 
   type 'a lazy_t = 'a Lazy.t
