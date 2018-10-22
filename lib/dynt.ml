@@ -12,13 +12,14 @@
     TODO: Pitch
 *)
 
-(** {3 Constructing dynamic types}
+(** {3 Build runtime types}
 
     Runtime representations of OCaml types are built using the [dynt.deriving]
     PPX syntax extension. In the simplest case, you only have to attach a
     [ [@@deriving t] ] attribute to the type declaration.
 
     {[
+    # #require "dynt.deriving";;
     # open Dynt;;
     # type foo = { bar: string } [@@deriving t] ;;
     type foo = { bar: string }
@@ -154,9 +155,29 @@ module Std = Std
     ]}
 *)
 
-(** {3 Using dynamic types}
+(** {3 Use runtime types}
 
-    TODO: Some words on the example applications.
+    We provide some example modules that consume runtime types. The best entry
+    point for further exploring the features of Dynt is probably the
+    implementation of {!Json.conv}.
+
+    {!Print} is used a generic dynamic printer. It is able to print arbitrary
+    values based on their runtime type. Values of abstract types can be printed
+    by registering abstract printers.
+
+    {!Variant} may be used to serialize values in an OCaml compatible syntax.
+    Provided a runtime type, the module is able to serialize and deserialize
+    arbitrary values of non-abstract type. Custom (de)variantizers for abstract
+    types can be registered globally.
+
+    {!Json} provides serialization like {!Variant} but targets JSON as
+    intermediate format. Additionally, it uses the latest features provided by
+    {!Matcher} to allow the registration of custom converters for any type.
+
+    {!Check} is a Quickcheck implementation that derives value generators from
+    runtime types. Additionally, it is able to generate random runtime types and
+    thereby values of random type. This is useful for testing functions that are
+    meant to handle any type.
 *)
 
 module Print = Print
@@ -164,18 +185,7 @@ module Variant = Variant
 module Json = Json
 module Check = Check
 
-(** {3 Paths}
-
-    We include an implementation of lenses and list of lenses: {!Path} enables
-    access of values in nested tuples, records and constructors.  Additionally,
-    paths can be used to access nested types (see {!Xtype.project_path}).
-
-    Paths are constructed using the [[?path: .]] syntax extension.
-*)
-
-module Path = Path
-
-(** {3 Type representation}
+(** {4 Type representation}
 
     Dynt comes with different representations of runtime types. Depending on the
     application, one might use one or another.
@@ -196,15 +206,21 @@ module Stype = Stype
 module Ttype = Ttype
 module Xtype = Xtype
 
-(** {3 Unification and pattern matching}
+(** {4 Unification}
 
-    TODO: Describe Unify and Matcher
+    TODO: Describe Unify
 *)
 
 module Unify = Unify
+
+(** {4 Pattern matching}
+
+    TODO: Describe Matcher
+*)
+
 module Matcher = Matcher
 
-(** {3 Type equality}
+(** {4 Type equality}
 
     Some of the other modules are able to check for type equality of dynamically
     crafted types. Such type equalities are inherently out of reach for the
@@ -225,10 +241,37 @@ module Matcher = Matcher
 
 module TypEq = TypEq
 
+(** {3 Paths}
+
+    We include an implementation of lenses and list of lenses: {!Path} enables
+    access to values in nested tuples, records and constructors.  Additionally,
+    paths can be used to access nested types (see {!Xtype.project_path}).
+
+    Paths can be constructed by the [dynt.path] syntax extension.
+
+    {[
+      # #require "dynt.path";;
+      # type t = A of {b: int array list * string}
+      + let p1 : (t, string) Path.t = [%path? [ A b; (_, []) ]]
+      + let p2 : (t, int)    Path.t = [%path? [ A b; ([], _); [0]; [|1|] ]]
+      + let Path.{get; set} = Path.lens p2
+      + let () =
+          if get (A {b= ([ [|0; 42|]; [||] ], "clutter")}) = Some 42
+          then print_endline "success" ;;
+      success
+    ]}
+
+    Further instructions can be found within the {!Path} module.
+*)
+
+module Path = Path
+
 (** {3 open Dynt}
 
-    Place [open Dynt] at the toplevel of your modules to have the dynamic
-    representation of basic ocaml types available when you need them.
+    We recommend to place [open Dynt] at the toplevel of your modules to have
+    the runtime representation of basic OCaml types and all the dynt tools
+    available when you need them. If you do not want to have the [Dynt.*]
+    modules cluttering your namespace use [open Dynt.Std].
 *)
 
 type stype = Stype.t
@@ -239,6 +282,6 @@ include Std
 
 (**/**)
 
-module Dynt_ppx_runtime = Dynt_ppx_runtime
+module Ppx_runtime = Ppx_runtime
 
 (**/**)
