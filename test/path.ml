@@ -46,7 +46,7 @@ let%expect_test _ =
   [%expect
     {|
     [%path? []]
-    (t =
+    (dynt_test#test/path.ml.t =
        | A of
         (t.A =
            {

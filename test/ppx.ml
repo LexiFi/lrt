@@ -36,7 +36,9 @@ module Basic = struct
   type enum = North | East | South | West [@@deriving t]
 
   let%expect_test _ =
-    print enum_t ; [%expect {| (enum = North | East | South | West) |}]
+    print enum_t ;
+    [%expect
+      {| (dynt_test#test/ppx.ml.Basic.enum = North | East | South | West) |}]
 
   type sum1 =
     | Option1 of string * int
@@ -49,7 +51,7 @@ module Basic = struct
     print sum1_t ;
     [%expect
       {|
-    (sum1 =
+    (dynt_test#test/ppx.ml.Basic.sum1 =
        | Option1 of (string * int)
        | Option2 of (int * int * string)
        | Option3
@@ -63,7 +65,7 @@ module Basic = struct
     print record_t ;
     [%expect
       {|
-    (record =
+    (dynt_test#test/ppx.ml.Basic.record =
        {
          field1: (int * string);
          field2: string;
@@ -78,7 +80,7 @@ module Basic = struct
     print inline_record_t ;
     [%expect
       {|
-    (inline_record =
+    (dynt_test#test/ppx.ml.Basic.inline_record =
        | Basic of int
        | Inline of
         (inline_record.Inline =
@@ -102,22 +104,22 @@ module Recursion = struct
     print natural2_t ;
     [%expect
       {|
-    (record =
+    (dynt_test#test/ppx.ml.Recursion.record =
        {
          a: int;
-         b: record;
+         b: dynt_test#test/ppx.ml.Recursion.record;
        })
-    (natural =
+    (dynt_test#test/ppx.ml.Recursion.natural =
        | Z
-       | S of natural)
-    (natural2 =
+       | S of dynt_test#test/ppx.ml.Recursion.natural)
+    (dynt_test#test/ppx.ml.Recursion.natural2 =
        | Z
-       | S of natural2
+       | S of dynt_test#test/ppx.ml.Recursion.natural2
        | Sum of
         (natural2.Sum =
            {
-             a: natural2;
-             b: natural2;
+             a: dynt_test#test/ppx.ml.Recursion.natural2;
+             b: dynt_test#test/ppx.ml.Recursion.natural2;
            })) |}]
 end
 
@@ -133,7 +135,7 @@ module Open = struct
     print (alist2_t int_t string_t) ;
     [%expect
       {|
-      (int rectangle =
+      (int dynt_test#test/ppx.ml.Open.rectangle =
          {
            a: int;
            b: int;
@@ -153,7 +155,7 @@ module Open = struct
     print (weird_type_t int_t float_t string_t (alist_t int_t float_t) int_t) ;
     [%expect
       {|
-      ((int, float, string, (int * float) list, int) weird_type =
+      ((int, float, string, (int * float) list, int) dynt_test#test/ppx.ml.Open.weird_type =
          | A of int
          | B of float
          | C of string
@@ -175,16 +177,16 @@ module Open = struct
     print (either_list_t string_t int_t) ;
     [%expect
       {|
-    (int btree =
+    (int dynt_test#test/ppx.ml.Open.btree =
        {
          v: int;
-         l: int btree option;
-         r: int btree option;
+         l: int dynt_test#test/ppx.ml.Open.btree option;
+         r: int dynt_test#test/ppx.ml.Open.btree option;
        })
-    (int bbtree =
-       | Inner of (int * int bbtree * int bbtree)
+    (int dynt_test#test/ppx.ml.Open.bbtree =
+       | Inner of (int * int dynt_test#test/ppx.ml.Open.bbtree * int dynt_test#test/ppx.ml.Open.bbtree)
        | Leave of int)
-    ((string, int) either_list =
+    ((string, int) dynt_test#test/ppx.ml.Open.either_list =
        | Either of
         ((string, int) either_list.Either =
            {
@@ -232,24 +234,24 @@ module Mutual = struct
     print (wnode_t int_t) ;
     [%expect
       {|
-      (string weirdtree =
+      (string dynt_test#test/ppx.ml.Mutual.weirdtree =
          {
            node:
-           (string wnode =
+           (string dynt_test#test/ppx.ml.Mutual.wnode =
               {
                 basic: string;
-                weird: string weirdtree;
+                weird: string dynt_test#test/ppx.ml.Mutual.weirdtree;
               });
-           children: string weirdtree list;
+           children: string dynt_test#test/ppx.ml.Mutual.weirdtree list;
          })
-      (int wnode =
+      (int dynt_test#test/ppx.ml.Mutual.wnode =
          {
            basic: int;
            weird:
-           (int weirdtree =
+           (int dynt_test#test/ppx.ml.Mutual.weirdtree =
               {
-                node: int wnode;
-                children: int weirdtree list;
+                node: int dynt_test#test/ppx.ml.Mutual.wnode;
+                children: int dynt_test#test/ppx.ml.Mutual.weirdtree list;
               });
          }) |}]
 
@@ -265,11 +267,11 @@ module Mutual = struct
     print (opt_llist_t int_t) ;
     [%expect
       {|
-      (int opt_list =
+      (int dynt_test#test/ppx.ml.Mutual.opt_list =
          | None
          | Some of int list)
       int list
-      (int opt_list =
+      (int dynt_test#test/ppx.ml.Mutual.opt_list =
          | None
          | Some of int list) list |}]
 
@@ -294,20 +296,20 @@ module Mutual = struct
     print (el_t int_t) ;
     [%expect
       {|
-      (int ambiguous_list =
+      (int dynt_test#test/ppx.ml.Mutual.ambiguous_list =
          | Nil
          | Cons of
-          (int el =
+          (int dynt_test#test/ppx.ml.Mutual.el =
              | Singleton of int
-             | More of (int * int ambiguous_list)))
-      (int el =
+             | More of (int * int dynt_test#test/ppx.ml.Mutual.ambiguous_list)))
+      (int dynt_test#test/ppx.ml.Mutual.el =
          | Singleton of int
          | More of
           (int
            *
-           (int ambiguous_list =
+           (int dynt_test#test/ppx.ml.Mutual.ambiguous_list =
               | Nil
-              | Cons of int el))) |}]
+              | Cons of int dynt_test#test/ppx.ml.Mutual.el))) |}]
 end
 
 module NonregRec = struct
@@ -322,14 +324,14 @@ module NonregRec = struct
     print (good2_t string_t (array_t int_t)) ;
     [%expect
       {|
-      (int array good1 =
+      (int array dynt_test#test/ppx.ml.NonregRec.good1 =
          {
-           field: int array good1 option;
+           field: int array dynt_test#test/ppx.ml.NonregRec.good1 option;
            v: int array;
          })
-      ((string, int array) good2 =
+      ((string, int array) dynt_test#test/ppx.ml.NonregRec.good2 =
          {
-           field: (string, int array) good2 option;
+           field: (string, int array) dynt_test#test/ppx.ml.NonregRec.good2 option;
          }) |}]
 end
 
@@ -353,9 +355,9 @@ module Inline = struct
       int
       (int -> int)
       string list
-      (int good1 =
+      (int dynt_test#test/ppx.ml.NonregRec.good1 =
          {
-           field: int good1 option;
+           field: int dynt_test#test/ppx.ml.NonregRec.good1 option;
            v: int;
          })
       (int * int) array
@@ -426,17 +428,17 @@ module Properties = struct
     print [%t: ((int, string) combined[@prop {w= "combined"}])] ;
     [%expect
       {|
-      (int fields =
+      (int dynt_test#test/ppx.ml.Properties.fields =
          {
            we [@prop {need = "some"; more = "record"}]: int;
            fields [@prop {_with = "properties"}]: int;
          })
-      (int constructors =
+      (int dynt_test#test/ppx.ml.Properties.constructors =
          | A [@prop {key = "value"}] of int
          | B [@prop {k = "v"}] of int)
       int [@prop {some = "prop"}] list
       int [@prop {a = "b"; b = "c"; c = "d"}]
-      ((int, string) combined =
+      ((int, string) dynt_test#test/ppx.ml.Properties.combined =
          | Core [@prop {w = "Core"}] of (int [@prop {w = "a"}] * string [@prop {w = "b"}]) [@prop {w = "a*b"}] list [@prop {w = "(a*b)list"}]
          | Inline [@prop {w = "Inline"}] of
           ((int, string) combined.Inline =
@@ -589,7 +591,7 @@ module Alias = struct
     print [%t: t] ;
     [%expect
       {|
-      (t =
+      (dynt_test#test/ppx.ml.Alias.t =
          | Option1 of (string * int)
          | Option2 of (int * int * string)
          | Option3
@@ -644,7 +646,7 @@ module Patch = struct
     [%expect
       {|
       int
-      ((string, float) ht =
+      ((string, float) dynt_test#test/ppx.ml.Patch.ht =
          {
            table: (string, float) Hashtbl.t;
            meta: Patch.meta;

@@ -30,21 +30,13 @@ let () =
     Ast_pattern.(estring __)
     ~f:(function x -> cookies.libname <- x)
 
-(*
- * Automatically generate names for abstract types
- * TODO: use this to fill rec_name of variant/records
- *)
-
-let abstract_name ~path name =
+let qualifying_name ~path name =
   match cookies.libname with
   | None -> Format.sprintf "%s.%s" path name
   | Some lib -> Format.sprintf "%s#%s.%s" lib path name
 
-(*
- * Declare attributes on type declarations, core types,
- * record field labels and variant constructors
- *
- *)
+(* Declare attributes on type declarations, core types,
+   record field labels and variant constructors *)
 
 let attr_prop ctx =
   let prop a b =
@@ -109,10 +101,7 @@ let attr_td_unboxed =
 let unboxed_of_td td =
   match Attribute.get attr_td_unboxed td with Some () -> true | None -> false
 
-(*
- * generate regularly used AST fragments
- *
- *)
+(* generate regularly used AST fragments *)
 
 let ignore ~loc expr : expression -> expression =
   let pat = ppat_any ~loc in
@@ -151,10 +140,7 @@ let stype_of_ttype ({ptyp_loc= loc; _} as ct) expr =
   let ct, _ = patch_of_ct ct and txt = lid_ttype in
   [%expr stype_of_ttype ([%e expr] : [%t ptyp_constr ~loc {loc; txt} [ct]])]
 
-(*
- * mangle names
- *
- *)
+(* mangle names *)
 
 let mangle_label = function
   | "t" -> ppx.id
@@ -168,12 +154,9 @@ let mangle_lid = function
 let mangle_label_loc t = {t with txt= mangle_label t.txt}
 let mangle_lid_loc t = {t with txt= mangle_lid t.txt}
 
-(*
- * Read information from AST fragments
- *
- *)
+(* Read information from AST fragments *)
 
-type names = {typ: string; ttyp: string; node: string}
+type names = {qualifying: string; typ: string; ttyp: string; node: string}
 
 let free_vars_of_type_decl td =
   List.map
@@ -183,9 +166,10 @@ let free_vars_of_type_decl td =
       | _ -> raise_errorf ~loc:ct.ptyp_loc "This should be a type variable" )
     td.ptype_params
 
-let names_of_type_decl td =
+let names_of_type_decl ~path td =
   let typ = td.ptype_name.txt in
-  {typ; ttyp= mangle_label typ; node= typ ^ "_node"}
+  let qualifying = qualifying_name ~path typ in
+  {typ; qualifying; ttyp= mangle_label typ; node= typ ^ "_node"}
 
 let ttype_ct_of_ct ~loc ct = ptyp_constr ~loc {txt= lid_ttype; loc} [ct]
 
@@ -207,10 +191,7 @@ let close_ttype ~loc ~free ttype =
     (fun acc name -> [%type: [%t ptyp_var ~loc name] Ttype.t -> [%t acc]])
     ttype (List.rev free)
 
-(*
- * general helpers
- *
- *)
+(* general helpers *)
 
 let find_index_opt (l : 'a list) (el : 'a) : int option =
   let i = ref 0 in
@@ -221,16 +202,13 @@ let find_index_opt (l : 'a list) (el : 'a) : int option =
   in
   f l
 
-(*
- * The actual workers
- *
- *)
+(* the actual mappers *)
 
 (* We use this to store information about recursive types. Which identifiers
- * are used recursively? Is the recursion regular?
- * Rec: alist mapping recursive identifiers to their type args
- * Nonrec: list of identifiers
- * Inline defined types do not have an identifier *)
+   are used recursively? Is the recursion regular?
+   Rec: alist mapping recursive identifiers to their type args
+   Nonrec: list of identifiers
+   Inline defined types do not have an identifier *)
 type rec_ = Inline | Nonrec of label list | Rec of (label * label list) list
 
 let rec core_type ~rec_ ~free ({ptyp_loc= loc; _} as ct) : expression =
@@ -238,8 +216,8 @@ let rec core_type ~rec_ ~free ({ptyp_loc= loc; _} as ct) : expression =
   let rc = core_type ~rec_ ~free in
   let rcs ({ptyp_loc= loc; _} as ct) =
     (* TODO: When we do a full PPX extension, we could fix this hole by
-     * moving the type check before the type declaration that redefines the
-     * type *)
+       moving the type check before the type declaration that redefines the
+       type *)
     match (rec_, ct.ptyp_desc) with
     | Nonrec l, Ptyp_constr ({txt= Lident name; _}, _) when List.mem name l ->
         stype_of_ttype (ptyp_any ~loc) (rc ct)
@@ -301,10 +279,9 @@ let rec core_type ~rec_ ~free ({ptyp_loc= loc; _} as ct) : expression =
         let fields =
           List.map
             (function
-              (* TODO properties could be read for object fields.
-             * But where should they be placed?
-             * DT_prop (ct)?
-             *)
+              (* TODO: properties could be read for object fields.
+                 But where should they be placed?
+                 DT_prop (ct)? *)
               | Otag ({txt; loc}, _attr, ct) ->
                   pexp_tuple ~loc [estring ~loc txt; rcs ct]
               | Oinherit _ -> raise_errorf "inheritance not yet supported" ~loc)
@@ -330,7 +307,8 @@ let record_labels ~loc ~me ~free ~rec_ ~unboxed l =
     let pat = pvar ~loc me.node
     and expr =
       [%expr
-        create_node [%e estring ~loc me.typ] [%e stypes_of_free ~loc free]]
+        create_node [%e estring ~loc me.qualifying]
+          [%e stypes_of_free ~loc free]]
     in
     pexp_let ~loc Nonrecursive [value_binding ~loc ~pat ~expr]
   and ttype = [%expr ttype_of_stype (DT_node [%e evar ~loc me.node])]
@@ -403,7 +381,8 @@ let variant_constructors ~loc ~me ~free ~rec_ ~unboxed l =
     let pat = pvar ~loc me.node
     and expr =
       [%expr
-        create_node [%e estring ~loc me.typ] [%e stypes_of_free ~loc free]]
+        create_node [%e estring ~loc me.qualifying]
+          [%e stypes_of_free ~loc free]]
     in
     pexp_let ~loc Nonrecursive [value_binding ~loc ~pat ~expr]
   and ttype = [%expr ttype_of_stype (DT_node [%e evar ~loc me.node])]
@@ -458,14 +437,14 @@ let str_type_decl ~loc ~path (recflag, tds) =
              tds)
   in
   (* We create one value binding from tpl, cn, ls, sn and fl:
-   * let tpl[0], tpl[1] =
-   *   let () = createnodes (cn) in
-   *   let rec = lazy .. and lazy .. (lr) in
-   *   let () = setnodes (sn) in
-   *   force .. , force .. (fl)
-   * the other value bindings (bnd) are appended *)
+     let tpl[0], tpl[1] =
+       let () = createnodes (cn) in
+       let rec = lazy .. and lazy .. (lr) in
+       let () = setnodes (sn) in
+       force .. , force .. (fl)
+     the other value bindings (bnd) are appended *)
   let parse (tpl, cn, lr, sn, fl, bnd) ({ptype_loc= loc; _} as td) =
-    let me = names_of_type_decl td in
+    let me = names_of_type_decl ~path td in
     let typ = type_of_type_decl ~loc td in
     let ttyp = ttype_of_type_decl ~loc td in
     let free = free_vars_of_type_decl td in
@@ -473,9 +452,7 @@ let str_type_decl ~loc ~path (recflag, tds) =
     let cn, ttype, sn =
       match abstract_of_td td with
       | Name {txt= name; loc} -> (cn, open_abstract ~free ~loc name, sn)
-      | Auto ->
-          let name = abstract_name ~path me.typ in
-          (cn, open_abstract ~free ~loc name, sn)
+      | Auto -> (cn, open_abstract ~free ~loc me.qualifying, sn)
       | No -> (
         match td.ptype_kind with
         | Ptype_abstract -> (
@@ -528,8 +505,7 @@ let str_type_decl ~loc ~path (recflag, tds) =
   List.map (fun x -> pstr_value ~loc Nonrecursive [x]) (prepare :: bindings)
 
 (* Type declarations in signature. Generates
- * val <type>_t : <type> ttype
- *)
+   val <type>_t : <type> ttype *)
 let sig_of_type_decl ({ptype_loc= loc; _} as td) =
   match td.ptype_kind with
   | Ptype_abstract | Ptype_record _ | Ptype_variant _ ->

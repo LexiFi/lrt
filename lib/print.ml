@@ -378,7 +378,7 @@ module Test = struct
     [%expect
       {|
       ttype:
-      (tt =
+      (dynt#lib/print.ml.Test.tt =
          | Inl of
           (tt.Inl =
              {
