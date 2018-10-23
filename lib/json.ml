@@ -321,8 +321,9 @@ let conv ?(ctx = empty_ctx) t =
   and mapf' : (string * value) Read.mapf' =
     let f : type a. name:string -> a t -> a -> string * value =
      fun ~name t ->
+      let json_name = ctx.to_json_field name in
       let to_json = (conv_t t).to_json in
-      fun x -> (ctx.to_json_field name, to_json x)
+      fun x -> (json_name, to_json x)
     in
     {f}
   and asm : value Assembler.asm =

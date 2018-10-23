@@ -366,7 +366,7 @@ module Assembler = struct
           v
       | [] -> raise Not_found
       | _ :: rest ->
-          (* could fallback to building a lookup table here... *)
+          (* TODO: fallback to building a lookup table here... *)
           List.assoc s rest
   end
 
@@ -553,6 +553,10 @@ module Read = struct
   let check tag o = Obj.is_block o && Obj.tag o = tag
   let cast : (Obj.t -> Obj.t) -> 'a -> 'b = Obj.magic
 
+  let range n =
+    let rec aux i acc = if i < 0 then acc else aux (i - 1) (i :: acc) in
+    aux (n - 1) []
+
   let tuple : type a b. a tuple -> (a, b) element -> a -> b =
    fun _ el -> cast (fun o -> Obj.field o el.nth)
 
@@ -615,18 +619,18 @@ module Read = struct
 
   let[@landmark] map_tuple (type a b) (tup : a tuple) (mapf : b mapf) =
     let farr = lazy (fun_arr_of_fields tup.t_len tup.t_flds mapf) in
+    let range = range tup.t_len in
     fun (x : a) ->
       let farr = Lazy.force farr in
-      let o = Obj.repr x in
-      List.init (Obj.size o) (fun i -> farr.(i) (Obj.field o i))
+      List.map (fun i -> farr.(i) (Obj.field (Obj.repr x) i)) range
 
   let[@landmark] map_record (type a b) (r : a record) (mapf : b mapf') =
     let farr = lazy (fun_arr_of_fields' r.r_len r.r_flds mapf) in
+    if r.r_repr <> Regular then failwith "TODO: unboxed/float records" ;
+    let range = range r.r_len in
     fun (x : a) ->
-      if r.r_repr = Unboxed then failwith "TODO: unboxed records" ;
       let farr = Lazy.force farr in
-      let o = Obj.repr x in
-      List.init (Obj.size o) (fun i -> farr.(i) (Obj.field o i))
+      List.map (fun i -> farr.(i) (Obj.field (Obj.repr x) i)) range
 
   type ('a, 'b) mapped_sum =
     | Regular of string * 'a list
@@ -646,26 +650,26 @@ module Read = struct
                | Regular c ->
                    if c.rc_repr = Unboxed then failwith "TODO: unboxed cstr" ;
                    let farr' = fun_arr_of_fields c.rc_len c.rc_flds mapf in
+                   let range = range c.rc_len in
                    fun o ->
                      Regular
                        ( fst c.rc_label
-                       , List.init (Obj.size o) (fun i ->
-                             farr'.(i) (Obj.field o i) ) )
+                       , List.map (fun i -> farr'.(i) (Obj.field o i)) range )
                | Inlined c ->
                    if c.ic_repr = Unboxed then failwith "TODO: unboxed cstr" ;
                    let farr' = fun_arr_of_fields' c.ic_len c.ic_flds mapf' in
+                   let range = range c.ic_len in
                    fun o ->
                      Inlined
                        ( fst c.ic_label
-                       , List.init (Obj.size o) (fun i ->
-                             farr'.(i) (Obj.field o i) ) ) )
+                       , List.map (fun i -> farr'.(i) (Obj.field o i)) range )
+           )
          in
          (farr, fnd))
     in
     fun (x : a) ->
       let farr, fnd = Lazy.force aux in
-      let o = Obj.repr x in
-      farr.(fnd x) o
+      farr.(fnd x) (Obj.repr x)
 end
 
 (* paths *)
