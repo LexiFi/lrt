@@ -1,7 +1,7 @@
 Dynt - Dynamic Types for OCaml
 ==============================
 
-[!]: <> (Remember to keep this pitch in sync with `lib/dynt.ml`.)
+[//]: # (Remember to keep this pitch in sync with `lib/dynt.ml`.)
 
 It is often useful to get access to types at runtime in order to implement
 generic type-driven operations. A typical example is a generic
