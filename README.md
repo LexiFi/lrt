@@ -54,7 +54,7 @@ type nat =
   [@@deriving t]
 
 let () =
-  Print.print ~t:nat_t (S (S (S Z)))
+  Print.show ~t:nat_t (S (S (S Z)))
 ```
 
 Having the basic things set up, you are ready to explore the

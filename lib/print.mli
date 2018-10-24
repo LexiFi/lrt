@@ -7,12 +7,8 @@
 
 (** Dynamic printing. *)
 
-(* TODO: val print: Format.fomatter -> Ttype.dynamic -> unit *)
-
 val print : t:'a Ttype.t -> Format.formatter -> 'a -> unit
 (** Print a value to the given formatter. *)
-
-(* TODO: val show: Ttype.dynamic -> unit *)
 
 val show : t:'a Ttype.t -> 'a -> unit
 (** Print a value to stdout. *)
