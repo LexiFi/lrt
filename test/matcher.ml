@@ -23,7 +23,8 @@ module T = struct
 
   let () =
     let open Matcher in
-    add m ~t:[%t: string list] (fun () -> Format.printf "t0 = %a\n%!" pp_ty t0_t) ;
+    add m ~t:[%t: string list] (fun () ->
+        Format.printf "t0 = %a\n%!" pp_ty t0_t ) ;
     add1 m
       ( module struct
         type 'a t = 'a t1 [@@deriving t]

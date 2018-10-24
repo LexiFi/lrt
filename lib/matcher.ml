@@ -165,9 +165,8 @@ module Make (Return : sig
 end) : S with type 'a return = 'a Return.t = struct
   (* TODO: document, that symbol table is stored in Module, not in Matcher.t *)
 
+  module Index = Matcher_index.Tree
   module IntMap = Ext.Int.Map
-  module Symbol = Matcher_symbol.Make ()
-  module Tree = Matcher_index.Make (Symbol)
 
   (* TODO: How can I avoid this duplication of signatures? *)
   type 'a return = 'a Return.t
@@ -226,19 +225,19 @@ end) : S with type 'a return = 'a Return.t = struct
     | M2 of (module M2 with type matched = 'a)
 
   type candidate = C0 of (module C0) | C1 of (module C1) | C2 of (module C2)
-  type t = candidate Tree.t
+  type t = candidate Index.t
 
-  let create ~modulo_props : t = Tree.create ~modulo_props
+  let create ~modulo_props : t = Index.create ~modulo_props
 
   let add tree (type a) ~(t : a Ttype.t) (return : a return) =
     let c = C0 (module struct type t = a
 
                               let t = t
                               let return = return end) in
-    Tree.add tree (Ttype.to_stype t) c
+    Index.add tree (Ttype.to_stype t) c
 
   let add0 tree (module C : C0) =
-    Tree.add tree (Ttype.to_stype C.t) (C0 (module C))
+    Index.add tree (Ttype.to_stype C.t) (C0 (module C))
 
   type var
 
@@ -247,12 +246,12 @@ end) : S with type 'a return = 'a Return.t = struct
   let v1 = var 1
 
   let add1 tree (module C : C1) =
-    Tree.add tree (Ttype.to_stype (C.t v0)) (C1 (module C))
+    Index.add tree (Ttype.to_stype (C.t v0)) (C1 (module C))
 
   let add2 tree (module C : C2) =
-    Tree.add tree (Ttype.to_stype (C.t v0 v1)) (C2 (module C))
+    Index.add tree (Ttype.to_stype (C.t v0 v1)) (C2 (module C))
 
-  let ttype : type a. int -> Tree.substitution -> a Ttype.t =
+  let ttype : type a. int -> Index.substitution -> a Ttype.t =
    fun i map ->
     match IntMap.find_opt i map with
     | None -> Obj.magic Std.unit_t
@@ -266,7 +265,7 @@ end) : S with type 'a return = 'a Return.t = struct
   let apply : type a. t -> t:a Ttype.t -> a matched option =
    fun tree ~t ->
     let stype = Ttype.to_stype t in
-    match Tree.get tree stype with
+    match Index.get tree stype with
     | None -> None
     | Some (C0 (module C : C0), map) ->
         assert (IntMap.cardinal map = 0) ;
