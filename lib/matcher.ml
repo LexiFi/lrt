@@ -7,15 +7,8 @@
 
 (** Pattern matching on dynamic types. *)
 
-(** {3 Example}
-
-    TODO: example
-*)
-
-(** {3 Properties}
-
-    TODO: describe that properties are matched by key. Values are ignored.
-*)
+(** In order to gain some intuition about this module can be used, consult the
+    below {!example} or the implementation of {!Json.conv}. *)
 
 (** A matcher with a given return type. *)
 module type S = sig
@@ -33,6 +26,27 @@ module type S = sig
   (** A fresh matcher without any registered pattern. The parameter
       [modulo_props] controls whether properties are ignored or interpreted as
       distinguishing features of runtime types.
+
+      {4 Properties}
+
+      The handling of properties during matching requires special attention.
+
+      When [modulo_props:false] (default), properties are distinguishing
+      features of runtime types. Two types that only differ in their outermost
+      properties (e.g. one without and one with) will not unify and thus not
+      match. The same is true if the properties are the same but their order is
+      different. We attempt to provide associativity in the sense of
+      {!Ttype.consume_outer_props}. A property is uniquely identified by its
+      key, values are ignored during matching.
+
+      When [modulo_props:true], properties are ignored for unification.
+      Nevertheless, properties are preserved within the substituted runtime
+      types.
+
+      TODO:
+      - Think about moving the [modulo_props] argument to {!apply}.
+      - Think about automatic property handling: first check for pattern with
+        property, if not registered, strip first property and retry.
   *)
 
   (** {3 Pattern candidates} *)
@@ -145,6 +159,7 @@ module type S = sig
   (** See {!apply}. Raises {!Not_found} if no matching pattern is available. *)
 end
 
+(** Instantiate a matcher with a result type. *)
 module Make (Return : sig
   type 'a t
 end) : S with type 'a return = 'a Return.t = struct
@@ -292,3 +307,90 @@ end) : S with type 'a return = 'a Return.t = struct
   let apply_exn tree ~t =
     match apply tree ~t with None -> raise Not_found | Some m -> m
 end
+
+(** {3 Example}
+
+    We will match on these example types.
+
+    {[
+  type t0 = string list
+
+  and 'a t1 = 'a array
+
+  and ('a, 'b) t2 = ('a * 'b) option [@@deriving t]
+    ]}
+
+    The example pattern match should print the type. An appropriate result type
+    is [unit -> unit].
+
+    {[
+  module Matcher = Matcher.Make (struct type 'a t = unit -> unit end)
+
+  let m = Matcher.create ~modulo_props:true
+  let pp_ty = Ttype.print
+    ]}
+
+    The different cases are registered one by one. Free variables will be
+    substituted in the returned result.
+
+    {[
+
+  let () =
+    let open Matcher in
+    add m ~t:t0_t (fun () -> Format.printf "t0 = %a\n%!" pp_ty t0_t) ;
+    add1 m
+      ( module struct
+        type 'a t = 'a t1 [@@deriving t]
+
+        let return a_t () =
+          Format.printf "%a t1 = %a\n%!" pp_ty a_t pp_ty (t1_t a_t)
+      end ) ;
+    add2 m
+      ( module struct
+        type ('a, 'b) t = ('a, 'b) t2 [@@deriving t]
+
+        let return a_t b_t () =
+          Format.printf "(%a, %a) t2 = %a\n%!" pp_ty a_t pp_ty b_t pp_ty
+            (t2_t a_t b_t)
+      end )
+    ]}
+
+    The handling of matcher results needs some boilerplate code.
+
+    {[
+
+  let apply : type a. Matcher.t -> t:a Ttype.t -> unit =
+   fun matcher ~t ->
+    let open Matcher in
+    match apply matcher ~t with
+    | None -> print_endline "Not found"
+    | Some (M0 (module M : M0 with type matched = a)) -> M.return ()
+    | Some (M1 (module M : M1 with type matched = a)) -> M.return ()
+    | Some (M2 (module M : M2 with type matched = a)) -> M.return ()
+
+    ]}
+
+    Now everything is set up and the matcher is ready for application.
+
+    {[
+
+  let () =
+    apply m ~t:[%t: t0] ;
+    apply m ~t:[%t: int t1] ;
+    apply m ~t:[%t: bool t1] ;
+    apply m ~t:[%t: float option] ;
+    apply m ~t:[%t: (float, string) t2] ;
+    apply m ~t:[%t: (unit, string) t2]
+    ]}
+
+    The above example program produces the following output.
+
+    {[
+      t0 = string list
+      int t1 = int array
+      bool t1 = bool array
+      Not found
+      (float, string) t2 = (float * string) option
+      (unit, string) t2 = (unit * string) option
+    ]}
+*)
