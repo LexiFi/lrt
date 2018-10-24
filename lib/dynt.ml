@@ -7,9 +7,30 @@
 
 (** Dynamic types for OCaml. *)
 
+(*  REMEMBER TO KEEP THE FOLLOWING PITCH IN SYNC WITH THE README. *)
+
 (** {3 Introduction}
 
-    TODO: Pitch
+    It is often useful to get access to types at runtime in order to implement
+    generic type-driven operations. A typical example is a generic
+    pretty-printer. Unfortunately, the OCaml compiler does not keep type
+    information at runtime. At LexiFi, we have extended OCaml to support runtime
+    types. This extension has been in use for years and is now a key element in
+    many of our interesting components, such as our automatic GUI framework
+    (which derives GUIs from type definitions) or our high-level database layer
+    (which derives SQL schema from type definitions, and exposes a well-typed
+    interface for queries). This extension is tightly integrated with the OCaml
+    typechecker, which allows the compiler to synthesize the runtime type
+    representations with minimal input from the programmer.
+
+    This package makes the features of our extension available to other OCaml
+    users without relying on a modified compiler. Instead, it only relies on a
+    PPX syntax extension that synthesizes the runtime representation of types
+    from their syntactic definition with a deriving-like approach.
+
+    Based on this new implementation we are able to open-source the
+    infrastructure we have developed around the machinery of runtime types as
+    well as libraries built upon them.
 *)
 
 (** {3 Build runtime types}
