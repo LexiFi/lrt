@@ -26,7 +26,7 @@ well as libraries built upon them.
 
 ## Getting started
 
-The best way to install this package is via opam.
+The best way to install this package is via opam (TODO: release).
 
 ```sh
 opam install dynt
