@@ -26,21 +26,22 @@ let matcher =
     add m ~t:b_t (fun _ -> print_endline "b") ;
     add m ~t:c_t (fun _ -> print_endline "c") ;
     add0 m
-      (module struct type t = d [@@deriving t]
+      ( module struct
+        type t = d [@@deriving t]
 
-                     let data () = print_endline "d"
+        let return () = print_endline "d"
       end ) ;
     add1 m
       ( module struct
         type 'a t = 'a e [@@deriving t]
 
-        let data _a_t () = print_endline "e"
+        let return _a_t () = print_endline "e"
       end ) ;
     add2 m
       ( module struct
         type ('a, 'b) t = (('a, 'b) Hashtbl.t[@patch hashtbl_t]) [@@deriving t]
 
-        let data _a_t _b_t () = print_endline "f"
+        let return _a_t _b_t () = print_endline "f"
       end ) ;
     m)
 
@@ -49,9 +50,9 @@ let apply : type a. Matcher.t -> t:a Ttype.t -> unit =
   let open Matcher in
   match apply matcher ~t with
   | None -> print_endline "Not found"
-  | Some (M0 (module M : M0 with type matched = a)) -> M.data ()
-  | Some (M1 (module M : M1 with type matched = a)) -> M.data ()
-  | Some (M2 (module M : M2 with type matched = a)) -> M.data ()
+  | Some (M0 (module M : M0 with type matched = a)) -> M.return ()
+  | Some (M1 (module M : M1 with type matched = a)) -> M.return ()
+  | Some (M2 (module M : M2 with type matched = a)) -> M.return ()
 
 let%expect_test _ =
   apply matcher ~t:a_t ;

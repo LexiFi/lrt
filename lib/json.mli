@@ -144,7 +144,7 @@ val conv : ?ctx:ctx -> 'a Ttype.t -> 'a conv
 *)
 
 (* TODO: support passing local custom conversions to conv. *)
-module Matcher : Matcher.S with type 'a data := 'a conv
+module Matcher : Matcher.S with type 'a return := 'a conv
 
 val matcher : Matcher.t
 (** The matcher holding globally registered custom json mappings. *)

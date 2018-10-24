@@ -5,6 +5,12 @@
 (*  of the dynt package. Details can be found in the attached LICENSE file.   *)
 (******************************************************************************)
 
+module Int = struct
+  module Map = Map.Make (struct type t = int
+
+                                let compare = compare end)
+end
+
 module List_ = struct
   let pp_list sep pp ppf = function
     | [] -> ()

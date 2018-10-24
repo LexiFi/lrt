@@ -238,13 +238,13 @@ let conv ?(ctx = empty_ctx) t =
     match apply matcher ~t:t.t with
     | Some (M0 (module M : M0 with type matched = a)) ->
         let TypEq.Eq = M.eq in
-        M.data
+        M.return
     | Some (M1 (module M : M1 with type matched = a)) ->
         let TypEq.Eq = M.eq in
-        M.data
+        M.return
     | Some (M2 (module M : M2 with type matched = a)) ->
         let TypEq.Eq = M.eq in
-        M.data
+        M.return
     | None -> (
       match Lazy.force t.xt with
       | Prop (_, t) -> conv_t t
@@ -394,7 +394,7 @@ let () =
     ( module struct
       type 'a t = 'a list [@@deriving t]
 
-      let data (t : 'a Ttype.t) =
+      let return (t : 'a Ttype.t) =
         let conv = conv t in
         let to_json l = Array (List.map conv.to_json l)
         and of_json = function
@@ -409,7 +409,7 @@ let () =
     ( module struct
       type 'a t = 'a array [@@deriving t]
 
-      let data (t : 'a Ttype.t) =
+      let return (t : 'a Ttype.t) =
         let conv = conv t in
         let to_json l = Array (Ext.Array.map_to_list conv.to_json l)
         and of_json = function
@@ -424,7 +424,7 @@ let () =
     ( module struct
       type 'a t = ('a Lazy.t[@patch lazy_t]) [@@deriving t]
 
-      let data (t : 'a Ttype.t) =
+      let return (t : 'a Ttype.t) =
         let conv = conv t in
         let to_json x = conv.to_json (Lazy.force x)
         and of_json x = lazy (conv.of_json x) in
@@ -436,7 +436,7 @@ let () =
     ( module struct
       type 'a t = 'a option [@@deriving t]
 
-      let data (t : 'a Ttype.t) =
+      let return (t : 'a Ttype.t) =
         let conv = conv t in
         let to_json = function Some x -> conv.to_json x | None -> Null
         and of_json = function Null -> None | x -> Some (conv.of_json x) in
@@ -448,7 +448,7 @@ let () =
     ( module struct
       type 'a t = 'a option option [@@deriving t]
 
-      let data (t : 'a Ttype.t) =
+      let return (t : 'a Ttype.t) =
         let conv = conv t in
         let to_json = function
           | Some (Some x) ->
