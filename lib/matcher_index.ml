@@ -236,6 +236,8 @@ end = struct
      on the first symbol on the stack. Arguments returned by [Id.of_stype]
      are pushed back to the stack.
 
+     TODO: Is it a discrimination tree? What is a discrimination tree?
+
      The set of paths from root to leaves in the resulting tree is homomorphic
      to the set of stypes (modulo Id.of_stype). Each path in the tree
      corresponds to one stype and vice versa.
@@ -247,12 +249,13 @@ end = struct
      give the same path of features. During traversal of the tree, we maintain
      a mapping between the two.
 
-     TODO: Use Id.range to make the upper level of the tree an array instead of
-     a table. Lower levels become a IntMap.
-     Reasoning: In most cases, we do not match complex patterns, but only the
-     outermost structure of an stype. E.g. we implement a new type and register
-     a dynamic printer for it. In these easy cases, the overhead of a Hashtbl
-     can be completely avoided.
+     I use Id.range to make the upper level of the tree an array instead of
+     a table.  Reasoning: In most cases, we do not match complex patterns, but
+     only the outermost structure of an stype. E.g. we implement a new type and
+     register a dynamic printer for it. In these easy cases, the overhead of a
+     Hashtbl can be completely avoided.
+
+     TODO: get rid of mixed iterative/functional style
   *)
 
   type key = Stype.t
@@ -263,13 +266,43 @@ end = struct
     (* free_vars maps DT_var in stype to free vars in path *)
     | Inner of {steps: 'a tree IntTable.t; free: 'a tree IntTable.t}
 
-  type 'a t = {modulo_props: bool; tree: 'a tree; symbols: Id.registry}
+  type 'a t = { modulo_props: bool
+              ; mutable tree_map : 'a tree IntMap.t
+                    (* used for insert *)
+              ; mutable tree_arr: 'a tree option array Lazy.t
+                    (* used for matching *)
+              ; mutable min_id: int
+              ; mutable max_id: int
+              ; mutable universal: (int * 'a) option
+                    (* If someone registers DT_var *)
+              ; symbols: Id.registry
+              }
 
   let create_node () =
     Inner {steps= IntTable.create (); free= IntTable.create ()}
 
+  let arr_of_map min max m =
+    let arr = Array.make (max - min + 1) None in
+    IntMap.iter (fun i tree ->
+        arr.(i - min) <- Some tree) m;
+    arr
+
+  let create' ~modulo_props symbols tree_map =
+    let min_id, max_id = Id.range symbols in
+    let tree_arr = lazy (arr_of_map min_id max_id tree_map) in
+    {modulo_props; min_id; max_id; symbols; tree_arr; tree_map;
+     universal = None
+    }
+
+  let set t tree_map =
+    let min_id, max_id = Id.range t.symbols in
+    t.min_id <- min_id;
+    t.max_id <- max_id;
+    t.tree_arr <- lazy (arr_of_map min_id max_id tree_map);
+    t.tree_map <- tree_map
+
   let create ~modulo_props =
-    {modulo_props; tree= create_node (); symbols= Id.create ()}
+    create' ~modulo_props (Id.create ()) IntMap.empty
 
   let[@landmark] get t stype =
     let modulo_props = t.modulo_props in
@@ -330,7 +363,18 @@ end = struct
                         uniquely identify the number of children on each step.
       *)
     in
-    traverse [stype] [] t.tree
+    (* Check against first step in array. *)
+    match get_step stype with
+    | None -> None
+    | Some (id, args) ->
+      match (Lazy.force t.tree_arr).(id - t.min_id) with
+      | None -> None
+      | Some tree -> match traverse args [] tree with
+        | Some result -> Some result
+        | None -> match t.universal with
+          | None -> None
+          | Some (dt_var, value) ->
+            Some (value, IntMap.singleton dt_var stype)
 
   let[@landmark] add t stype value =
     let get_step =
@@ -379,7 +423,25 @@ end = struct
                   traverse tl free_vars tree ) ) )
       | _, _ -> failwith "inconsistent tree"
     in
-    traverse [stype] [] t.tree
+    match get_step stype with
+    | Var i -> (
+        match t.universal with
+        | Some _ -> failwith "pattern already registered"
+        | None -> t.universal <- Some (i, value)
+      )
+    | Symbol (id, args) ->
+      let tree =
+        match IntMap.find_opt id t.tree_map with
+        | None -> (
+            match args with
+            | [] -> Leave {value; free_vars = []}
+            | _ ->
+              let tree = create_node () in
+              traverse args [] tree; tree
+          )
+        | Some tree -> traverse args [] tree ; tree
+      in
+      set t (IntMap.add id tree t.tree_map)
 
   let%test _ =
     let open Stype in
