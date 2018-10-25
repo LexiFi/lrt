@@ -262,7 +262,7 @@ end) : S with type 'a return = 'a Return.t = struct
   (* Unification succeeded by instantiating type
                                  variable with stype s. *)
 
-  let apply : type a. t -> t:a Ttype.t -> a matched option =
+  let[@landmark] apply : type a. t -> t:a Ttype.t -> a matched option =
    fun tree ~t ->
     let stype = Ttype.to_stype t in
     match Index.get tree stype with
