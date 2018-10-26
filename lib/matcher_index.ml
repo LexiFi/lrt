@@ -312,22 +312,26 @@ end = struct
           in
           Some (value, subst)
       | hd :: tl, Inner node -> (
-          ( match get_step node.steps.ids hd with
-          | None -> None
-          | Some (symbol, children) -> (
-            match (Lazy.force node.steps.arr).(symbol + node.steps.shift) with
+          let ordinary =
+            match get_step node.steps.ids hd with
             | None -> None
-            | Some x -> traverse (children @ tl) subst x ) )
-          |> (* Ordinary lookup using the outermost feature of the stype hd failed.
-             Now try to unify with the free vars, starting with the smallest.
-             By doing this, we guarantee (proof?!) that ('a * 'a) is preferred
-             over ('a * 'b).
-             Rationale: the smallest was bound further up in the path and thus
-             is the most restricting choice.
-          *)
-          function
+            | Some (symbol, children) -> (
+              match
+                (Lazy.force node.steps.arr).(symbol + node.steps.shift)
+              with
+              | Some x -> traverse (children @ tl) subst x
+              | None -> None )
+          in
+          match ordinary with
           | Some x -> Some x
           | None ->
+              (* Ordinary lookup using the outermost feature of the stype hd failed.
+               Now try to unify with the free vars, starting with the smallest.
+               By doing this, we guarantee that ('a * 'a) is preferred
+               over ('a * 'b).
+               Rationale: the smallest id was bound further up in the path and thus
+               is the most restricting choice.
+            *)
               let rec loop = function
                 | [] -> None
                 | (free_id, tree) :: rest -> (
@@ -338,10 +342,9 @@ end = struct
                       else loop rest )
               in
               loop (IntMap.bindings node.free) )
-      | [], _ | _ :: _, Leave _ -> assert false
-      (* This should be impossible. [Symbol.of_stype] should
-                        uniquely identify the number of children on each step.
-      *)
+      | [], _ | _ :: _, Leave _ -> failwith "inconsistent matcher index"
+      (* This should be impossible. [Id.identify] should uniquely identify the
+         number of children on each step. *)
     in
     traverse [stype] [] t.tree
 

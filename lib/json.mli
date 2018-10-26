@@ -151,7 +151,8 @@ val matcher : unit -> Matcher.t
 
 type ctx
 
-val ctx : ?to_json_field:(string -> string) -> ?matcher:Matcher.t -> unit -> ctx
+val ctx 
+  : ?to_json_field:(string -> string) -> ?matcher:Matcher.t -> unit -> ctx
 (** The default mapping can be manipulated by providing a context to the
     {!val:conv} function. The following variations are currently possible.
 

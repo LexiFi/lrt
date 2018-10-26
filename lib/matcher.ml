@@ -163,7 +163,6 @@ end
 module Make (Return : sig
   type 'a t
 end) : S with type 'a return = 'a Return.t = struct
-
   module Index = Matcher_index.Tree
   module IntMap = Ext.Int.Map
 
