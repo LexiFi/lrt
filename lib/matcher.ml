@@ -323,34 +323,33 @@ end
 
     {[
   module Matcher = Matcher.Make (struct type 'a t = unit -> unit end)
-
-  let m = Matcher.create ~modulo_props:true
-  let pp_ty = Ttype.print
     ]}
 
     The different cases are registered one by one. Free variables will be
     substituted in the returned result.
 
     {[
-
-  let () =
+  let m =
     let open Matcher in
-    add m ~t:t0_t (fun () -> Format.printf "t0 = %a\n%!" pp_ty t0_t) ;
-    add1 m
-      ( module struct
-        type 'a t = 'a t1 [@@deriving t]
+    let pp_ty = Ttype.print
+    empty ~modulo_props:true
+    |> add ~t:[%t: string list] (fun () ->
+           Format.printf "t0 = %a\n%!" pp_ty t0_t )
+    |> add1
+         ( module struct
+           type 'a t = 'a t1 [@@deriving t]
 
-        let return a_t () =
-          Format.printf "%a t1 = %a\n%!" pp_ty a_t pp_ty (t1_t a_t)
-      end ) ;
-    add2 m
-      ( module struct
-        type ('a, 'b) t = ('a, 'b) t2 [@@deriving t]
+           let return a_t () =
+             Format.printf "%a t1 = %a\n%!" pp_ty a_t pp_ty (t1_t a_t)
+         end )
+    |> add2
+         ( module struct
+           type ('a, 'b) t = ('a, 'b) t2 [@@deriving t]
 
-        let return a_t b_t () =
-          Format.printf "(%a, %a) t2 = %a\n%!" pp_ty a_t pp_ty b_t pp_ty
-            (t2_t a_t b_t)
-      end )
+           let return a_t b_t () =
+             Format.printf "(%a, %a) t2 = %a\n%!" pp_ty a_t pp_ty b_t pp_ty
+               (t2_t a_t b_t)
+         end )
     ]}
 
     The handling of matcher results needs some boilerplate code.

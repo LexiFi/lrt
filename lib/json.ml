@@ -219,27 +219,32 @@ let get_constr l =
       Print.show ~t:[%t: (string * value) list] l ;
       failwith "'type' field is not a string"
 
-type ctx = {to_json_field: string -> string}
-
-let ctx ?(to_json_field = fun x -> x) () = {to_json_field}
-let empty_ctx = ctx ()
-let json_unit = Object []
-
 type 'a conv = {to_json: 'a -> value; of_json: value -> 'a}
 
 module Matcher = Matcher.Make (struct type 'a t = 'a conv end)
 
+type ctx = { to_json_field: string -> string
+           ; matcher: Matcher.t
+           }
+
 let global = ref (Matcher.empty ~modulo_props:false)
+
+let ctx ?(to_json_field = fun x -> x) ?(matcher= !global) () =
+  {to_json_field; matcher}
+
+let json_unit = Object []
+let matcher () = !global
+
 let add ~t conv = global := Matcher.add ~t conv !global
 let add0 m = global := Matcher.add0 m !global
 let add1 m = global := Matcher.add1 m !global
 let add2 m = global := Matcher.add2 m !global
 
-let conv ?(ctx = empty_ctx) t =
+let conv ?(ctx = ctx ()) t =
   let rec conv_t : type a. a Xtype.t -> a conv =
    fun t ->
     let open Matcher in
-    match apply !global ~t:t.t with
+    match apply ctx.matcher ~t:t.t with
     | Some (M0 (module M : M0 with type matched = a)) ->
         let TypEq.Eq = M.eq in
         M.return

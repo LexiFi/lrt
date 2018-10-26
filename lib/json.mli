@@ -119,23 +119,12 @@ type 'a conv = {to_json: 'a -> value; of_json: value -> 'a}
 
 *)
 
-type ctx
-
-val ctx : ?to_json_field:(string -> string) -> unit -> ctx
-(** The default mapping can be manipulated by providing a context to the
-    {!val:conv} function. The following variations are currently possible.
-
-    - to_json_field: how to translate a record field name to a JSON field name.
-*)
-
-val conv : ?ctx:ctx -> 'a Ttype.t -> 'a conv
-(** Generates a conv pair from the provided type. *)
-
 (** {3 Custom mapping for specific types}
 
-    Custom conv pairs can be globally registered using the {!Matcher} module.
-    [conv t] checks whether there is a custom conv registered in {!matcher},
-    before it defaults to the previously described generic mapping.
+    Custom conv pairs can be globally registered using the {!add} function and
+    its variations.  By default, [conv t] uses the globally registered
+    converters where possible. The default can be overwritten, by providing
+    a custom matcher locally (via {!ctx}).
 
     Note:
     - It is not allowed to use [null] in the JSON representation of values, at
@@ -143,13 +132,36 @@ val conv : ?ctx:ctx -> 'a Ttype.t -> 'a conv
     reserved for representing the [None] case).
 *)
 
-(* TODO: support passing local custom conversions to conv. *)
 module Matcher : Matcher.S with type 'a return := 'a conv
 
 val add : t:'a Ttype.t -> 'a conv -> unit
+(** See {!Matcher.add}. Modifies the global registry. *)
+
 val add0 : (module Matcher.C0) -> unit
+(** See {!Matcher.add0}. Modifies the global registry. *)
+
 val add1 : (module Matcher.C1) -> unit
+(** See {!Matcher.add1}. Modifies the global registry. *)
+
 val add2 : (module Matcher.C2) -> unit
+(** See {!Matcher.add2}. Modifies the global registry. *)
+
+val matcher : unit -> Matcher.t
+(** Fetch the current global registry of converters. *)
+
+type ctx
+
+val ctx : ?to_json_field:(string -> string) -> ?matcher:Matcher.t -> unit -> ctx
+(** The default mapping can be manipulated by providing a context to the
+    {!val:conv} function. The following variations are currently possible.
+
+    - to_json_field: how to translate a record field name to a JSON field name.
+    - matcher: instead of the global registry of custom converters, use modified
+      one. Allows to overwrite global converters locally.
+*)
+
+val conv : ?ctx:ctx -> 'a Ttype.t -> 'a conv
+(** Generates a conv pair from the provided type. *)
 
 (** {3 Mapping between JSON trees and their textual representation.} *)
 
