@@ -140,7 +140,7 @@ let cstr_by_value : type a. a constructor list -> a -> a constructor =
     let cstrs, fnd = Lazy.force aux in
     cstrs.(fnd x)
 
-let[@landmark] rec xtype_of_ttype : type a. a Ttype.t -> a xtype =
+let rec xtype_of_ttype : type a. a Ttype.t -> a xtype =
  fun t ->
   (* CAUTION: This must be consistent with core/std.ml *)
   match Ttype.to_stype t with
@@ -617,14 +617,14 @@ module Read = struct
             let f = mapf.f ~name e.typ in
             fun (o : Obj.t) -> f (Obj.magic o) )
 
-  let[@landmark] map_tuple (type a b) (tup : a tuple) (mapf : b mapf) =
+  let map_tuple (type a b) (tup : a tuple) (mapf : b mapf) =
     let farr = lazy (fun_arr_of_fields tup.t_len tup.t_flds mapf) in
     let range = range tup.t_len in
     fun (x : a) ->
       let farr = Lazy.force farr in
       List.map (fun i -> farr.(i) (Obj.field (Obj.repr x) i)) range
 
-  let[@landmark] map_record (type a b) (r : a record) (mapf : b mapf') =
+  let map_record (type a b) (r : a record) (mapf : b mapf') =
     let farr = lazy (fun_arr_of_fields' r.r_len r.r_flds mapf) in
     if r.r_repr <> Regular then failwith "TODO: unboxed/float records" ;
     let range = range r.r_len in
@@ -637,7 +637,7 @@ module Read = struct
     | Inlined of string * 'b list
     | Constant of string
 
-  let[@landmark] map_sum : type a b c.
+  let map_sum : type a b c.
       a sum -> b mapf -> c mapf' -> a -> (b, c) mapped_sum =
    fun sum mapf mapf' ->
     let aux =

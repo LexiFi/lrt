@@ -146,8 +146,10 @@ val conv : ?ctx:ctx -> 'a Ttype.t -> 'a conv
 (* TODO: support passing local custom conversions to conv. *)
 module Matcher : Matcher.S with type 'a return := 'a conv
 
-val matcher : Matcher.t
-(** The matcher holding globally registered custom json mappings. *)
+val add : t:'a Ttype.t -> 'a conv -> unit
+val add0 : (module Matcher.C0) -> unit
+val add1 : (module Matcher.C1) -> unit
+val add2 : (module Matcher.C2) -> unit
 
 (** {3 Mapping between JSON trees and their textual representation.} *)
 

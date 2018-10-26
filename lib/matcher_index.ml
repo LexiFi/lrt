@@ -16,7 +16,7 @@ module Id : sig
 
   type registry
 
-  val create : unit -> registry
+  val empty : registry
 
   val range : registry -> int * int
   (** The inclusive range of used ids. *)
@@ -25,12 +25,14 @@ module Id : sig
     | Symbol of int * Stype.t list  (** symbol, arguments *)
     | Var of int  (** DT_var *)
 
-  val of_stype_register 
-    : registry -> modulo_props:bool -> Stype.t -> maybe_free
-  (** Identify stype. Generates new id for unkown stypes. *)
+  val register_stype 
+    : registry -> modulo_props:bool -> Stype.t -> maybe_free * registry
+  (** Identify stype. Generates new id for unkown stypes and adds it to the
+      registry. *)
 
-  val of_stype : registry -> modulo_props:bool -> Stype.t -> maybe_free option
-  (** Identify stype. Returns [None] if stype is unknown. *)
+  val identify_stype 
+    : registry -> modulo_props:bool -> Stype.t -> maybe_free option
+  (** See {!register_stype}. Returns [None] if stype is unknown. *)
 end = struct
   (* Strings are mapped to non-negative integers using a string table. During
      registration, we use map data structure. For lookup, we compile a string
@@ -43,23 +45,28 @@ end = struct
   module Tbl = Ext.String.Tbl
 
   type registry =
-    { mutable last_id: int
-    ; mutable map: int StrMap.t
-    ; mutable rev_strings: string list
-    ; mutable table: Tbl.t Lazy.t
-    ; mutable min_id: int }
+    { map: int StrMap.t
+    ; rev_strings: string list
+    ; table: Tbl.t Lazy.t
+    ; min_id: int
+    ; max_id: int }
 
-  let add r name =
-    r.rev_strings <- name :: r.rev_strings ;
-    r.last_id <- r.last_id + 1 ;
-    r.map <- StrMap.add name r.last_id r.map ;
-    r.table <- lazy (Tbl.prepare (List.rev r.rev_strings)) ;
-    r.last_id
+  let add_name r name =
+    let rev_strings = name :: r.rev_strings in
+    let max_id = r.max_id + 1 in
+    ( max_id
+    , { rev_strings
+      ; max_id
+      ; map= StrMap.add name max_id r.map
+      ; table= lazy (Tbl.prepare (List.rev rev_strings))
+      ; min_id= r.min_id } )
 
-  let register r name =
-    match StrMap.find_opt name r.map with Some i -> i | None -> add r name
+  let register_name r name =
+    match StrMap.find_opt name r.map with
+    | Some i -> (i, r)
+    | None -> add_name r name
 
-  let lookup r name =
+  let lookup_name r name =
     let i = Tbl.lookup (Lazy.force r.table) name in
     if i >= 0 then Some i else None
 
@@ -82,23 +89,22 @@ end = struct
   let next (x : false_) = x
   let _ = next
 
-  let tuple r arity =
+  let identify_tuple r arity =
     let id = tuple0 - arity in
     if id < r.min_id then None else Some id
 
-  let tuple_register r arity =
-    let id = tuple0 - arity in
-    r.min_id <- min r.min_id id ;
-    id
+  let register_tuple r arity =
+    let min_id = tuple0 - arity in
+    (min_id, {r with min_id})
 
-  let create () =
-    { last_id= -1
+  let empty =
+    { max_id= -1
+    ; min_id= tuple0
     ; map= StrMap.empty
     ; rev_strings= []
-    ; table= lazy (Tbl.prepare [])
-    ; min_id= tuple0 }
+    ; table= lazy (Tbl.prepare []) }
 
-  let range r = (r.min_id, r.last_id)
+  let range r = (r.min_id, r.max_id)
 
   type maybe_free = Symbol of int * Stype.t list | Var of int  (** DT_var *)
 
@@ -107,7 +113,7 @@ end = struct
     | [] -> t
     | hd :: tl -> normalize_props (Stype.DT_prop ([hd], t)) tl
 
-  let rec of_stype 
+  let rec identify_stype 
       : registry -> modulo_props:bool -> Stype.t -> maybe_free option =
    fun r ~modulo_props -> function
     | DT_int -> Some (Symbol (int, []))
@@ -117,41 +123,48 @@ end = struct
     | DT_array a -> Some (Symbol (array, [a]))
     | DT_option a -> Some (Symbol (option, [a]))
     | DT_arrow (_, a, b) -> Some (Symbol (arrow, [a; b]))
-    | DT_prop (_, s) when modulo_props -> of_stype r ~modulo_props s
-    | DT_prop ([], s) -> of_stype r ~modulo_props s
+    | DT_prop (_, s) when modulo_props -> identify_stype r ~modulo_props s
+    | DT_prop ([], s) -> identify_stype r ~modulo_props s
     | DT_prop ([(key, _)], s) -> (
-      match lookup r key with None -> None | Some i -> Some (Symbol (i, [s])) )
-    | DT_prop (l, s) -> of_stype r ~modulo_props (normalize_props s l)
+      match lookup_name r key with
+      | None -> None
+      | Some i -> Some (Symbol (i, [s])) )
+    | DT_prop (l, s) -> identify_stype r ~modulo_props (normalize_props s l)
     | DT_tuple l -> (
-      match tuple r (List.length l) with
+      match identify_tuple r (List.length l) with
       | Some id -> Some (Symbol (id, l))
       | None -> None )
     | DT_abstract (rec_name, rec_args) | DT_node {rec_name; rec_args; _} -> (
-      match lookup r rec_name with
+      match lookup_name r rec_name with
       | None -> None
       | Some i -> Some (Symbol (i, rec_args)) )
     | DT_object _ -> failwith "object not supported"
     | DT_var i -> Some (Var i)
 
-  let rec of_stype_register 
-      : registry -> modulo_props:bool -> Stype.t -> maybe_free =
+  let rec register_stype 
+      : registry -> modulo_props:bool -> Stype.t -> maybe_free * registry =
    fun r ~modulo_props -> function
-    | DT_int -> Symbol (int, [])
-    | DT_float -> Symbol (float, [])
-    | DT_string -> Symbol (string, [])
-    | DT_list a -> Symbol (list, [a])
-    | DT_array a -> Symbol (array, [a])
-    | DT_option a -> Symbol (option, [a])
-    | DT_arrow (_, a, b) -> Symbol (arrow, [a; b])
-    | DT_prop (_, s) when modulo_props -> of_stype_register r ~modulo_props s
-    | DT_prop ([], s) -> of_stype_register r ~modulo_props s
-    | DT_prop ([(key, _)], s) -> Symbol (register r key, [s])
-    | DT_prop (l, s) -> of_stype_register r ~modulo_props (normalize_props s l)
-    | DT_tuple l -> Symbol (tuple_register r (List.length l), l)
+    | DT_int -> (Symbol (int, []), r)
+    | DT_float -> (Symbol (float, []), r)
+    | DT_string -> (Symbol (string, []), r)
+    | DT_list a -> (Symbol (list, [a]), r)
+    | DT_array a -> (Symbol (array, [a]), r)
+    | DT_option a -> (Symbol (option, [a]), r)
+    | DT_arrow (_, a, b) -> (Symbol (arrow, [a; b]), r)
+    | DT_prop (_, s) when modulo_props -> register_stype r ~modulo_props s
+    | DT_prop ([], s) -> register_stype r ~modulo_props s
+    | DT_prop ([(key, _)], s) ->
+        let id, r = register_name r key in
+        (Symbol (id, [s]), r)
+    | DT_prop (l, s) -> register_stype r ~modulo_props (normalize_props s l)
+    | DT_tuple l ->
+        let id, r = register_tuple r (List.length l) in
+        (Symbol (id, l), r)
     | DT_abstract (rec_name, rec_args) | DT_node {rec_name; rec_args; _} ->
-        Symbol (register r rec_name, rec_args)
+        let id, r = register_name r rec_name in
+        (Symbol (id, rec_args), r)
     | DT_object _ -> failwith "object not supported"
-    | DT_var i -> Var i
+    | DT_var i -> (Var i, r)
 
   (* TODO: Runner fails with: Trying to run an expect test from the wrong file
 
@@ -210,17 +223,6 @@ end = struct
   *)
 end
 
-module IntTable = struct
-  type 'a t = (int, 'a) Hashtbl.t
-
-  open Hashtbl
-
-  let create () = create 5
-  let set = replace
-  let get = find_opt
-  let fold = fold
-end
-
 module IntMap = Ext.Int.Map
 
 module Tree : sig
@@ -228,8 +230,8 @@ module Tree : sig
   type key = Stype.t
   type substitution = Stype.t IntMap.t
 
-  val create : modulo_props:bool -> 'a t
-  val add : 'a t -> key -> 'a -> unit
+  val empty : modulo_props:bool -> 'a t
+  val add : key -> 'a -> 'a t -> 'a t
   val get : 'a t -> key -> ('a * substitution) option
 end = struct
   (* On each level of the discrimination tree, we discriminate on the
@@ -254,62 +256,46 @@ end = struct
      only the outermost structure of an stype. E.g. we implement a new type and
      register a dynamic printer for it. In these easy cases, the overhead of a
      Hashtbl can be completely avoided.
-
-     TODO: get rid of mixed iterative/functional style
   *)
 
   type key = Stype.t
   type substitution = Stype.t IntMap.t
 
+  type 'a steps =
+    { map: 'a IntMap.t (* used during insertion *)
+    ; ids: Id.registry (* stypes to int mapping specific to node*)
+    ; arr: 'a option array Lazy.t (* flattened map *)
+    ; shift: int
+    (* diff between ids in map and array indexes *) }
+
   type 'a tree =
     | Leave of {value: 'a; free_vars: (int * int) list}
     (* free_vars maps DT_var in stype to free vars in path *)
-    | Inner of {steps: 'a tree IntTable.t; free: 'a tree IntTable.t}
+    | Inner of {steps: 'a tree steps; free: 'a tree IntMap.t}
 
-  type 'a t = { modulo_props: bool
-              ; mutable tree_map : 'a tree IntMap.t
-                    (* used for insert *)
-              ; mutable tree_arr: 'a tree option array Lazy.t
-                    (* used for matching *)
-              ; mutable min_id: int
-              ; mutable max_id: int
-              ; mutable universal: (int * 'a) option
-                    (* If someone registers DT_var *)
-              ; symbols: Id.registry
-              }
+  type 'a t = {modulo_props: bool; tree: 'a tree}
 
-  let create_node () =
-    Inner {steps= IntTable.create (); free= IntTable.create ()}
+  let steps : type a. Id.registry -> a IntMap.t -> a steps =
+   fun ids map ->
+    let min, max = Id.range ids in
+    let arr =
+      lazy
+        (let arr = Array.make (max - min + 1) None in
+         IntMap.iter (fun i tree -> arr.(i - min) <- Some tree) map ;
+         arr)
+    in
+    {map; ids; arr; shift= -min}
 
-  let arr_of_map min max m =
-    let arr = Array.make (max - min + 1) None in
-    IntMap.iter (fun i tree ->
-        arr.(i - min) <- Some tree) m;
-    arr
+  let empty ~modulo_props : 'a t =
+    { modulo_props
+    ; tree= Inner {steps= steps Id.empty IntMap.empty; free= IntMap.empty} }
 
-  let create' ~modulo_props symbols tree_map =
-    let min_id, max_id = Id.range symbols in
-    let tree_arr = lazy (arr_of_map min_id max_id tree_map) in
-    {modulo_props; min_id; max_id; symbols; tree_arr; tree_map;
-     universal = None
-    }
-
-  let set t tree_map =
-    let min_id, max_id = Id.range t.symbols in
-    t.min_id <- min_id;
-    t.max_id <- max_id;
-    t.tree_arr <- lazy (arr_of_map min_id max_id tree_map);
-    t.tree_map <- tree_map
-
-  let create ~modulo_props =
-    create' ~modulo_props (Id.create ()) IntMap.empty
-
-  let[@landmark] get t stype =
+  let get t stype =
     let modulo_props = t.modulo_props in
     let equal =
       if modulo_props then Stype.equality_modulo_props else Stype.equality
-    and get_step s =
-      match Id.of_stype t.symbols ~modulo_props s with
+    and get_step ids s =
+      match Id.identify_stype ids ~modulo_props s with
       | Some (Id.Symbol (s, l)) -> Some (s, l)
       | None -> None
       | _ -> failwith "free variable in query"
@@ -326,10 +312,10 @@ end = struct
           in
           Some (value, subst)
       | hd :: tl, Inner node -> (
-          ( match get_step hd with
+          ( match get_step node.steps.ids hd with
           | None -> None
           | Some (symbol, children) -> (
-            match IntTable.get node.steps symbol with
+            match (Lazy.force node.steps.arr).(symbol + node.steps.shift) with
             | None -> None
             | Some x -> traverse (children @ tl) subst x ) )
           |> (* Ordinary lookup using the outermost feature of the stype hd failed.
@@ -344,104 +330,84 @@ end = struct
           | None ->
               let rec loop = function
                 | [] -> None
-                | (free_id, tree) :: tl' -> (
+                | (free_id, tree) :: rest -> (
                   match List.assoc_opt free_id subst with
                   | None -> traverse tl ((free_id, hd) :: subst) tree
                   | Some stype ->
                       if equal stype hd then traverse tl subst tree
-                      else loop tl' )
+                      else loop rest )
               in
-              (* TODO: change type of node.free to something ordered *)
-              let sorted =
-                IntTable.fold
-                  (fun k v acc -> IntMap.add k v acc)
-                  node.free IntMap.empty
-              in
-              loop (IntMap.bindings sorted) )
+              loop (IntMap.bindings node.free) )
       | [], _ | _ :: _, Leave _ -> assert false
       (* This should be impossible. [Symbol.of_stype] should
                         uniquely identify the number of children on each step.
       *)
     in
-    (* Check against first step in array. *)
-    match get_step stype with
-    | None -> None
-    | Some (id, args) ->
-      match (Lazy.force t.tree_arr).(id - t.min_id) with
-      | None -> None
-      | Some tree -> match traverse args [] tree with
-        | Some result -> Some result
-        | None -> match t.universal with
-          | None -> None
-          | Some (dt_var, value) ->
-            Some (value, IntMap.singleton dt_var stype)
+    traverse [stype] [] t.tree
 
-  let[@landmark] add t stype value =
+  let add : type a. key -> a -> a t -> a t =
+   fun stype value t ->
+    let empty_tree : a tree =
+      Inner {steps= steps Id.empty IntMap.empty; free= IntMap.empty}
+    in
     let get_step =
       let modulo_props = t.modulo_props in
-      Id.of_stype_register t.symbols ~modulo_props
+      Id.register_stype ~modulo_props
     in
     let rec traverse stack free_vars tree =
       match (tree, stack) with
       | Leave _, [] ->
           raise (Invalid_argument "(congruent) type already registered")
       | Inner node, hd :: tl -> (
-        match get_step hd with
-        | Symbol (symbol, children) -> (
-            let nstack = children @ tl in
-            match IntTable.get node.steps symbol with
+        match get_step node.steps.ids hd with
+        | Symbol (symbol, children), ids' -> (
+            let stack' = children @ tl in
+            match IntMap.find_opt symbol node.steps.map with
             | None -> (
-              match nstack with
-              | [] -> IntTable.set node.steps symbol (Leave {value; free_vars})
-              | _ ->
-                  let tree = create_node () in
-                  IntTable.set node.steps symbol tree ;
-                  traverse nstack free_vars tree )
-            | Some tree -> traverse nstack free_vars tree )
-        | Var dt_var -> (
-            let free_id =
-              (* Was this dt_var already observed further up in the path?
-                 If so, reuse free_id, else bump free_id. *)
-              match List.assoc_opt dt_var free_vars with
-              | Some free_id -> free_id
-              | None ->
-                  let last =
-                    (* TODO: check first element might be enough *)
-                    List.fold_left max (-1) (List.rev_map fst free_vars)
+              match stack' with
+              | [] ->
+                  let map' =
+                    IntMap.add symbol (Leave {value; free_vars}) node.steps.map
                   in
-                  last + 1
+                  Inner {node with steps= steps ids' map'}
+              | _ ->
+                  let tree' = traverse stack' free_vars empty_tree in
+                  let map' = IntMap.add symbol tree' node.steps.map in
+                  Inner {node with steps= steps ids' map'} )
+            | Some tree ->
+                let tree' = traverse stack' free_vars tree in
+                let map' = IntMap.add symbol tree' node.steps.map in
+                Inner {node with steps= steps ids' map'} )
+        | Var dt_var, _ids' -> (
+            let free_id, free_vars =
+              (* Was this dt_var already observed further up in the path?
+                   If so, reuse free_id, else bump free_id. *)
+              match List.assoc_opt dt_var free_vars with
+              | Some free_id -> (free_id, free_vars)
+              | None -> (
+                match free_vars with
+                | [] -> (0, [(dt_var, 0)])
+                | (_, last) :: _ as l -> (last + 1, (dt_var, last + 1) :: l) )
             in
-            let free_vars = (dt_var, free_id) :: free_vars in
-            match IntTable.get node.free free_id with
-            | Some tree -> traverse tl free_vars tree
+            match IntMap.find_opt free_id node.free with
+            | Some tree ->
+                let tree' = traverse tl free_vars tree in
+                let free' = IntMap.add free_id tree' node.free in
+                Inner {node with free= free'}
             | None -> (
               match tl with
-              | [] -> IntTable.set node.free free_id (Leave {value; free_vars})
+              | [] ->
+                  let free' =
+                    IntMap.add free_id (Leave {value; free_vars}) node.free
+                  in
+                  Inner {node with free= free'}
               | _ ->
-                  let tree = create_node () in
-                  IntTable.set node.free free_id tree ;
-                  traverse tl free_vars tree ) ) )
+                  let tree' = traverse tl free_vars empty_tree in
+                  let free' = IntMap.add free_id tree' node.free in
+                  Inner {node with free= free'} ) ) )
       | _, _ -> failwith "inconsistent tree"
     in
-    match get_step stype with
-    | Var i -> (
-        match t.universal with
-        | Some _ -> failwith "pattern already registered"
-        | None -> t.universal <- Some (i, value)
-      )
-    | Symbol (id, args) ->
-      let tree =
-        match IntMap.find_opt id t.tree_map with
-        | None -> (
-            match args with
-            | [] -> Leave {value; free_vars = []}
-            | _ ->
-              let tree = create_node () in
-              traverse args [] tree; tree
-          )
-        | Some tree -> traverse args [] tree ; tree
-      in
-      set t (IntMap.add id tree t.tree_map)
+    {t with tree= traverse [stype] [] t.tree}
 
   let%test _ =
     let open Stype in
@@ -456,22 +422,22 @@ end = struct
       | Some (i, s) ->
           Format.fprintf fmt "Some (%i, %a)" i print_substitution s
     in
-    let table = create ~modulo_props:true in
-    let tadd typ = add table (Ttype.to_stype typ) in
+    let tadd typ = add (Ttype.to_stype typ) in
     let open Std in
-    tadd (list_t int_t) 1 ;
-    tadd (option_t string_t) 2 ;
-    tadd int_t 3 ;
-    add table (DT_var 0) 42 ;
-    add table (DT_list (DT_var 0)) 4 ;
-    add table (DT_tuple [DT_var 0; DT_var 0]) 5 ;
-    add table (DT_tuple [DT_var 1; DT_var 0]) 6 ;
-    (* this fails as expected *)
-    (* add (DT_var 1) 42 *)
+    let tree =
+      empty ~modulo_props:true
+      |> tadd (list_t int_t) 1
+      |> tadd (option_t string_t) 2
+      |> tadd int_t 3 |> add (DT_var 0) 42 |> add (DT_list (DT_var 0)) 4
+      |> add (DT_tuple [DT_var 0; DT_var 0]) 5
+      |> add (DT_tuple [DT_var 1; DT_var 0]) 6
+      (* this fails as expected *)
+      (* |> add (DT_var 1) 42 *)
+    in
     let s = Ttype.to_stype in
     List.for_all
       (fun (stype, expected) ->
-        let got = get table stype in
+        let got = get tree stype in
         if got = expected then true
         else
           let () =

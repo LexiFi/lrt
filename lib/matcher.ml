@@ -22,8 +22,8 @@ module type S = sig
   *)
   type 'a return
 
-  val create : modulo_props:bool -> t
-  (** A fresh matcher without any registered pattern. The parameter
+  val empty : modulo_props:bool -> t
+  (** The empty matcher without any registered pattern. The parameter
       [modulo_props] controls whether properties are ignored or interpreted as
       distinguishing features of runtime types.
 
@@ -51,8 +51,8 @@ module type S = sig
 
   (** {3 Pattern candidates} *)
 
-  val add : t -> t:'a Ttype.t -> 'a return -> unit
-  (** [add m ~t return] adds pattern [t] with right hand side [return] to
+  val add : t:'a Ttype.t -> 'a return -> t -> t
+  (** [add ~t return m] adds pattern [t] with right hand side [return] to
       the matcher [m]. *)
 
   module type C0 = sig
@@ -62,7 +62,7 @@ module type S = sig
     (** Is returned when {!t} is given to {!apply}. *)
   end
 
-  val add0 : t -> (module C0) -> unit
+  val add0 : (module C0) -> t -> t
   (** Add a case to the matcher. Equivalent to {!add}. *)
 
   module type C1 = sig
@@ -72,7 +72,7 @@ module type S = sig
     (** Used to obtain {!M1.return} on a match. *)
   end
 
-  val add1 : t -> (module C1) -> unit
+  val add1 : (module C1) -> t -> t
   (** Adds a case to a matcher. One free variable.*)
 
   module type C2 = sig
@@ -82,7 +82,7 @@ module type S = sig
     (** Used to obtain {!M2.return} on a match. *)
   end
 
-  val add2 : t -> (module C2) -> unit
+  val add2 : (module C2) -> t -> t
   (** Adds a case to a matcher. Two free variables. *)
 
   (** {3 Matching results} *)
@@ -227,17 +227,16 @@ end) : S with type 'a return = 'a Return.t = struct
   type candidate = C0 of (module C0) | C1 of (module C1) | C2 of (module C2)
   type t = candidate Index.t
 
-  let create ~modulo_props : t = Index.create ~modulo_props
+  let empty ~modulo_props : t = Index.empty ~modulo_props
 
-  let add tree (type a) ~(t : a Ttype.t) (return : a return) =
+  let add (type a) ~(t : a Ttype.t) (return : a return) =
     let c = C0 (module struct type t = a
 
                               let t = t
                               let return = return end) in
-    Index.add tree (Ttype.to_stype t) c
+    Index.add (Ttype.to_stype t) c
 
-  let add0 tree (module C : C0) =
-    Index.add tree (Ttype.to_stype C.t) (C0 (module C))
+  let add0 (module C : C0) = Index.add (Ttype.to_stype C.t) (C0 (module C))
 
   type var
 
@@ -245,11 +244,11 @@ end) : S with type 'a return = 'a Return.t = struct
   let v0 = var 0
   let v1 = var 1
 
-  let add1 tree (module C : C1) =
-    Index.add tree (Ttype.to_stype (C.t v0)) (C1 (module C))
+  let add1 (module C : C1) =
+    Index.add (Ttype.to_stype (C.t v0)) (C1 (module C))
 
-  let add2 tree (module C : C2) =
-    Index.add tree (Ttype.to_stype (C.t v0 v1)) (C2 (module C))
+  let add2 (module C : C2) =
+    Index.add (Ttype.to_stype (C.t v0 v1)) (C2 (module C))
 
   let ttype : type a. int -> Index.substitution -> a Ttype.t =
    fun i map ->
@@ -262,7 +261,7 @@ end) : S with type 'a return = 'a Return.t = struct
   (* Unification succeeded by instantiating type
                                  variable with stype s. *)
 
-  let[@landmark] apply : type a. t -> t:a Ttype.t -> a matched option =
+  let apply : type a. t -> t:a Ttype.t -> a matched option =
    fun tree ~t ->
     let stype = Ttype.to_stype t in
     match Index.get tree stype with

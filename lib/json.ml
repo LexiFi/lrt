@@ -229,13 +229,17 @@ type 'a conv = {to_json: 'a -> value; of_json: value -> 'a}
 
 module Matcher = Matcher.Make (struct type 'a t = 'a conv end)
 
-let matcher = Matcher.create ~modulo_props:false
+let global = ref (Matcher.empty ~modulo_props:false)
+let add ~t conv = global := Matcher.add ~t conv !global
+let add0 m = global := Matcher.add0 m !global
+let add1 m = global := Matcher.add1 m !global
+let add2 m = global := Matcher.add2 m !global
 
 let conv ?(ctx = empty_ctx) t =
   let rec conv_t : type a. a Xtype.t -> a conv =
    fun t ->
     let open Matcher in
-    match apply matcher ~t:t.t with
+    match apply !global ~t:t.t with
     | Some (M0 (module M : M0 with type matched = a)) ->
         let TypEq.Eq = M.eq in
         M.return
@@ -352,7 +356,7 @@ let () =
     | Number (F x) -> int_of_float x
     | _ -> failwith "integer expected"
   and to_json i = Number (I i) in
-  Matcher.add matcher ~t:int_t {of_json; to_json}
+  add ~t:int_t {of_json; to_json}
 
 let () =
   let of_json = function
@@ -369,7 +373,7 @@ let () =
     | FP_nan -> String "NaN"
     | _ -> Number (F x)
   in
-  Matcher.add matcher ~t:float_t {of_json; to_json}
+  add ~t:float_t {of_json; to_json}
 
 let () =
   let to_json () = json_unit
@@ -377,20 +381,20 @@ let () =
     | Object _ -> ()
     | _ -> failwith "unit object expected"
   in
-  Matcher.add matcher ~t:unit_t {of_json; to_json}
+  add ~t:unit_t {of_json; to_json}
 
 let () =
   let to_json b = Bool b
   and of_json = function Bool b -> b | _ -> failwith "boolean expected" in
-  Matcher.add matcher ~t:bool_t {of_json; to_json}
+  add ~t:bool_t {of_json; to_json}
 
 let () =
   let to_json s = String s
   and of_json = function String x -> x | _ -> failwith "string expected" in
-  Matcher.add matcher ~t:string_t {of_json; to_json}
+  add ~t:string_t {of_json; to_json}
 
 let () =
-  Matcher.add1 matcher
+  add1
     ( module struct
       type 'a t = 'a list [@@deriving t]
 
@@ -405,7 +409,7 @@ let () =
     end )
 
 let () =
-  Matcher.add1 matcher
+  add1
     ( module struct
       type 'a t = 'a array [@@deriving t]
 
@@ -420,7 +424,7 @@ let () =
     end )
 
 let () =
-  Matcher.add1 matcher
+  add1
     ( module struct
       type 'a t = ('a Lazy.t[@patch lazy_t]) [@@deriving t]
 
@@ -432,7 +436,7 @@ let () =
     end )
 
 let () =
-  Matcher.add1 matcher
+  add1
     ( module struct
       type 'a t = 'a option [@@deriving t]
 
@@ -444,7 +448,7 @@ let () =
     end )
 
 let () =
-  Matcher.add1 matcher
+  add1
     ( module struct
       type 'a t = 'a option option [@@deriving t]
 
@@ -478,11 +482,11 @@ let () =
     | String s -> Variant.variant_of_string s
     | _ -> failwith "Variant string expected"
   and to_json x = String (Variant.string_one_line_of_variant x) in
-  Matcher.add matcher ~t:[%t: Variant.t] {of_json; to_json}
+  add ~t:[%t: Variant.t] {of_json; to_json}
 
 let () =
   let of_json x = x and to_json x = x in
-  Matcher.add matcher ~t:[%t: value] {of_json; to_json}
+  add ~t:[%t: value] {of_json; to_json}
 
 open Buffer
 
