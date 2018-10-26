@@ -1,0 +1,26 @@
+graph {
+  graph [resolution=128];
+  node [shape=plaintext, fontsize=24];
+  r  [label = "root"];
+  a0 [label = "a"];
+  a1 [label = "a"];
+  b0 [label = "b"];
+  f0 [label = "f"];
+  g0 [label = "g"];
+  g1 [label = "g"];
+  m0 [label = "m"];
+  x0 [label = "x"];
+  x1 [label = "x"];
+  y0 [label = "y"];
+  { rank=same;
+    res0 [label = "res0"];
+    res1 [label = "res1"];
+    res2 [label = "res2"];
+    res3 [label = "res3"]; }
+  r -- m0;
+  r -- x0 -- res3;
+  m0 -- f0 -- b0 -- g0 -- a0 -- res0;
+  m0 -- x1;
+  x1 -- g1 -- a1 -- res1;
+  x1 -- y0 -- res2;
+}
