@@ -7,8 +7,8 @@
 
 (** Pattern matching on runtime types. *)
 
-(** In order to gain some intuition about this module can be used, consult the
-    below {!example} or the implementation of {!Json.conv}. *)
+(** In order to gain some intuition about how this module can be used, consult
+    the below {!example} or the implementation of {!Json.conv}. *)
 
 (** A matcher with a given return type. *)
 module type S = sig

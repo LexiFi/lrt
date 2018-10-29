@@ -238,8 +238,6 @@ end = struct
      on the first symbol on the stack. Arguments returned by [Id.of_stype]
      are pushed back to the stack.
 
-     TODO: Is it a discrimination tree? What is a discrimination tree?
-
      The set of paths from root to leaves in the resulting tree is homomorphic
      to the set of stypes (modulo Id.of_stype). Each path in the tree
      corresponds to one stype and vice versa.
