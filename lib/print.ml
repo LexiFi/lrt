@@ -2,7 +2,7 @@
 (*  Copyright (C) 2018 by LexiFi.                                             *)
 (*                                                                            *)
 (*  This source file is released under the terms of the MIT license as part   *)
-(*  of the dynt package. Details can be found in the attached LICENSE file.   *)
+(*  of the lrt package. Details can be found in the attached LICENSE file.   *)
 (******************************************************************************)
 
 open Std
@@ -378,7 +378,7 @@ module Test = struct
     [%expect
       {|
       ttype:
-      (dynt#lib/print.ml.Test.tt =
+      (lrt#lib/print.ml.Test.tt =
          | Inl of
           (tt.Inl =
              {

@@ -2,12 +2,12 @@
 (*  Copyright (C) 2018 by LexiFi.                                             *)
 (*                                                                            *)
 (*  This source file is released under the terms of the MIT license as part   *)
-(*  of the dynt package. Details can be found in the attached LICENSE file.   *)
+(*  of the lrt package. Details can be found in the attached LICENSE file.   *)
 (******************************************************************************)
 
-(** Runtime types for OCaml. *)
+(** LexiFi runtime types. *)
 
-(*  REMEMBER TO KEEP THE FOLLOWING PITCH IN SYNC WITH THE README. *)
+(*  REMEMBER TO KEEP THE FOLLOWING PITCH IN SYNC WITH THE README AND OPAM FILE. *)
 
 (** {3 Introduction}
 
@@ -35,13 +35,13 @@
 
 (** {3 Build runtime types}
 
-    Runtime representations of OCaml types are built using the [dynt.deriving]
+    Runtime representations of OCaml types are built using the [lrt.deriving]
     PPX syntax extension. In the simplest case, you only have to attach a
     [ [@@deriving t] ] attribute to the type declaration.
 
     {[
-    # #require "dynt.deriving";;
-    # open Dynt.Std;;
+    # #require "lrt.deriving";;
+    # open Lrt.Std;;
     # type foo = { bar: string } [@@deriving t] ;;
     type foo = { bar: string }
     val foo_t : foo ttype
@@ -59,7 +59,7 @@ module Std = struct
 
   (**/**)
 
-  module Dynt_ppx_runtime = Dynt_ppx_runtime
+  module Lrt_ppx_runtime = Lrt_ppx_runtime
 
   (**/**)
 end
@@ -187,7 +187,7 @@ end
 (** {3 Use runtime types}
 
     We provide some example modules that consume runtime types. The best entry
-    point for further exploring the features of Dynt is probably the
+    point for further exploring the features of Lrt is probably the
     implementation of {!Json.conv}.
 
     {!Print} is used as generic dynamic printer. It is able to print arbitrary
@@ -216,7 +216,7 @@ module Check = Check
 
 (** {4 Type representation}
 
-    Dynt comes with different representations of runtime types. Depending on the
+    Lrt comes with different representations of runtime types. Depending on the
     application, one might use one or another.
 
     {!Stype.t} or {!stype} in short are an untyped runtime representation of
@@ -224,8 +224,8 @@ module Check = Check
     unsafe but powerful code. Most users want to avoid this interface.
 
     {!Ttype.t} or {!ttype} in short extend the untyped {!stype} with an OCaml
-    type. Ttypes are constructed by the [[@@deriving t]] syntax extension and
-    can be used to safely consume APIs that make use of runtime types.
+    type. Ttypes can be built using the [[@@deriving t]] syntax extension
+    and can be used to safely consume APIs that make use of runtime types.
 
     {!Xtype.t} enable safe inspection of runtime types. Xtypes are used to
     implement APIs that make use of runtime types.
@@ -286,10 +286,10 @@ module TypEq = TypEq
     access to values in nested tuples, records and constructors.  Additionally,
     paths can be used to access nested types (see {!Xtype.project_path}).
 
-    Paths can be constructed by the [dynt.path] syntax extension.
+    Paths can be built using the [lrt.path] syntax extension.
 
     {[
-      # #require "dynt.path";;
+      # #require "lrt.path";;
       # type t = A of {b: int array list * string}
       + let p1 : (t, string) Path.t = [%path? [ A b; (_, []) ]]
       + let p2 : (t, int)    Path.t = [%path? [ A b; ([], _); [0]; [|1|] ]]
@@ -305,12 +305,12 @@ module TypEq = TypEq
 
 module Path = Path
 
-(** {3 open Dynt}
+(** {3 open Lrt}
 
-    We recommend to place [open Dynt] at the toplevel of your modules to have
-    the runtime representation of basic OCaml types and all the dynt tools
-    available when you need them. If you do not want to have the [Dynt.*]
-    modules cluttering your namespace use [open Dynt.Std].
+    We recommend to place [open Lrt] at the toplevel of your modules to have
+    the runtime representation of basic OCaml types and all the lrt tools
+    available when you need them. If you do not want to have the [Lrt.*]
+    modules cluttering your namespace use [open Lrt.Std].
 *)
 
 type stype = Stype.t

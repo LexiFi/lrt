@@ -2,10 +2,10 @@
 (*  Copyright (C) 2018 by LexiFi.                                             *)
 (*                                                                            *)
 (*  This source file is released under the terms of the MIT license as part   *)
-(*  of the dynt package. Details can be found in the attached LICENSE file.   *)
+(*  of the lrt package. Details can be found in the attached LICENSE file.   *)
 (******************************************************************************)
 
-(** The [\[@@deriving t\]] syntax extension. See {!Dynt}. *)
+(** The [\[@@deriving t\]] syntax extension. See {!Lrt}. *)
 
 (**/**)
 
@@ -123,8 +123,8 @@ let stypes_of_free ~loc free =
   let open M in
   List.mapi (fun i _v -> [%expr DT_var [%e eint i]]) free |> elist
 
-let lid_runtime = Longident.parse "Dynt_ppx_runtime.Types"
-let lid_ttype = Longident.parse "Dynt_ppx_runtime.Types.Ttype.t"
+let lid_runtime = Longident.parse "Lrt_ppx_runtime.Types"
+let lid_ttype = Longident.parse "Lrt_ppx_runtime.Types.Ttype.t"
 let wrap_runtime ~loc = pexp_open ~loc Override {txt= lid_runtime; loc}
 
 let wrap_props ~loc props t =

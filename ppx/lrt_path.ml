@@ -2,10 +2,10 @@
 (*  Copyright (C) 2018 by LexiFi.                                             *)
 (*                                                                            *)
 (*  This source file is released under the terms of the MIT license as part   *)
-(*  of the dynt package. Details can be found in the attached LICENSE file.   *)
+(*  of the lrt package. Details can be found in the attached LICENSE file.   *)
 (******************************************************************************)
 
-(** The [\[%path? .\]] syntax extension. See {!Dynt.Path}.*)
+(** The [\[%path? .\]] syntax extension. See {!Lrt.Path}.*)
 
 (**/**)
 
@@ -192,7 +192,7 @@ and expand acc ({ppat_loc= loc; _} as x) =
 let expand ~loc ~path x =
   ignore path ;
   [%expr
-    let open! Dynt_ppx_runtime.Path in
+    let open! Lrt_ppx_runtime.Path in
     [%e elist ~loc (expand [] x |> List.rev)]]
 
 (* Register the expander *)
@@ -201,4 +201,4 @@ let () =
     [ Extension.(
         declare "path" Context.expression Ast_pattern.(ppat __ none) expand) ]
   in
-  Driver.register_transformation "dynt_path" ~extensions
+  Driver.register_transformation "lrt_path" ~extensions

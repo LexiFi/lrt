@@ -2,7 +2,7 @@
 (*  Copyright (C) 2018 by LexiFi.                                             *)
 (*                                                                            *)
 (*  This source file is released under the terms of the MIT license as part   *)
-(*  of the dynt package. Details can be found in the attached LICENSE file.   *)
+(*  of the lrt package. Details can be found in the attached LICENSE file.   *)
 (******************************************************************************)
 
 type 'a t = Stype.t
@@ -41,4 +41,4 @@ let of_stype s = Ttype (Obj.magic s)
 
 let t a =
   let t = to_stype a in
-  Stype.DT_abstract ("Dynt.Ttype.t", [t]) |> Obj.magic
+  Stype.DT_abstract ("Lrt.Ttype.t", [t]) |> Obj.magic

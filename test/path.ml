@@ -2,10 +2,10 @@
 (*  Copyright (C) 2018 by LexiFi.                                             *)
 (*                                                                            *)
 (*  This source file is released under the terms of the MIT license as part   *)
-(*  of the dynt package. Details can be found in the attached LICENSE file.   *)
+(*  of the lrt package. Details can be found in the attached LICENSE file.   *)
 (******************************************************************************)
 
-open Dynt
+open Lrt
 
 (*
 type id = int -> int [@@deriving t]
@@ -46,7 +46,7 @@ let%expect_test _ =
   [%expect
     {|
     [%path? []]
-    (dynt_test#test/path.ml.t =
+    (lrt_test#test/path.ml.t =
        | A of
         (t.A =
            {
@@ -91,7 +91,7 @@ let%expect_test _ =
 
 let value = [|["hey"; "hi"]|]
 let p2 = [%path? [[|0|]; [1]]]
-let l2 = Dynt.Path.lens p2
+let l2 = Lrt.Path.lens p2
 
 let%expect_test _ =
   print_endline (l2.get value |> assert_some) ;

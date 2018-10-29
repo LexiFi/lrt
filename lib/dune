@@ -1,9 +1,9 @@
 (library
-  (public_name dynt)
-  (synopsis "Dynt: DYNamic Types")
+  (public_name lrt)
+  (synopsis "lrt: LexiFi runtime types")
   (inline_tests)
   (libraries landmarks)
-  (preprocess (pps ppx_expect dynt.deriving landmarks.ppx)))
+  (preprocess (pps ppx_expect lrt.deriving landmarks.ppx)))
 
 (rule
   (targets variant_lexer.ml)

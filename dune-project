@@ -1,4 +1,4 @@
 (lang dune 1.1)
-(name dynt)
+(name lrt)
 (version "~dev")
 (using fmt 1.0)

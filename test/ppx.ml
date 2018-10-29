@@ -2,10 +2,10 @@
 (*  Copyright (C) 2018 by LexiFi.                                             *)
 (*                                                                            *)
 (*  This source file is released under the terms of the MIT license as part   *)
-(*  of the dynt package. Details can be found in the attached LICENSE file.   *)
+(*  of the lrt package. Details can be found in the attached LICENSE file.   *)
 (******************************************************************************)
 
-open Dynt
+open Lrt
 
 let print x = Format.printf "%a\n%!" Ttype.print x
 
@@ -38,7 +38,7 @@ module Basic = struct
   let%expect_test _ =
     print enum_t ;
     [%expect
-      {| (dynt_test#test/ppx.ml.Basic.enum = North | East | South | West) |}]
+      {| (lrt_test#test/ppx.ml.Basic.enum = North | East | South | West) |}]
 
   type sum1 =
     | Option1 of string * int
@@ -51,7 +51,7 @@ module Basic = struct
     print sum1_t ;
     [%expect
       {|
-    (dynt_test#test/ppx.ml.Basic.sum1 =
+    (lrt_test#test/ppx.ml.Basic.sum1 =
        | Option1 of (string * int)
        | Option2 of (int * int * string)
        | Option3
@@ -65,7 +65,7 @@ module Basic = struct
     print record_t ;
     [%expect
       {|
-    (dynt_test#test/ppx.ml.Basic.record =
+    (lrt_test#test/ppx.ml.Basic.record =
        {
          field1: (int * string);
          field2: string;
@@ -80,7 +80,7 @@ module Basic = struct
     print inline_record_t ;
     [%expect
       {|
-    (dynt_test#test/ppx.ml.Basic.inline_record =
+    (lrt_test#test/ppx.ml.Basic.inline_record =
        | Basic of int
        | Inline of
         (inline_record.Inline =
@@ -104,22 +104,22 @@ module Recursion = struct
     print natural2_t ;
     [%expect
       {|
-    (dynt_test#test/ppx.ml.Recursion.record =
+    (lrt_test#test/ppx.ml.Recursion.record =
        {
          a: int;
-         b: dynt_test#test/ppx.ml.Recursion.record;
+         b: lrt_test#test/ppx.ml.Recursion.record;
        })
-    (dynt_test#test/ppx.ml.Recursion.natural =
+    (lrt_test#test/ppx.ml.Recursion.natural =
        | Z
-       | S of dynt_test#test/ppx.ml.Recursion.natural)
-    (dynt_test#test/ppx.ml.Recursion.natural2 =
+       | S of lrt_test#test/ppx.ml.Recursion.natural)
+    (lrt_test#test/ppx.ml.Recursion.natural2 =
        | Z
-       | S of dynt_test#test/ppx.ml.Recursion.natural2
+       | S of lrt_test#test/ppx.ml.Recursion.natural2
        | Sum of
         (natural2.Sum =
            {
-             a: dynt_test#test/ppx.ml.Recursion.natural2;
-             b: dynt_test#test/ppx.ml.Recursion.natural2;
+             a: lrt_test#test/ppx.ml.Recursion.natural2;
+             b: lrt_test#test/ppx.ml.Recursion.natural2;
            })) |}]
 end
 
@@ -135,7 +135,7 @@ module Open = struct
     print (alist2_t int_t string_t) ;
     [%expect
       {|
-      (int dynt_test#test/ppx.ml.Open.rectangle =
+      (int lrt_test#test/ppx.ml.Open.rectangle =
          {
            a: int;
            b: int;
@@ -155,7 +155,7 @@ module Open = struct
     print (weird_type_t int_t float_t string_t (alist_t int_t float_t) int_t) ;
     [%expect
       {|
-      ((int, float, string, (int * float) list, int) dynt_test#test/ppx.ml.Open.weird_type =
+      ((int, float, string, (int * float) list, int) lrt_test#test/ppx.ml.Open.weird_type =
          | A of int
          | B of float
          | C of string
@@ -177,16 +177,16 @@ module Open = struct
     print (either_list_t string_t int_t) ;
     [%expect
       {|
-    (int dynt_test#test/ppx.ml.Open.btree =
+    (int lrt_test#test/ppx.ml.Open.btree =
        {
          v: int;
-         l: int dynt_test#test/ppx.ml.Open.btree option;
-         r: int dynt_test#test/ppx.ml.Open.btree option;
+         l: int lrt_test#test/ppx.ml.Open.btree option;
+         r: int lrt_test#test/ppx.ml.Open.btree option;
        })
-    (int dynt_test#test/ppx.ml.Open.bbtree =
-       | Inner of (int * int dynt_test#test/ppx.ml.Open.bbtree * int dynt_test#test/ppx.ml.Open.bbtree)
+    (int lrt_test#test/ppx.ml.Open.bbtree =
+       | Inner of (int * int lrt_test#test/ppx.ml.Open.bbtree * int lrt_test#test/ppx.ml.Open.bbtree)
        | Leave of int)
-    ((string, int) dynt_test#test/ppx.ml.Open.either_list =
+    ((string, int) lrt_test#test/ppx.ml.Open.either_list =
        | Either of
         ((string, int) either_list.Either =
            {
@@ -234,24 +234,24 @@ module Mutual = struct
     print (wnode_t int_t) ;
     [%expect
       {|
-      (string dynt_test#test/ppx.ml.Mutual.weirdtree =
+      (string lrt_test#test/ppx.ml.Mutual.weirdtree =
          {
            node:
-           (string dynt_test#test/ppx.ml.Mutual.wnode =
+           (string lrt_test#test/ppx.ml.Mutual.wnode =
               {
                 basic: string;
-                weird: string dynt_test#test/ppx.ml.Mutual.weirdtree;
+                weird: string lrt_test#test/ppx.ml.Mutual.weirdtree;
               });
-           children: string dynt_test#test/ppx.ml.Mutual.weirdtree list;
+           children: string lrt_test#test/ppx.ml.Mutual.weirdtree list;
          })
-      (int dynt_test#test/ppx.ml.Mutual.wnode =
+      (int lrt_test#test/ppx.ml.Mutual.wnode =
          {
            basic: int;
            weird:
-           (int dynt_test#test/ppx.ml.Mutual.weirdtree =
+           (int lrt_test#test/ppx.ml.Mutual.weirdtree =
               {
-                node: int dynt_test#test/ppx.ml.Mutual.wnode;
-                children: int dynt_test#test/ppx.ml.Mutual.weirdtree list;
+                node: int lrt_test#test/ppx.ml.Mutual.wnode;
+                children: int lrt_test#test/ppx.ml.Mutual.weirdtree list;
               });
          }) |}]
 
@@ -267,11 +267,11 @@ module Mutual = struct
     print (opt_llist_t int_t) ;
     [%expect
       {|
-      (int dynt_test#test/ppx.ml.Mutual.opt_list =
+      (int lrt_test#test/ppx.ml.Mutual.opt_list =
          | None
          | Some of int list)
       int list
-      (int dynt_test#test/ppx.ml.Mutual.opt_list =
+      (int lrt_test#test/ppx.ml.Mutual.opt_list =
          | None
          | Some of int list) list |}]
 
@@ -296,20 +296,20 @@ module Mutual = struct
     print (el_t int_t) ;
     [%expect
       {|
-      (int dynt_test#test/ppx.ml.Mutual.ambiguous_list =
+      (int lrt_test#test/ppx.ml.Mutual.ambiguous_list =
          | Nil
          | Cons of
-          (int dynt_test#test/ppx.ml.Mutual.el =
+          (int lrt_test#test/ppx.ml.Mutual.el =
              | Singleton of int
-             | More of (int * int dynt_test#test/ppx.ml.Mutual.ambiguous_list)))
-      (int dynt_test#test/ppx.ml.Mutual.el =
+             | More of (int * int lrt_test#test/ppx.ml.Mutual.ambiguous_list)))
+      (int lrt_test#test/ppx.ml.Mutual.el =
          | Singleton of int
          | More of
           (int
            *
-           (int dynt_test#test/ppx.ml.Mutual.ambiguous_list =
+           (int lrt_test#test/ppx.ml.Mutual.ambiguous_list =
               | Nil
-              | Cons of int dynt_test#test/ppx.ml.Mutual.el))) |}]
+              | Cons of int lrt_test#test/ppx.ml.Mutual.el))) |}]
 end
 
 module NonregRec = struct
@@ -324,14 +324,14 @@ module NonregRec = struct
     print (good2_t string_t (array_t int_t)) ;
     [%expect
       {|
-      (int array dynt_test#test/ppx.ml.NonregRec.good1 =
+      (int array lrt_test#test/ppx.ml.NonregRec.good1 =
          {
-           field: int array dynt_test#test/ppx.ml.NonregRec.good1 option;
+           field: int array lrt_test#test/ppx.ml.NonregRec.good1 option;
            v: int array;
          })
-      ((string, int array) dynt_test#test/ppx.ml.NonregRec.good2 =
+      ((string, int array) lrt_test#test/ppx.ml.NonregRec.good2 =
          {
-           field: (string, int array) dynt_test#test/ppx.ml.NonregRec.good2 option;
+           field: (string, int array) lrt_test#test/ppx.ml.NonregRec.good2 option;
          }) |}]
 end
 
@@ -355,9 +355,9 @@ module Inline = struct
       int
       (int -> int)
       string list
-      (int dynt_test#test/ppx.ml.NonregRec.good1 =
+      (int lrt_test#test/ppx.ml.NonregRec.good1 =
          {
-           field: int dynt_test#test/ppx.ml.NonregRec.good1 option;
+           field: int lrt_test#test/ppx.ml.NonregRec.good1 option;
            v: int;
          })
       (int * int) array
@@ -428,17 +428,17 @@ module Properties = struct
     print [%t: ((int, string) combined[@prop {w= "combined"}])] ;
     [%expect
       {|
-      (int dynt_test#test/ppx.ml.Properties.fields =
+      (int lrt_test#test/ppx.ml.Properties.fields =
          {
            we [@prop {need = "some"; more = "record"}]: int;
            fields [@prop {_with = "properties"}]: int;
          })
-      (int dynt_test#test/ppx.ml.Properties.constructors =
+      (int lrt_test#test/ppx.ml.Properties.constructors =
          | A [@prop {key = "value"}] of int
          | B [@prop {k = "v"}] of int)
       int [@prop {some = "prop"}] list
       int [@prop {a = "b"; b = "c"; c = "d"}]
-      ((int, string) dynt_test#test/ppx.ml.Properties.combined =
+      ((int, string) lrt_test#test/ppx.ml.Properties.combined =
          | Core [@prop {w = "Core"}] of (int [@prop {w = "a"}] * string [@prop {w = "b"}]) [@prop {w = "a*b"}] list [@prop {w = "(a*b)list"}]
          | Inline [@prop {w = "Inline"}] of
           ((int, string) combined.Inline =
@@ -522,9 +522,9 @@ module Abstract = struct
     print [%t: C.t] ;
     [%expect
       {|
-      dynt_test#test/ppx.ml.Abstract.A.t
-      dynt_test#test/ppx.ml.Abstract.A.t
-      dynt_test#test/ppx.ml.Abstract.C.t |}]
+      lrt_test#test/ppx.ml.Abstract.A.t
+      lrt_test#test/ppx.ml.Abstract.A.t
+      lrt_test#test/ppx.ml.Abstract.C.t |}]
 
   (* use non abstract ttype internally *)
 
@@ -591,7 +591,7 @@ module Alias = struct
     print [%t: t] ;
     [%expect
       {|
-      (dynt_test#test/ppx.ml.Alias.t =
+      (lrt_test#test/ppx.ml.Alias.t =
          | Option1 of (string * int)
          | Option2 of (int * int * string)
          | Option3
@@ -612,7 +612,7 @@ module Overwrite = struct
   (* Pervasives have the be toplevel, not locally by the
    * derived code
    *
-   * This test fails when ppx runtime includes Dynt.Pervasives
+   * This test fails when ppx runtime includes Lrt.Pervasives
    *)
 
   type string = int [@@deriving t]
@@ -646,7 +646,7 @@ module Patch = struct
     [%expect
       {|
       int
-      ((string, float) dynt_test#test/ppx.ml.Patch.ht =
+      ((string, float) lrt_test#test/ppx.ml.Patch.ht =
          {
            table: (string, float) Hashtbl.t;
            meta: Patch.meta;
@@ -815,7 +815,7 @@ module NoName = struct
     (* print N.t; *)
     [%expect
       {|
-      dynt_test#test/ppx.ml.NoName.t
+      lrt_test#test/ppx.ml.NoName.t
       int
-      dynt_test#test/ppx.ml.NoName.F.t |}]
+      lrt_test#test/ppx.ml.NoName.F.t |}]
 end

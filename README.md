@@ -1,7 +1,7 @@
-Dynt - Dynamic Types for OCaml
-==============================
+lrt - Lexifi runtime types
+==========================
 
-[//]: # (Remember to keep this pitch in sync with `lib/dynt.ml`.)
+[//]: # (Remember to keep this pitch in sync with lib/lrt.ml and lrt.opam)
 
 It is often useful to get access to types at runtime in order to implement
 generic type-driven operations. A typical example is a generic
@@ -29,24 +29,24 @@ well as libraries built upon them.
 The best way to install this package is via opam (TODO: release).
 
 ```sh
-opam install dynt
+opam install lrt
 ```
 
 Then, in order to generate runtime representations of your OCaml
-types, you have to enable the dynt ppx. Your dune file might look like
+types, you have to enable the lrt ppx. Your dune file might look like
 the following.
 
 ```dune
 (executable
   (name foo)
-  (libraries bar dynt)
-  (preprocess (pps dynt.deriving)))
+  (libraries bar lrt)
+  (preprocess (pps lrt.deriving)))
 ```
 
 Now you can use runtime types in your programs:
 
 ```ocaml
-open Dynt
+open Lrt
 
 type nat =
   | Z
@@ -58,7 +58,7 @@ let () =
 ```
 
 Having the basic things set up, you are ready to explore the
-[documentation][docs] of the `Dynt` module.
+[documentation][docs] of the `Lrt` module.
 
 ## About
 
@@ -68,7 +68,7 @@ public release as [part of an internship][story].
 
 The package is is licensed by LexiFi under the terms of the MIT license.
 
-[docs]: https://lexifi.github.io/dynt/dynt/Dynt/index.html
+[docs]: https://lexifi.github.io/lrt/lrt/Lrt/index.html
 [lexifi]: https://lexifi.github.io/
 [story]: https://lexifi.github.io/404
 

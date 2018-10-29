@@ -1,22 +1,22 @@
 (library
-  (name dynt_deriving)
-  (public_name dynt.deriving)
-  (synopsis "dynt [@@deriving t] syntax extension")
+  (name lrt_deriving)
+  (public_name lrt.deriving)
+  (synopsis "lrt [@@deriving t] syntax extension")
   (libraries ppxlib)
   (preprocess (pps ppxlib.metaquot))
-  (modules dynt_deriving)
+  (modules lrt_deriving)
   (kind ppx_rewriter))
 
 (library
-  (name dynt_path)
-  (public_name dynt.path)
-  (synopsis "dynt [%path? .] syntax extension")
+  (name lrt_path)
+  (public_name lrt.path)
+  (synopsis "lrt [%path? .] syntax extension")
   (libraries ppxlib)
   (preprocess (pps ppxlib.metaquot))
-  (modules dynt_path)
+  (modules lrt_path)
   (kind ppx_rewriter))
 
 (executable
   (name standalone)
-  (libraries dynt_path dynt_deriving ppxlib)
+  (libraries lrt_path lrt_deriving ppxlib)
   (modules standalone))
