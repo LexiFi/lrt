@@ -366,8 +366,9 @@ module Assembler = struct
           v
       | [] -> raise Not_found
       | _ :: rest ->
-          (* TODO: fallback to building a lookup table here... *)
-          List.assoc s rest
+          match Ext.List_.assoc_consume s rest with
+          | None -> raise Not_found
+          | Some (v, rest) -> r := rest; v
   end
 
   (* TODO: Instead of the Xtype.t, this could also pass an element. *)
@@ -413,7 +414,7 @@ module Assembler = struct
       done ;
       o
 
-  let init' 
+  let init'
       :  int
       -> int
       -> 'a record_field list
@@ -713,7 +714,7 @@ module Step = struct
     in
     (cast {get; set}, StepMeta.field ~field_name)
 
-  let regular_constructor 
+  let regular_constructor
       : ('a, 'b) regular_constructor -> ('b, 'c) element -> ('a, 'c) Path.step
       =
    fun c f ->
@@ -734,7 +735,7 @@ module Step = struct
     let name = fst c.rc_label in
     (cast {get; set}, StepMeta.constructor_regular ~name ~nth ~arity)
 
-  let inlined_constructor 
+  let inlined_constructor
       : ('a, 'b) inlined_constructor -> ('b, 'c) element -> ('a, 'c) Path.step
       =
    fun c f ->

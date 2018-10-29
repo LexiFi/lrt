@@ -110,6 +110,14 @@ module List_ = struct
 
   let rev_flatten l = rev_flatten_map (fun x -> x) l
   let flatten_map f l = List.rev (rev_flatten_map f l)
+
+  let assoc_consume key lst =
+    let rec f acc = function
+      | [] -> None
+      | (k, v) :: tl when k = key -> Some (v, List.rev_append acc tl)
+      | hd :: tl -> f (hd :: acc) tl
+    in
+    f [] lst
 end
 
 module Array_ = struct
@@ -163,7 +171,7 @@ end
 
 module Float = struct
   (* TODO: this float printing is very slow. *)
-  
+
   (* from ocaml/typing/oprint.ml *)
   let valid_float_lexeme s =
     let l = String.length s in
@@ -385,7 +393,7 @@ module String = struct
   module Tbl = struct
     (* TODO: heuristic to delay building the dispatch table until N lookups occured
        (use simple list search before)? *)
-    
+
     (* A slightly faster, but much less readable, implementation is in public/tests/strtbl.mf. *)
 
     type tree =
@@ -398,7 +406,7 @@ module String = struct
     type t = tree array
 
     (* dispatch on the string's length *)
-    
+
     (* Dispatching *)
 
     let rec eval_tree s = function

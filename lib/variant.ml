@@ -49,7 +49,7 @@ module type VARIANTIZABLE_2 = sig
 
   val to_variant : 'a to_variant -> 'b to_variant -> ('a, 'b) t to_variant
 
-  val of_variant 
+  val of_variant
     : failwith -> 'a of_variant -> 'b of_variant -> ('a, 'b) t of_variant
 end
 
@@ -204,14 +204,6 @@ let conv : type a. (string -> a) -> (string -> a) -> string -> a =
   | v -> v
   | exception Failure _ -> bad_variant "conversion error"
 
-let assoc_consume key lst =
-  let rec f acc = function
-    | [] -> None
-    | (k, v) :: tl when k = key -> Some (v, List.rev_append acc tl)
-    | hd :: tl -> f (hd :: acc) tl
-  in
-  f [] lst
-
 let variant_of_string = Variant_lexer.variant_of_string
 let variant_of_file = Variant_lexer.variant_of_file
 
@@ -335,7 +327,7 @@ let rec of_variant : type a. t:a Xtype.t -> Stype.properties -> a of_variant =
   with Bad_type_for_variant _ as e ->
     (* check accumulated properties for recovery mechanism *)
     let rec use_first props =
-      match assoc_consume "of_variant_custom_uid" props with
+      match Ext.List_.assoc_consume "of_variant_custom_uid" props with
       | None -> raise e
       | Some (uid, reduced_props) -> (
           let open Custom_of in
@@ -373,17 +365,17 @@ and record_field_builder : type a.
   let lref = ref lst in
   let rec mk (name, props) el =
     (* When lst is in the correct order, it is traversed only once. *)
-    match assoc_consume name !lref with
+    match Ext.List_.assoc_consume name !lref with
     | Some (v, newlst) ->
         lref := newlst ;
         of_variant [] ~t:el.typ v
     | None -> (
       (* Record field <name> not found in variant. Check old_name. *)
-      match assoc_consume "of_variant_old_name" props with
+      match Ext.List_.assoc_consume "of_variant_old_name" props with
       | Some (old_name, reduced_props) -> mk (old_name, reduced_props) el
       | None -> (
         (* old_name not specified or not part of variant. Check default. *)
-        match assoc_consume "of_variant_default" props with
+        match Ext.List_.assoc_consume "of_variant_default" props with
         | Some (default, _reduced_props) -> (
           try of_variant [] ~t:el.typ (variant_of_string default) with
           | Variant_parser {msg; text; loc} ->
