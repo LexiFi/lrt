@@ -1,5 +1,5 @@
-lrt - Lexifi runtime types
-==========================
+LexiFi runtime types
+====================
 
 [//]: # (Remember to keep this pitch in sync with lib/lrt.ml and lrt.opam)
 

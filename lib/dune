@@ -1,6 +1,6 @@
 (library
   (public_name lrt)
-  (synopsis "lrt: LexiFi runtime types")
+  (synopsis "LexiFi runtime types")
   (inline_tests)
   (libraries landmarks)
   (preprocess (pps ppx_expect lrt.deriving landmarks.ppx)))
