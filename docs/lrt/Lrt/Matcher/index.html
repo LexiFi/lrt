@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml"><head><title>Matcher (lrt.Lrt.Matcher)</title><link rel="stylesheet" href="../../../odoc.css"/><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1.0"/><script src="../../../highlight.pack.js"></script><script>hljs.initHighlightingOnLoad();</script></head><body><div class="content"><header><nav><a href="../index.html">Up</a> – <a href="../../index.html">lrt</a> &#x00BB; <a href="../index.html">Lrt</a> &#x00BB; Matcher</nav><h1>Module <code>Lrt.Matcher</code></h1><p>Pattern matching on runtime types.</p></header><aside><p>In order to gain some intuition about this module can be used, consult the below <a href="index.html#example"><span>Example</span></a> or the implementation of <a href="../Json/index.html#type-conv"><code>Json.conv</code></a>.</p></aside><dl><dt class="spec module-type" id="module-type-S"><a href="#module-type-S" class="anchor"></a><code><span class="keyword">module type </span><a href="module-type-S/index.html">S</a> = <span class="keyword">sig</span> ... <span class="keyword">end</span></code></dt><dd><p>A matcher with a given return type.</p></dd></dl><dl><dt class="spec module" id="module-Make"><a href="#module-Make" class="anchor"></a><code><span class="keyword">module </span><a href="Make/index.html">Make</a> : <span class="keyword">functor</span> (<a href="Make/argument-1-Return/index.html">Return</a> : <span class="keyword">sig</span> ... <span class="keyword">end</span>) <span>&#45;&gt;</span> <a href="index.html#module-type-S">S</a><span class="keyword"> with </span><span class="keyword">type </span>'a <a href="Make/index.html#type-return">return</a><span class="keyword"> = </span><span class="type-var">'a</span> <a href="Make/argument-1-Return/index.html#type-t">Return.t</a></code></dt><dd><p>Instantiate a matcher with a result type.</p></dd></dl><section><header><h3 id="example"><a href="#example" class="anchor"></a>Example</h3><p>We will match on these example types.</p><pre><code class="ml">type t0 = string list
+
+and 'a t1 = 'a array
+
+and ('a, 'b) t2 = ('a * 'b) option [@@deriving t]</code></pre><p>The example pattern match should print the type. An appropriate result type is <code>unit -&gt; unit</code>.</p><pre><code class="ml">module Matcher = Matcher.Make (struct type 'a t = unit -&gt; unit end)</code></pre><p>The different cases are registered one by one. Free variables will be substituted in the returned result.</p><pre><code class="ml">let m =
+  let open Matcher in
+  let pp_ty = Ttype.print
+  empty ~modulo_props:true
+  |&gt; add ~t:[%t: string list] (fun () -&gt;
+         Format.printf &quot;t0 = %a\n%!&quot; pp_ty t0_t )
+  |&gt; add1
+       ( module struct
+         type 'a t = 'a t1 [@@deriving t]
+
+         let return a_t () =
+           Format.printf &quot;%a t1 = %a\n%!&quot; pp_ty a_t pp_ty (t1_t a_t)
+       end )
+  |&gt; add2
+       ( module struct
+         type ('a, 'b) t = ('a, 'b) t2 [@@deriving t]
+
+         let return a_t b_t () =
+           Format.printf &quot;(%a, %a) t2 = %a\n%!&quot; pp_ty a_t pp_ty b_t pp_ty
+             (t2_t a_t b_t)
+       end )</code></pre><p>The handling of matcher results needs some boilerplate code.</p><pre><code class="ml">let apply : type a. Matcher.t -&gt; t:a Ttype.t -&gt; unit =
+ fun matcher ~t -&gt;
+  let open Matcher in
+  match apply matcher ~t with
+  | None -&gt; print_endline &quot;Not found&quot;
+  | Some (M0 (module M : M0 with type matched = a)) -&gt; M.return ()
+  | Some (M1 (module M : M1 with type matched = a)) -&gt; M.return ()
+  | Some (M2 (module M : M2 with type matched = a)) -&gt; M.return ()</code></pre><p>Now everything is set up and the matcher is ready for application.</p><pre><code class="ml">let () =
+  apply m ~t:[%t: t0] ;
+  apply m ~t:[%t: int t1] ;
+  apply m ~t:[%t: bool t1] ;
+  apply m ~t:[%t: float option] ;
+  apply m ~t:[%t: (float, string) t2] ;
+  apply m ~t:[%t: (unit, string) t2]</code></pre><p>The above example program produces the following output.</p><pre><code class="ml">t0 = string list
+int t1 = int array
+bool t1 = bool array
+Not found
+(float, string) t2 = (float * string) option
+(unit, string) t2 = (unit * string) option</code></pre></header></section></div></body></html>
