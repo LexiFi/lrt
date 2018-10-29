@@ -83,7 +83,7 @@ and 's object_ = private
 (** {3 Initialization and transformation} *)
 
 val of_ttype : 'a Ttype.t -> 'a t
-(** Produce a representation of a dynamic type, that is safer to inspect than
+(** Produce a representation of a runtime type, that is safer to inspect than
     the {!Stype.t} one. *)
 
 val xtype_of_ttype : 'a Ttype.t -> 'a xtype

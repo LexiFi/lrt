@@ -5,7 +5,7 @@
 (*  of the dynt package. Details can be found in the attached LICENSE file.   *)
 (******************************************************************************)
 
-(** Dynamic types for OCaml. *)
+(** Runtime types for OCaml. *)
 
 (*  REMEMBER TO KEEP THE FOLLOWING PITCH IN SYNC WITH THE README. *)
 
@@ -190,7 +190,7 @@ end
     point for further exploring the features of Dynt is probably the
     implementation of {!Json.conv}.
 
-    {!Print} is used a generic dynamic printer. It is able to print arbitrary
+    {!Print} is used as generic dynamic printer. It is able to print arbitrary
     values based on their runtime type. Values of abstract types can be printed
     by registering abstract printers.
 
@@ -219,16 +219,16 @@ module Check = Check
     Dynt comes with different representations of runtime types. Depending on the
     application, one might use one or another.
 
-    {!Stype.t} or {!stype} in short are an untyped representation of dynamic
-    types. Stypes are easy to construct, serializable and allow to write for
+    {!Stype.t} or {!stype} in short are an untyped runtime representation of
+    OCaml types. Stypes are easy to construct, serializable and allow to write
     unsafe but powerful code. Most users want to avoid this interface.
 
     {!Ttype.t} or {!ttype} in short extend the untyped {!stype} with an OCaml
     type. Ttypes are constructed by the [[@@deriving t]] syntax extension and
-    can be used to safely consume APIs that make use of dynamic types.
+    can be used to safely consume APIs that make use of runtime types.
 
-    {!Xtype.t} enable safe inspection of dynamic types. Xtypes are used to
-    implement APIs that make use of dynamic types.
+    {!Xtype.t} enable safe inspection of runtime types. Xtypes are used to
+    implement APIs that make use of runtime types.
 *)
 
 module Stype = Stype

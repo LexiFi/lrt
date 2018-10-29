@@ -43,7 +43,7 @@ the following.
   (preprocess (pps dynt.deriving)))
 ```
 
-Now you can use dynamic types in your programs:
+Now you can use runtime types in your programs:
 
 ```ocaml
 open Dynt
@@ -76,7 +76,7 @@ The package is is licensed by LexiFi under the terms of the MIT license.
 
 There are four main directories:
 
-* `lib` contains all the dynamic types and useful modules built atop.
+* `lib` contains the runtime type representations and useful modules built atop.
 * `ppx` contains the syntax extension.
 * `bench` contains the json/variant roundtrip benchmark code.
 * `tests` contains the separate tests. Some more tests are placed

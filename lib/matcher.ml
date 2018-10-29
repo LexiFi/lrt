@@ -5,7 +5,7 @@
 (*  of the dynt package. Details can be found in the attached LICENSE file.   *)
 (******************************************************************************)
 
-(** Pattern matching on dynamic types. *)
+(** Pattern matching on runtime types. *)
 
 (** In order to gain some intuition about this module can be used, consult the
     below {!example} or the implementation of {!Json.conv}. *)
