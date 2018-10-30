@@ -73,7 +73,7 @@ The package is is licensed by LexiFi under the terms of the MIT license.
 
 [docs]: https://lexifi.github.io/lrt/lrt/Lrt/index.html
 [lexifi]: https://lexifi.github.io/
-[story]: https://lexifi.github.io/404
+[story]: story.md
 
 ## Maintaining
 
