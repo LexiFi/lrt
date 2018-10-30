@@ -32,7 +32,7 @@ expanded with a runtime type argument. The implementation of `debug`
 destructs the provided type information in order to dynamically print
 the given value.
 
-```
+```ocaml
 val debug: t: 'a ttype -> 'a -> unit
 ```
 
@@ -57,7 +57,7 @@ solution. Using the new PPX, the previous example becomes a bit more
 verbose, but the burden of using runtime types on an ordinary compiler
 is not too high.
 
-```
+```ocaml
 type nontriv_type =
   | Foo of {bar : string}
   [@@deriving t]
