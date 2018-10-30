@@ -66,13 +66,16 @@ This approach to runtime types was initially developed by [LexiFi][lexifi]
 for its internal use. In 2018 it was partially reworked and prepared for
 public release as [part of an internship][story].
 
+The latest changes are not yet integrated into LexiFi's code base. This
+must be considered a **preliminary, potentially unstable release**.
+
 The package is is licensed by LexiFi under the terms of the MIT license.
 
 [docs]: https://lexifi.github.io/lrt/lrt/Lrt/index.html
 [lexifi]: https://lexifi.github.io/
 [story]: https://lexifi.github.io/404
 
-## Notes to the future maintainer
+## Maintaining
 
 There are four main directories:
 
