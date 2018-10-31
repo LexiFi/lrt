@@ -162,10 +162,10 @@ module Array_ = struct
 end
 
 module Float = struct
-  (* TODO: this float printing is very slow. *)
-  
-  (* from ocaml/typing/oprint.ml *)
-  let valid_float_lexeme s =
+  (* TODO: speed up float printing. *)
+
+  (* from ocaml/stdlib/stdlib.ml *)
+  let valid_float_lexem s =
     let l = String.length s in
     let rec loop i =
       if i >= l then s ^ "."
@@ -173,6 +173,7 @@ module Float = struct
     in
     loop 0
 
+  (* from ocaml/typing/oprint.ml *)
   let repres f =
     match classify_float f with
     | FP_nan -> "nan"
@@ -185,7 +186,7 @@ module Float = struct
             let s2 = Printf.sprintf "%.15g" f in
             if f = float_of_string s2 then s2 else Printf.sprintf "%.18g" f
         in
-        valid_float_lexeme float_val
+        valid_float_lexem float_val
 
   let pp_repres ppf f = Format.pp_print_string ppf (repres f)
 end
