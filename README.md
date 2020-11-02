@@ -30,7 +30,7 @@ This package has not been made available on the OPAM repository. You can
 still use OPAM to install its current version: 
 
 ```sh
-opam pin add ocaml-vdom git://github.com/lexifi/lrt.git
+opam pin add lrt git://github.com/lexifi/lrt.git
 ```
 
 Then, in order to generate runtime representations of your OCaml
